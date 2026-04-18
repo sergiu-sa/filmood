@@ -1,7 +1,15 @@
 import { buildTMDBParams } from "@/lib/moodMap";
-import type { DeckFilm } from "@/lib/types";
+import {
+  applyEra,
+  applyTempo,
+  appendExtraKeywords,
+} from "@/lib/moodRefinements";
+import type { DeckFilm, EraKey, TempoKey } from "@/lib/types";
 
 const DECK_SIZE = 15;
+// Cap how many text-derived keyword IDs we union across the group, to avoid
+// over-constraining TMDB and producing empty results for large groups.
+const MAX_SHARED_EXTRA_KEYWORDS = 3;
 
 interface TMDBDiscoverResult {
   id: number;
@@ -13,13 +21,48 @@ interface TMDBDiscoverResult {
   genre_ids: number[];
 }
 
+interface ParticipantInput {
+  mood_selections: string[] | null;
+  era?: EraKey | null;
+  tempo?: TempoKey | null;
+  extra_keywords?: number[] | null;
+}
+
+// Majority vote across participant values. Ties (or all null) return null —
+// we'd rather skip the filter than impose a minority preference on the group.
+function majorityVote<T extends string>(values: (T | null | undefined)[]): T | null {
+  const counts = new Map<T, number>();
+  for (const v of values) {
+    if (!v) continue;
+    counts.set(v, (counts.get(v) ?? 0) + 1);
+  }
+  if (counts.size === 0) return null;
+  const entries = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  if (entries.length > 1 && entries[0][1] === entries[1][1]) return null;
+  return entries[0][0];
+}
+
+function topKeywords(participants: ParticipantInput[], limit: number): number[] {
+  const counts = new Map<number, number>();
+  for (const p of participants) {
+    for (const k of p.extra_keywords ?? []) {
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([k]) => k);
+}
+
 /**
- * Aggregate all participants' moods with weighted frequency,
- * fetch films from TMDB, and build a balanced deck.
- * Each film is tagged with genre_ids and the mood(s) it was sourced from.
+ * Aggregate all participants' moods with weighted frequency, fetch films
+ * from TMDB, and build a balanced deck. Each film is tagged with genre_ids
+ * and the mood(s) it was sourced from. Era, tempo, and text-derived keywords
+ * are applied on top via majority vote (era/tempo) and capped union (keywords).
  */
 export async function buildSharedDeck(
-  participants: { mood_selections: string[] | null }[],
+  participants: ParticipantInput[],
 ): Promise<DeckFilm[]> {
   const apiKey = process.env.TMDB_API_KEY;
   if (!apiKey) throw new Error("TMDB API key not configured");
@@ -59,7 +102,6 @@ export async function buildSharedDeck(
         break;
       }
     }
-    // Every mood is at count=1, drop the least popular ones
     if (!trimmed) {
       allocations.pop();
       allocated--;
@@ -69,6 +111,11 @@ export async function buildSharedDeck(
     allocations[0].count++;
     allocated++;
   }
+
+  // Aggregate group refinements
+  const sharedEra = majorityVote(participants.map((p) => p.era ?? null));
+  const sharedTempo = majorityVote(participants.map((p) => p.tempo ?? null));
+  const sharedKeywords = topKeywords(participants, MAX_SHARED_EXTRA_KEYWORDS);
 
   // Fetch TMDB results for each unique mood in parallel
   const fetchResults = allocations.map(async ({ mood, count }) => {
@@ -81,6 +128,12 @@ export async function buildSharedDeck(
     for (const [k, v] of Object.entries(moodParams)) {
       url.searchParams.set(k, v);
     }
+
+    // Apply group-level refinements on top of the per-mood TMDB params.
+    // Tempo goes before era so tempo's runtime filter sticks.
+    applyTempo(url, sharedTempo);
+    applyEra(url, sharedEra);
+    appendExtraKeywords(url, sharedKeywords);
 
     const res = await fetch(url.toString());
     const data = await res.json();

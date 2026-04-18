@@ -1,6 +1,10 @@
 // Mood-to-TMDB mapping — each mood maps to TMDB query params (genres, sort, filters).
 // TMDB Genre IDs: 28=Action, 16=Animation, 35=Comedy, 18=Drama, 14=Fantasy,
-// 36=History, 27=Horror, 10749=Romance, 878=Sci-Fi, 53=Thriller, 10751=Family, 9648=Mystery
+// 36=History, 27=Horror, 10749=Romance, 878=Sci-Fi, 53=Thriller, 10751=Family,
+// 9648=Mystery, 80=Crime, 10752=War
+// TMDB Keyword IDs used below (all OR'd via with_keywords):
+// 6054=feel-good, 9799=romantic-comedy, 180547=coming-of-age,
+// 10714=mind-bending, 4565=dystopia, 1701=neo-noir, 9840=cult-film
 
 import type { MoodConfig } from "@/lib/types";
 export const moodMap: Record<string, MoodConfig> = {
@@ -69,6 +73,7 @@ export const moodMap: Record<string, MoodConfig> = {
     sortBy: "popularity.desc",
     voteCountGte: 300,
     voteAverageGte: 7.0,
+    keywords: [6054],
   },
   cry: {
     key: "cry",
@@ -113,6 +118,66 @@ export const moodMap: Record<string, MoodConfig> = {
     voteCountGte: 200,
     voteAverageGte: 7.5,
   },
+  datenight: {
+    key: "datenight",
+    tagLabel: "Date night",
+    label: "Easy-watch together",
+    description: "Rom-com vibes, no heavy stuff",
+    accentColor: "rose",
+    genres: [35, 10749],
+    excludeGenres: [27, 10752],
+    sortBy: "popularity.desc",
+    voteCountGte: 400,
+    keywords: [6054, 9799],
+  },
+  nostalgic: {
+    key: "nostalgic",
+    tagLabel: "Take me back",
+    label: "Wistful & nostalgic",
+    description: "Coming-of-age, tender memories",
+    accentColor: "gold",
+    genres: [18, 10749],
+    sortBy: "vote_average.desc",
+    voteCountGte: 200,
+    voteAverageGte: 7.0,
+    keywords: [180547],
+  },
+  mindbending: {
+    key: "mindbending",
+    tagLabel: "Bend my mind",
+    label: "Reality-shifting puzzles",
+    description: "Twists, loops, what-is-real",
+    accentColor: "violet",
+    genres: [878, 53],
+    sortBy: "vote_average.desc",
+    voteCountGte: 300,
+    voteAverageGte: 7.0,
+    keywords: [10714, 4565],
+  },
+  dark: {
+    key: "dark",
+    tagLabel: "Go dark",
+    label: "Cold, gritty, bleak",
+    description: "Neo-noir, crime, moral grey",
+    accentColor: "ember",
+    genres: [80, 53, 18],
+    sortBy: "vote_average.desc",
+    voteCountGte: 300,
+    voteAverageGte: 6.8,
+    keywords: [1701],
+  },
+  weird: {
+    key: "weird",
+    tagLabel: "Something weird",
+    label: "Off-kilter & surreal",
+    description: "Cult-leaning, quirky, strange",
+    accentColor: "teal",
+    genres: [35, 18, 14],
+    sortBy: "vote_average.desc",
+    voteCountGte: 150,
+    voteAverageGte: 6.8,
+    keywords: [9840],
+  },
 };
 
 // All moods as an array for UI iteration
@@ -136,6 +201,9 @@ export function buildTMDBParams(moodKey: string): Record<string, string> {
   }
   if (mood.voteAverageGte) {
     params["vote_average.gte"] = mood.voteAverageGte.toString();
+  }
+  if (mood.keywords && mood.keywords.length > 0) {
+    params.with_keywords = mood.keywords.join(",");
   }
 
   return params;
@@ -203,6 +271,17 @@ export function buildMergedTMDBParams(moodKeys: string[]): Record<string, string
   }
   if (voteAverageGte > 0) {
     params["vote_average.gte"] = voteAverageGte.toString();
+  }
+
+  // 4. Keywords (union across moods — TMDB treats comma as OR, so more = broader)
+  const allKeywords = new Set<number>();
+  for (const cfg of configs) {
+    if (cfg.keywords) {
+      for (const k of cfg.keywords) allKeywords.add(k);
+    }
+  }
+  if (allKeywords.size > 0) {
+    params.with_keywords = [...allKeywords].join(",");
   }
 
   return params;

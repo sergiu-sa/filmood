@@ -20,7 +20,12 @@ export interface MoodConfig {
   sortBy: "popularity.desc" | "vote_average.desc";
   voteCountGte: number;
   voteAverageGte?: number;
+  /** TMDB keyword IDs joined with OR into with_keywords for sharper targeting. */
+  keywords?: number[];
 }
+
+export type EraKey = "classic" | "modern" | "fresh";
+export type TempoKey = "slowburn" | "fastpaced";
 
 // ─── Film Detail Types ─────────────────────────────
 
@@ -93,6 +98,14 @@ export interface SessionParticipant {
   has_swiped: boolean;
   is_ready: boolean;
   joined_at: string;
+  /** Raw free-form description — resolved to mood keys + keywords on submit. */
+  mood_text: string | null;
+  /** "classic" | "modern" | "fresh" — see EraKey. Nullable. */
+  era: EraKey | null;
+  /** "slowburn" | "fastpaced" — see TempoKey. Nullable. */
+  tempo: TempoKey | null;
+  /** TMDB keyword IDs resolved from mood_text. Default []. */
+  extra_keywords: number[];
 }
 
 /** A swipe vote row from the swipes table */

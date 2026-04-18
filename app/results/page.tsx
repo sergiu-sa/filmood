@@ -383,6 +383,9 @@ function ResultsContent() {
   const runtime = searchParams.get("runtime");
   const language = searchParams.get("language");
   const exclude = searchParams.get("exclude");
+  const era = searchParams.get("era");
+  const tempo = searchParams.get("tempo");
+  const text = searchParams.get("text");
 
   const [films, setFilms] = useState<Film[]>([]);
   const [moods, setMoods] = useState<string[]>([]);
@@ -411,12 +414,13 @@ function ResultsContent() {
   const gridGap = isSmall || isTablet ? "12px" : isMedium ? "10px" : "14px";
 
   useEffect(() => {
-    if (!mood) {
+    // Text alone is enough to kick off a search — mood tiles are optional now.
+    if (!mood && !text) {
       setLoading(false);
       return;
     }
 
-    const parsedMoods = mood
+    const parsedMoods = (mood ?? "")
       .split(",")
       .map((m) => m.trim().toLowerCase())
       .filter(Boolean);
@@ -427,10 +431,14 @@ function ResultsContent() {
         setError(null);
         setMoods(parsedMoods);
 
-        const params = new URLSearchParams({ mood });
+        const params = new URLSearchParams();
+        if (mood) params.set("mood", mood);
         if (runtime) params.set("runtime", runtime);
         if (language) params.set("language", language);
         if (exclude) params.set("exclude", exclude);
+        if (era) params.set("era", era);
+        if (tempo) params.set("tempo", tempo);
+        if (text) params.set("text", text);
 
         const res = await fetch(`/api/movies/discover?${params.toString()}`);
         const data = await res.json();
@@ -443,6 +451,14 @@ function ResultsContent() {
           throw new Error(data.error);
         }
 
+        // Surface moods inferred from free-form text so the header pills still
+        // show something meaningful when the user didn't pick a tile.
+        if (Array.isArray(data.moods) && data.moods.length > 0 && parsedMoods.length === 0) {
+          // data.mood is the resolved mood key list (comma-separated)
+          const resolvedKeys = typeof data.mood === "string" ? data.mood.split(",") : [];
+          setMoods(resolvedKeys);
+        }
+
         setFilms(Array.isArray(data.films) ? data.films : []);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load films");
@@ -452,7 +468,7 @@ function ResultsContent() {
     };
 
     fetchFilms();
-  }, [mood, runtime, language, exclude]);
+  }, [mood, runtime, language, exclude, era, tempo, text]);
 
   // Fetch providers for the top pick
   const topPick =
@@ -487,7 +503,7 @@ function ResultsContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topPick?.id]);
 
-  if (!mood) {
+  if (!mood && !text) {
     return (
       <div className="text-center py-20">
         <p style={{ color: "var(--t2)" }} className="mb-4">

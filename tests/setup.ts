@@ -9,3 +9,19 @@ globalThis.fetch = vi.fn().mockResolvedValue({
   ok: true,
   json: async () => ({ results: [], films: [] }),
 } as unknown as Response);
+
+// jsdom doesn't implement matchMedia, but components that call useMediaQuery
+// render through jsdom tests — polyfill a stable "no match" response.
+if (typeof window !== "undefined" && !window.matchMedia) {
+  window.matchMedia = (query: string) =>
+    ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }) as unknown as MediaQueryList;
+}

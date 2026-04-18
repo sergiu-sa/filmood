@@ -1,4 +1,4 @@
-import { buildTMDBParams, allMoods } from "@/lib/moodMap";
+import { buildTMDBParams, buildMergedTMDBParams, allMoods, moodMap } from "@/lib/moodMap";
 
 describe("buildTMDBParams", () => {
   it("returns correct params for 'laugh' mood", () => {
@@ -58,11 +58,50 @@ describe("buildTMDBParams", () => {
       }
     }
   });
+
+  it("includes with_keywords when the mood defines keywords", () => {
+    for (const mood of allMoods) {
+      const params = buildTMDBParams(mood.key);
+      if (mood.keywords && mood.keywords.length > 0) {
+        expect(params.with_keywords).toBe(mood.keywords.join(","));
+      } else {
+        expect(params.with_keywords).toBeUndefined();
+      }
+    }
+  });
+});
+
+describe("buildMergedTMDBParams", () => {
+  it("unions keywords across merged moods", () => {
+    // datenight (6054,9799) + nostalgic (180547) should union all three.
+    const params = buildMergedTMDBParams(["datenight", "nostalgic"]);
+    expect(params.with_keywords).toBeDefined();
+    const actual = new Set(params.with_keywords!.split(","));
+    expect(actual).toEqual(new Set(["6054", "9799", "180547"]));
+  });
+
+  it("omits with_keywords when none of the merged moods define any", () => {
+    // beautiful + cry have no keywords
+    const params = buildMergedTMDBParams(["beautiful", "cry"]);
+    expect(params.with_keywords).toBeUndefined();
+  });
+
+  it("takes strictest quality thresholds across moods", () => {
+    // mindbending voteAverageGte=7.0 vs dark voteAverageGte=6.8 → 7.0 wins
+    const params = buildMergedTMDBParams(["mindbending", "dark"]);
+    expect(params["vote_average.gte"]).toBe("7");
+  });
 });
 
 describe("moodMap data integrity", () => {
-  it("has 10 moods defined", () => {
-    expect(allMoods.length).toBe(10);
+  it("has 15 moods defined", () => {
+    expect(allMoods.length).toBe(15);
+  });
+
+  it("includes the 5 new moods added in Stage 3", () => {
+    for (const key of ["datenight", "nostalgic", "mindbending", "dark", "weird"]) {
+      expect(moodMap[key]).toBeDefined();
+    }
   });
 
   it("every mood has required fields", () => {

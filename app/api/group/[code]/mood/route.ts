@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
 import { moodMap } from "@/lib/moodMap";
+import { resolveMoodText } from "@/lib/moodResolver";
+import { isEraKey, isTempoKey } from "@/lib/moodRefinements";
 import { resolveSession, resolveParticipant } from "@/lib/group-api";
 import { buildSharedDeck } from "@/lib/deck";
+import type { EraKey, TempoKey } from "@/lib/types";
 
 // POST /api/group/[code]/mood
-// Save a participant's private mood selections.
-// When all participants have submitted, build the shared movie deck
-// and transition the session to "swiping".
+// Save a participant's private mood selections + optional free-form text,
+// era, and tempo. When all participants have submitted, build the shared
+// movie deck and transition the session to "swiping".
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ code: string }> },
@@ -15,7 +18,13 @@ export async function POST(
   const { code } = await params;
 
   const user = await getAuthUser(request);
-  let body: { moods?: string[]; participantId?: string };
+  let body: {
+    moods?: string[];
+    participantId?: string;
+    text?: string;
+    era?: string;
+    tempo?: string;
+  };
 
   try {
     body = await request.json();
@@ -23,23 +32,42 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { moods, participantId } = body;
+  const { moods, participantId, text, era, tempo } = body;
 
-  // Validate moods array
-  if (!Array.isArray(moods) || moods.length === 0) {
+  // Validate + coerce
+  const tileMoods = Array.isArray(moods)
+    ? moods.filter((m): m is string => typeof m === "string" && m in moodMap)
+    : [];
+  const trimmedText = typeof text === "string" ? text.trim() : "";
+
+  // Resolve text → additional mood keys, keywords, era, tempo (chip values win).
+  const resolved = trimmedText ? resolveMoodText(trimmedText) : null;
+
+  const mergedMoodSet = new Set<string>(tileMoods);
+  resolved?.moodKeys.forEach((k) => mergedMoodSet.add(k));
+  const mergedMoods = [...mergedMoodSet];
+
+  if (mergedMoods.length === 0) {
+    const partialMatch =
+      resolved !== null &&
+      (resolved.era !== null ||
+        resolved.tempo !== null ||
+        resolved.keywords.length > 0);
     return NextResponse.json(
-      { error: "At least one mood is required" },
+      {
+        error: partialMatch
+          ? "Add a feeling word — like 'funny', 'dark', or 'cozy'. Era or tempo alone isn't enough."
+          : "Pick at least one mood tile or describe your mood",
+      },
       { status: 400 },
     );
   }
 
-  const validMoods = moods.filter((m) => m in moodMap);
-  if (validMoods.length === 0) {
-    return NextResponse.json(
-      { error: "No valid moods provided" },
-      { status: 400 },
-    );
-  }
+  const finalEra: EraKey | null = isEraKey(era) ? era : resolved?.era ?? null;
+  const finalTempo: TempoKey | null = isTempoKey(tempo)
+    ? tempo
+    : resolved?.tempo ?? null;
+  const extraKeywords = resolved?.keywords ?? [];
 
   try {
     const supabase = getSupabaseAdmin();
@@ -68,10 +96,15 @@ export async function POST(
       );
     }
 
-    // Save mood selections
     const { error: updateError } = await supabase
       .from("session_participants")
-      .update({ mood_selections: validMoods })
+      .update({
+        mood_selections: mergedMoods,
+        mood_text: trimmedText || null,
+        era: finalEra,
+        tempo: finalTempo,
+        extra_keywords: extraKeywords,
+      })
       .eq("id", participant.id);
 
     if (updateError) {
@@ -81,10 +114,11 @@ export async function POST(
       );
     }
 
-    // Check if all participants have now submitted
+    // Check if all participants have now submitted. Pull the full refinement
+    // payload for deck-building in one round-trip.
     const { data: allParticipants } = await supabase
       .from("session_participants")
-      .select("mood_selections")
+      .select("mood_selections, era, tempo, extra_keywords")
       .eq("session_id", session.id);
 
     const total = allParticipants?.length ?? 0;
@@ -100,14 +134,19 @@ export async function POST(
       });
     }
 
-    // All done — build the shared deck
+    // All done — build the shared deck using mood_selections plus refinements.
     const deck = await buildSharedDeck(allParticipants!);
 
-    // Save deck and transition to swiping
-    const { error: deckError } = await supabase
+    // Atomic compare-and-set on session.status so simultaneous last-submitters
+    // don't both write a deck. Whichever request wins flips status to "swiping";
+    // the loser's UPDATE matches zero rows and we skip silently — both clients
+    // get the redirect regardless.
+    const { data: claimed, error: deckError } = await supabase
       .from("sessions")
       .update({ movie_deck: deck, status: "swiping" })
-      .eq("id", session.id);
+      .eq("id", session.id)
+      .eq("status", "mood")
+      .select("id");
 
     if (deckError) {
       return NextResponse.json(
@@ -120,6 +159,7 @@ export async function POST(
       submitted: true,
       allDone: true,
       deckSize: deck.length,
+      claimedBuild: (claimed?.length ?? 0) > 0,
     });
   } catch (error) {
     const message =
@@ -127,4 +167,3 @@ export async function POST(
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-

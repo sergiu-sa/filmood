@@ -3,7 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { allMoods } from "@/lib/moodMap";
+import type { EraKey, TempoKey } from "@/lib/types";
 import MoodCard from "./MoodCard";
+import MoodExtras from "@/components/mood/MoodExtras";
+import { chipStyle, FieldLabel } from "@/components/mood/chipStyle";
 
 // Genre IDs for exclusion chips
 const EXCLUSION_OPTIONS = [
@@ -36,6 +39,12 @@ export default function MoodPanel({
   const [runtime, setRuntime] = useState<string | null>(null);
   const [language, setLanguage] = useState<string | null>(null);
   const [excludedGenres, setExcludedGenres] = useState<Set<number>>(new Set());
+  const [era, setEra] = useState<EraKey | null>(null);
+  const [tempo, setTempo] = useState<TempoKey | null>(null);
+  const [moodText, setMoodText] = useState("");
+
+  const trimmedText = moodText.trim();
+  const canSubmit = count > 0 || trimmedText.length > 0;
 
   const toggleExclusion = (genreId: number) => {
     setExcludedGenres((prev) => {
@@ -52,47 +61,22 @@ export default function MoodPanel({
   const hasRefinements = runtime !== null || language !== null || excludedGenres.size > 0;
 
   const handleFindFilms = () => {
-    if (count === 0) return;
+    if (!canSubmit) return;
 
     const params = new URLSearchParams();
-    params.set("mood", Array.from(selectedMoods).join(","));
+    if (count > 0) params.set("mood", Array.from(selectedMoods).join(","));
 
     if (runtime) params.set("runtime", runtime);
     if (language) params.set("language", language);
     if (excludedGenres.size > 0) {
       params.set("exclude", Array.from(excludedGenres).join(","));
     }
+    if (era) params.set("era", era);
+    if (tempo) params.set("tempo", tempo);
+    if (trimmedText) params.set("text", trimmedText);
 
     router.push(`/results?${params.toString()}`);
   };
-
-  const chipStyle = (isActive: boolean, variant?: "exclusion") => ({
-    padding: "7px 12px",
-    borderRadius: "8px",
-    fontSize: "11px",
-    fontWeight: 500 as const,
-    cursor: "pointer" as const,
-    border: "1px solid",
-    transition: "all 0.2s",
-    userSelect: "none" as const,
-    ...(variant === "exclusion" && isActive
-      ? {
-          background: "var(--rose-soft)",
-          color: "var(--rose)",
-          borderColor: "rgba(196, 107, 124, 0.25)",
-        }
-      : isActive
-        ? {
-            background: "var(--t1)",
-            color: "var(--bg)",
-            borderColor: "transparent",
-          }
-        : {
-            background: "var(--surface)",
-            color: "var(--t2)",
-            borderColor: "var(--border)",
-          }),
-  });
 
   const content = (
     <>
@@ -124,6 +108,18 @@ export default function MoodPanel({
             onSelect={onSelectMood}
           />
         ))}
+      </div>
+
+      {/* Era + tempo + free-form text */}
+      <div style={{ marginBottom: "14px" }}>
+        <MoodExtras
+          era={era}
+          tempo={tempo}
+          text={moodText}
+          onEraChange={setEra}
+          onTempoChange={setTempo}
+          onTextChange={setMoodText}
+        />
       </div>
 
       {/* Refine toggle + area */}
@@ -189,17 +185,7 @@ export default function MoodPanel({
           >
             {/* Runtime */}
             <div>
-              <div
-                className="font-sans"
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  color: "var(--t2)",
-                  marginBottom: "8px",
-                }}
-              >
-                How long do you have?
-              </div>
+              <FieldLabel>How long do you have?</FieldLabel>
               <div className="flex flex-wrap gap-1.5">
                 {[
                   { value: "short", label: "Under 100 min" },
@@ -219,17 +205,7 @@ export default function MoodPanel({
 
             {/* Language */}
             <div>
-              <div
-                className="font-sans"
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  color: "var(--t2)",
-                  marginBottom: "8px",
-                }}
-              >
-                Subtitles okay?
-              </div>
+              <FieldLabel>Subtitles okay?</FieldLabel>
               <div className="flex flex-wrap gap-1.5">
                 {[
                   { value: "en", label: "English only" },
@@ -249,17 +225,7 @@ export default function MoodPanel({
 
             {/* Exclusions */}
             <div>
-              <div
-                className="font-sans"
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  color: "var(--t2)",
-                  marginBottom: "8px",
-                }}
-              >
-                Not in the mood for...
-              </div>
+              <FieldLabel>Not in the mood for...</FieldLabel>
               <div className="flex flex-wrap gap-1.5">
                 {EXCLUSION_OPTIONS.map((opt) => (
                   <button
@@ -282,7 +248,7 @@ export default function MoodPanel({
         className="flex items-center gap-2.5 flex-wrap"
         style={{ borderTop: "1px solid var(--border)", paddingTop: "14px", marginTop: "10px" }}
       >
-        {count > 0 && (
+        {canSubmit && (
           <button
             onClick={handleFindFilms}
             className="cursor-pointer"
@@ -327,8 +293,10 @@ export default function MoodPanel({
 
         <span className="ml-auto" style={{ fontSize: "12px", color: "var(--t3)" }}>
           {count > 0
-            ? `${count} mood${count > 1 ? "s" : ""} selected`
-            : "Select your moods, then find films"}
+            ? `${count} mood${count > 1 ? "s" : ""} selected${trimmedText ? " + description" : ""}`
+            : trimmedText
+              ? "Describing your mood"
+              : "Select your moods, then find films"}
         </span>
       </div>
     </>

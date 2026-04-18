@@ -1,11 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildTMDBParams, buildMergedTMDBParams, moodMap } from "@/lib/moodMap";
+import { resolveMoodText } from "@/lib/moodResolver";
+import {
+  applyEra,
+  applyTempo,
+  appendExtraKeywords,
+  isEraKey,
+  isTempoKey,
+} from "@/lib/moodRefinements";
+import type { EraKey, TempoKey } from "@/lib/types";
+
+interface Refinements {
+  runtime: string | null;
+  language: string | null;
+  exclude: string | null;
+  era: EraKey | null;
+  tempo: TempoKey | null;
+  extraKeywords: number[];
+}
 
 // Shared helper: build a TMDB discover URL from param object + refinements
 function buildDiscoverURL(
   apiKey: string,
   moodParams: Record<string, string>,
-  refinements: { runtime: string | null; language: string | null; exclude: string | null },
+  refinements: Refinements,
 ): URL {
   const url = new URL("https://api.themoviedb.org/3/discover/movie");
   url.searchParams.set("api_key", apiKey);
@@ -34,19 +52,18 @@ function buildDiscoverURL(
     url.searchParams.set("without_genres", merged);
   }
 
+  // Tempo overrides runtime when both are set (more intentional axis).
+  applyTempo(url, refinements.tempo);
+  applyEra(url, refinements.era);
+  appendExtraKeywords(url, refinements.extraKeywords);
+
   return url;
 }
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const moodParam = searchParams.get("mood");
-
-  if (!moodParam) {
-    return NextResponse.json(
-      { error: "Missing 'mood' query parameter" },
-      { status: 400 }
-    );
-  }
+  const text = searchParams.get("text");
 
   const apiKey = process.env.TMDB_API_KEY;
   if (!apiKey) {
@@ -56,20 +73,46 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Support comma-separated moods: ?mood=laugh,escape
-  const moodKeys = moodParam.split(",").filter((k) => k in moodMap);
+  // Resolve the optional free-form text into mood keys + keywords + era/tempo.
+  // Explicit chip values for era/tempo win over anything inferred from text.
+  const resolved = text && text.trim() ? resolveMoodText(text.trim()) : null;
+
+  const tileKeys = (moodParam ?? "")
+    .split(",")
+    .map((k) => k.trim())
+    .filter((k) => k && k in moodMap);
+  const textKeys = resolved?.moodKeys ?? [];
+  const moodKeys = [...new Set([...tileKeys, ...textKeys])];
+
   if (moodKeys.length === 0) {
+    // Resolver picked up era/tempo/keywords but no mood word — we need at least
+    // one mood signal to build a genre query, so nudge the user toward one.
+    const partialMatch =
+      resolved !== null &&
+      (resolved.era !== null ||
+        resolved.tempo !== null ||
+        resolved.keywords.length > 0);
     return NextResponse.json(
-      { error: "No valid moods provided" },
+      {
+        error: partialMatch
+          ? "Add a feeling word — like 'funny', 'dark', or 'cozy'. Era or tempo alone isn't enough."
+          : "Provide a mood tile or describe your mood",
+      },
       { status: 400 }
     );
   }
 
   // Optional refinement params
-  const runtime = searchParams.get("runtime");   // "short" | "long"
-  const language = searchParams.get("language");  // "en" | "scand"
-  const exclude = searchParams.get("exclude");    // comma-separated genre IDs
-  const refinements = { runtime, language, exclude };
+  const eraParam = searchParams.get("era");
+  const tempoParam = searchParams.get("tempo");
+  const refinements: Refinements = {
+    runtime: searchParams.get("runtime"),
+    language: searchParams.get("language"),
+    exclude: searchParams.get("exclude"),
+    era: isEraKey(eraParam) ? eraParam : resolved?.era ?? null,
+    tempo: isTempoKey(tempoParam) ? tempoParam : resolved?.tempo ?? null,
+    extraKeywords: resolved?.keywords ?? [],
+  };
 
   try {
     // ── Primary: merged mood query ──
@@ -116,10 +159,18 @@ export async function GET(request: NextRequest) {
     const labels = moodKeys.map((k) => moodMap[k].label);
 
     return NextResponse.json({
-      mood: moodParam,
+      mood: moodKeys.join(","),
       moods: labels,
       films,
       total: films.length,
+      resolved: resolved
+        ? {
+            matched: resolved.matched,
+            addedMoods: textKeys,
+            era: resolved.era,
+            tempo: resolved.tempo,
+          }
+        : null,
     });
   } catch (error) {
     const message =

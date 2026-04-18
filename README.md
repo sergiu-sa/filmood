@@ -4,12 +4,6 @@
 
 Filmood is a film discovery and decision-making web app that starts from the user's emotional state rather than from content catalogs. Users pick a mood, and Filmood returns films that match it. The app supports both solo discovery and a real-time group session where several people swipe on a shared film deck and the app picks a winner based on everyone's votes.
 
-**Live:** [filmood.app](https://filmood-three.vercel.app/)
-
-**Course:** Agency 2 (FM2AJA205) — Noroff
-
----
-
 ## Features
 
 ### Solo experience

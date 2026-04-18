@@ -7,8 +7,10 @@ import { useParticipantId } from "@/lib/useParticipantId";
 import { useGroupRealtime } from "@/lib/useGroupRealtime";
 import { getAuthHeaders } from "@/lib/getAuthToken";
 import { allMoods } from "@/lib/moodMap";
+import type { EraKey, TempoKey } from "@/lib/types";
 import Breadcrumb from "@/components/Breadcrumb";
 import MoodCard from "@/components/dashboard/MoodCard";
+import MoodExtras from "@/components/mood/MoodExtras";
 
 type Phase = "selecting" | "submitting" | "waiting" | "building";
 
@@ -35,6 +37,9 @@ export default function GroupMoodPage() {
   const [participants, setParticipants] = useState<ParticipantProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [era, setEra] = useState<EraKey | null>(null);
+  const [tempo, setTempo] = useState<TempoKey | null>(null);
+  const [moodText, setMoodText] = useState("");
 
   const [sessionId, setSessionId] = useState<string | null>(null);
   const { participantId } = useParticipantId();
@@ -144,8 +149,11 @@ export default function GroupMoodPage() {
     });
   };
 
+  const trimmedText = moodText.trim();
+  const canSubmit = selectedMoods.size > 0 || trimmedText.length > 0;
+
   const handleSubmit = async () => {
-    if (selectedMoods.size === 0) return;
+    if (!canSubmit) return;
     setPhase("submitting");
     setError(null);
 
@@ -153,12 +161,21 @@ export default function GroupMoodPage() {
       const headers = await getAuthHeaders();
       const isGuest = !headers.Authorization;
 
-      const body: { moods: string[]; participantId?: string } = {
+      const body: {
+        moods: string[];
+        participantId?: string;
+        text?: string;
+        era?: EraKey;
+        tempo?: TempoKey;
+      } = {
         moods: Array.from(selectedMoods),
       };
       if (isGuest && participantId) {
         body.participantId = participantId;
       }
+      if (trimmedText) body.text = trimmedText;
+      if (era) body.era = era;
+      if (tempo) body.tempo = tempo;
 
       const res = await fetch(`/api/group/${code}/mood`, {
         method: "POST",
@@ -427,12 +444,12 @@ export default function GroupMoodPage() {
             padding: "22px",
           }}
         >
-          {/* Mood grid */}
+          {/* Mood grid — disabled once the participant leaves the selecting phase. */}
           <div
             style={{
               transition: "opacity 0.4s ease",
-              opacity: phase === "waiting" ? 0.4 : 1,
-              pointerEvents: phase === "waiting" ? "none" : "auto",
+              opacity: phase === "selecting" ? 1 : 0.4,
+              pointerEvents: phase === "selecting" ? "auto" : "none",
               marginBottom: "20px",
             }}
           >
@@ -449,6 +466,18 @@ export default function GroupMoodPage() {
                   onSelect={toggleMood}
                 />
               ))}
+            </div>
+
+            {/* Era + tempo + free-form text — outer wrapper above owns the dim/disable. */}
+            <div style={{ marginTop: "16px" }}>
+              <MoodExtras
+                era={era}
+                tempo={tempo}
+                text={moodText}
+                onEraChange={setEra}
+                onTempoChange={setTempo}
+                onTextChange={setMoodText}
+              />
             </div>
           </div>
 
@@ -469,19 +498,17 @@ export default function GroupMoodPage() {
 
               <button
                 onClick={handleSubmit}
-                disabled={selectedMoods.size === 0 || phase === "submitting"}
+                disabled={!canSubmit || phase === "submitting"}
                 className="cursor-pointer font-sans"
                 style={{
                   padding: "14px 36px",
                   borderRadius: "var(--r)",
                   background:
-                    selectedMoods.size > 0 && phase !== "submitting"
+                    canSubmit && phase !== "submitting"
                       ? "var(--violet)"
                       : "var(--surface2)",
                   color:
-                    selectedMoods.size > 0 && phase !== "submitting"
-                      ? "#fff"
-                      : "var(--t3)",
+                    canSubmit && phase !== "submitting" ? "#fff" : "var(--t3)",
                   fontSize: "14px",
                   fontWeight: 600,
                   border: "none",
@@ -494,17 +521,19 @@ export default function GroupMoodPage() {
                 {phase === "submitting"
                   ? "Submitting..."
                   : selectedMoods.size > 0
-                    ? `Lock in ${selectedMoods.size} mood${selectedMoods.size > 1 ? "s" : ""}`
-                    : "Select at least one mood"}
+                    ? `Lock in ${selectedMoods.size} mood${selectedMoods.size > 1 ? "s" : ""}${trimmedText ? " + description" : ""}`
+                    : trimmedText
+                      ? "Lock in your description"
+                      : "Select at least one mood"}
               </button>
 
               <span
                 className="font-sans"
                 style={{ fontSize: "12px", color: "var(--t3)" }}
               >
-                {selectedMoods.size > 0
+                {canSubmit
                   ? "Once submitted, you cannot change your picks"
-                  : "Tap the moods that match how you want to feel"}
+                  : "Tap moods or describe how you want to feel"}
               </span>
             </div>
           ) : (
