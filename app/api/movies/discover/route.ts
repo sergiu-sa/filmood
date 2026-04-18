@@ -19,7 +19,15 @@ interface Refinements {
   extraKeywords: number[];
 }
 
-// Shared helper: build a TMDB discover URL from param object + refinements
+// How many TMDB result pages to pool per search. Page 1 is always fetched
+// (quality anchor); one more page is picked from [2..MAX_PAGE] to widen the
+// pool and vary results across repeat searches.
+const MAX_PAGE = 3;
+// Final deck size returned to the client.
+const RESULT_LIMIT = 20;
+
+// Shared helper: build a TMDB discover URL from param object + refinements.
+// Page is set by fetchDiscoverPage so the same base URL can be reused.
 function buildDiscoverURL(
   apiKey: string,
   moodParams: Record<string, string>,
@@ -28,7 +36,6 @@ function buildDiscoverURL(
   const url = new URL("https://api.themoviedb.org/3/discover/movie");
   url.searchParams.set("api_key", apiKey);
   url.searchParams.set("language", "en-US");
-  url.searchParams.set("page", "1");
 
   for (const [k, v] of Object.entries(moodParams)) {
     url.searchParams.set(k, v);
@@ -58,6 +65,53 @@ function buildDiscoverURL(
   appendExtraKeywords(url, refinements.extraKeywords);
 
   return url;
+}
+
+// Fetch a specific TMDB discover page. Returns [] on any network/HTTP error so
+// one bad page doesn't blow up the whole search.
+async function fetchDiscoverPage(
+  baseURL: URL,
+  page: number,
+): Promise<{ id: number }[]> {
+  const paged = new URL(baseURL.toString());
+  paged.searchParams.set("page", String(page));
+  try {
+    const res = await fetch(paged.toString());
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.results ?? []) as { id: number }[];
+  } catch {
+    return [];
+  }
+}
+
+// Fetch page 1 + one random page from [2..MAX_PAGE] and return the merged,
+// deduped pool. Pooling widens the candidate set so a Fisher-Yates shuffle
+// produces genuine variety across repeat searches, while page 1 keeps
+// quality anchored.
+async function fetchDiscoverPool(baseURL: URL): Promise<{ id: number }[]> {
+  const secondPage = 2 + Math.floor(Math.random() * (MAX_PAGE - 1));
+  const [first, second] = await Promise.all([
+    fetchDiscoverPage(baseURL, 1),
+    fetchDiscoverPage(baseURL, secondPage),
+  ]);
+  const seen = new Set<number>();
+  const pool: { id: number }[] = [];
+  for (const film of [...first, ...second]) {
+    if (seen.has(film.id)) continue;
+    seen.add(film.id);
+    pool.push(film);
+  }
+  return pool;
+}
+
+function shuffle<T>(arr: T[]): T[] {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
 }
 
 export async function GET(request: NextRequest) {
@@ -123,28 +177,23 @@ export async function GET(request: NextRequest) {
     const mergedParams = buildMergedTMDBParams(moodKeys);
     const mergedURL = buildDiscoverURL(apiKey, mergedParams, refinements);
 
-    const mergedRes = await fetch(mergedURL.toString());
-    if (!mergedRes.ok) throw new Error(`TMDB error: ${mergedRes.status}`);
-    const mergedData = await mergedRes.json();
-    let films: { id: number }[] = mergedData.results ?? [];
+    // Fetch pages 1 + random(2..MAX_PAGE) and shuffle so repeat searches
+    // return different films instead of the same top 20.
+    let films: { id: number }[] = shuffle(await fetchDiscoverPool(mergedURL));
 
-    // ── Fallback: if the merged query returned < 5 films and we have
-    //    multiple moods, supplement with per-mood results so the page
+    // ── Fallback: if the merged pool returned < 5 films and we have
+    //    multiple moods, supplement with per-mood pools so the page
     //    never feels empty. The blended results stay at the top. ──
     if (films.length < 5 && moodKeys.length > 1) {
       const seen = new Set(films.map((f) => f.id));
 
-      const fallbackFetches = moodKeys.map(async (key) => {
-        const params = buildTMDBParams(key);
-        const url = buildDiscoverURL(apiKey, params, refinements);
-        const res = await fetch(url.toString());
-        if (!res.ok) return [];
-        const data = await res.json();
-        return (data.results ?? []) as { id: number }[];
-      });
-
-      const fallbackResults = await Promise.all(fallbackFetches);
-      const extras = fallbackResults.flat().filter((f) => {
+      const fallbackPools = await Promise.all(
+        moodKeys.map((key) => {
+          const url = buildDiscoverURL(apiKey, buildTMDBParams(key), refinements);
+          return fetchDiscoverPool(url);
+        }),
+      );
+      const extras = shuffle(fallbackPools.flat()).filter((f) => {
         if (seen.has(f.id)) return false;
         seen.add(f.id);
         return true;
@@ -154,7 +203,7 @@ export async function GET(request: NextRequest) {
       films = [...films, ...extras];
     }
 
-    films = films.slice(0, 20);
+    films = films.slice(0, RESULT_LIMIT);
 
     const labels = moodKeys.map((k) => moodMap[k].label);
 

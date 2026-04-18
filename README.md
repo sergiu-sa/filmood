@@ -83,16 +83,6 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 
 # TMDB — get this from themoviedb.org/settings/api
 TMDB_API_KEY=your_tmdb_api_key
-
-# NextAuth — only used for secret generation, auth runs through Supabase directly
-NEXTAUTH_SECRET=generate_with_openssl
-NEXTAUTH_URL=http://localhost:3000
-```
-
-Generate the NextAuth secret with:
-
-```bash
-openssl rand -base64 32
 ```
 
 ### Database setup
@@ -102,6 +92,7 @@ Run the SQL migrations in `supabase/migrations/` against your Supabase project i
 1. `000_watchlists.sql` — watchlists table
 2. `001_group_sessions.sql` — sessions, session_participants, swipes tables with RLS and Realtime
 3. `002_add_is_ready.sql` — adds `is_ready` flag to session_participants
+4. `003_mood_refinements.sql` — adds `mood_text`, `era`, `tempo`, `extra_keywords` to session_participants
 
 Run them in the Supabase SQL Editor or via the Supabase CLI. An optional `supabase/seed_group_session.sql` file is included with sample data for testing the group flow locally.
 
@@ -149,6 +140,35 @@ npm run test:e2e:debug   # Debug mode with inspector
 # One-off setup
 npm run seed:e2e-user    # Provision the Supabase user used by the E2E suite
 ```
+
+---
+
+## Deploying to Vercel
+
+The app is a standard Next.js 16 project and deploys to Vercel without custom build steps. Import the repo in the Vercel dashboard, then configure:
+
+### Environment variables (Production + Preview)
+
+Set these under **Settings → Environment Variables**:
+
+| Variable | Notes |
+|----------|-------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Same value as local. Exposed to the client. |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Same value as local. Exposed to the client. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-only. Used by admin routes and the E2E seed script. Never expose. |
+| `TMDB_API_KEY` | Server-only. Used by `/api/movies/*` route handlers. |
+
+### Supabase configuration
+
+Set **Supabase → Authentication → URL Configuration → Site URL** to the production Vercel domain so email-confirmation links sent during signup resolve correctly. If you later enable OAuth providers or magic-link auth, also add preview/production domains under **Redirect URLs**.
+
+### Database
+
+Make sure all four migrations in `supabase/migrations/` have been applied to the Supabase project used by production. New migrations must be applied manually in the Supabase SQL Editor before deploying code that depends on them.
+
+### Node version
+
+The repo pins Node 20 via `.nvmrc`, which Vercel reads for both the build and function runtime. `package.json` also declares `engines.node: ">=20"` for npm's benefit.
 
 ---
 
