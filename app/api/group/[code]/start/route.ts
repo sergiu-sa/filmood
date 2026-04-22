@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
 import { resolveSession } from "@/lib/group-api";
+import { internalError } from "@/lib/api-errors";
 
 // POST /api/group/[code]/start
 // Host transitions the session from "lobby" to "mood".
@@ -73,16 +74,11 @@ export async function POST(
       .eq("id", session.id);
 
     if (updateError) {
-      return NextResponse.json(
-        { error: "Failed to start session" },
-        { status: 500 },
-      );
+      return internalError(updateError, "Failed to start session");
     }
 
     return NextResponse.json({ status: "mood" });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to start session";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return internalError(error, "Failed to start session");
   }
 }

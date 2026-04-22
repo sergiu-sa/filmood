@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
 import { generateUniqueCode } from "@/lib/group";
+import { internalError } from "@/lib/api-errors";
 
 // POST /api/group/create
 // Creates a new group session. Requires authentication.
@@ -28,10 +29,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (sessionError || !session) {
-      return NextResponse.json(
-        { error: sessionError?.message ?? "Failed to create session" },
-        { status: 500 },
-      );
+      return internalError(sessionError, "Failed to create session");
     }
 
     // Auto-add the host as the first participant
@@ -51,10 +49,7 @@ export async function POST(request: NextRequest) {
     if (participantError || !participant) {
       // Clean up the session if participant insert fails
       await supabase.from("sessions").delete().eq("id", session.id);
-      return NextResponse.json(
-        { error: participantError?.message ?? "Failed to add host as participant" },
-        { status: 500 },
-      );
+      return internalError(participantError, "Failed to add host as participant");
     }
 
     return NextResponse.json(
@@ -66,8 +61,6 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     );
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to create session";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return internalError(error, "Failed to create session");
   }
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { internalError } from "@/lib/api-errors";
 
 export async function GET() {
   const apiKey = process.env.TMDB_API_KEY;
@@ -35,10 +36,7 @@ export async function GET() {
       );
 
     return NextResponse.json({ films });
-  } catch {
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
+  } catch (error) {
+    return internalError(error, "Internal server error");
   }
 }

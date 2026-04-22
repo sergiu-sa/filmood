@@ -1,6 +1,7 @@
 "use client";
 
 import type { AccentColor } from "@/lib/types";
+import { ACCENT_VARS } from "@/lib/constants";
 
 interface MoodCardProps {
   moodKey: string;
@@ -12,16 +13,6 @@ interface MoodCardProps {
   onSelect: (key: string) => void;
 }
 
-// Maps accent name to its CSS variable names
-const accentVars: Record<AccentColor, { base: string; soft: string; glow: string }> = {
-  gold:   { base: "var(--gold)",   soft: "var(--gold-soft)",   glow: "var(--gold-glow)" },
-  blue:   { base: "var(--blue)",   soft: "var(--blue-soft)",   glow: "var(--blue-glow)" },
-  rose:   { base: "var(--rose)",   soft: "var(--rose-soft)",   glow: "var(--rose-glow)" },
-  violet: { base: "var(--violet)", soft: "var(--violet-soft)", glow: "var(--violet-glow)" },
-  teal:   { base: "var(--teal)",   soft: "var(--teal-soft)",   glow: "var(--teal-glow)" },
-  ember:  { base: "var(--ember)",  soft: "var(--ember-soft)",  glow: "var(--ember-glow)" },
-};
-
 export default function MoodCard({
   moodKey,
   tagLabel,
@@ -31,7 +22,7 @@ export default function MoodCard({
   isSelected,
   onSelect,
 }: MoodCardProps) {
-  const accent = accentVars[accentColor];
+  const accent = ACCENT_VARS[accentColor];
 
   return (
     <button

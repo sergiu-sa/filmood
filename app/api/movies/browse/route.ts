@@ -1,24 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-
-type FilmRaw = {
-  id: number;
-  title: string;
-  poster_path: string | null;
-  release_date: string;
-  vote_average: number;
-  overview: string;
-};
-
-function mapFilm(f: FilmRaw) {
-  return {
-    id: f.id,
-    title: f.title,
-    poster_path: f.poster_path,
-    release_date: f.release_date,
-    vote_average: f.vote_average,
-    overview: f.overview,
-  };
-}
+import { mapTMDBFilm } from "@/lib/tmdb";
+import { internalError } from "@/lib/api-errors";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -119,12 +101,10 @@ export async function GET(request: NextRequest) {
     if (!res.ok) throw new Error("Failed to fetch from TMDB");
     const data = await res.json();
 
-    const films = (data.results ?? []).map(mapFilm);
+    const films = (data.results ?? []).map(mapTMDBFilm);
     const totalPages: number = data.total_pages ?? 1;
     return NextResponse.json({ films, totalPages });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Internal server error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return internalError(error, "Internal server error");
   }
 }

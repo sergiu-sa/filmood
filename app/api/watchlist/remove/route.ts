@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
+import { internalError } from "@/lib/api-errors";
 
 // DELETE /api/watchlist/remove
 // Removes a film from the user's watchlist.
@@ -28,7 +29,7 @@ export async function DELETE(request: NextRequest) {
     .eq("movie_id", movie_id);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return internalError(error, "Failed to remove from watchlist");
   }
 
   return NextResponse.json({ success: true });

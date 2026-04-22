@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { internalError } from "@/lib/api-errors";
 
 export async function GET(
   request: NextRequest,
@@ -40,10 +41,7 @@ export async function GET(
         type: trailer.type,
       },
     });
-  } catch {
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
+  } catch (error) {
+    return internalError(error, "Internal server error");
   }
 }

@@ -188,8 +188,8 @@ export default function TopPickCard({
                       borderRadius: "100px",
                       fontSize: "10px",
                       fontWeight: 600,
-                      color: vars.color,
-                      background: vars.bg,
+                      color: vars.base,
+                      background: vars.soft,
                       border: `1px solid ${vars.border}`,
                     }}
                   >

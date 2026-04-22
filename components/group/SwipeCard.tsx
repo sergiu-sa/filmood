@@ -268,8 +268,8 @@ export default function SwipeCard({
                     fontSize: isMobile ? "9px" : "10px",
                     fontWeight: 600,
                     lineHeight: 1,
-                    color: vars.color,
-                    background: vars.bg,
+                    color: vars.base,
+                    background: vars.soft,
                     border: `1px solid ${vars.border}`,
                   }}
                 >

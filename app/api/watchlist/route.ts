@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
+import { internalError } from "@/lib/api-errors";
 
 // GET /api/watchlist
 // Returns all saved films for the logged-in user, newest first.
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
     .order("added_at", { ascending: false });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return internalError(error, "Failed to load watchlist");
   }
 
   return NextResponse.json({ watchlist: data });

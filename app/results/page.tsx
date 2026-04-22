@@ -9,43 +9,7 @@ import FilmCard from "@/components/film/FilmCard";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import type { Film, AccentColor, Provider } from "@/lib/types";
 import { moodMap } from "@/lib/moodMap";
-
-/* ── Accent system ── */
-const accentVars: Record<
-  AccentColor,
-  { base: string; soft: string; glow: string }
-> = {
-  gold: {
-    base: "var(--gold)",
-    soft: "var(--gold-soft)",
-    glow: "var(--gold-glow)",
-  },
-  blue: {
-    base: "var(--blue)",
-    soft: "var(--blue-soft)",
-    glow: "var(--blue-glow)",
-  },
-  rose: {
-    base: "var(--rose)",
-    soft: "var(--rose-soft)",
-    glow: "var(--rose-glow)",
-  },
-  violet: {
-    base: "var(--violet)",
-    soft: "var(--violet-soft)",
-    glow: "var(--violet-glow)",
-  },
-  teal: {
-    base: "var(--teal)",
-    soft: "var(--teal-soft)",
-    glow: "var(--teal-glow)",
-  },
-  ember: {
-    base: "var(--ember)",
-    soft: "var(--ember-soft)",
-    glow: "var(--ember-glow)",
-  },
-};
+import { ACCENT_VARS } from "@/lib/constants";
 
 function getMeta(moods: string[]) {
   const key = moods[0]?.trim().toLowerCase() ?? "";
@@ -239,7 +203,7 @@ function TopPick({
               {moods.map((m) => {
                 const moodKey = m.trim().toLowerCase();
                 const moodAccentKey = moodMap[moodKey]?.accentColor ?? "gold";
-                const moodAccent = accentVars[moodAccentKey];
+                const moodAccent = ACCENT_VARS[moodAccentKey];
                 return (
                   <span
                     key={m}
@@ -572,7 +536,7 @@ function ResultsContent() {
   }
 
   const { accent: accentKey, tagline } = getMeta(moods);
-  const accent = accentVars[accentKey];
+  const accent = ACCENT_VARS[accentKey];
   const restFilms = topPick ? films.filter((f) => f.id !== topPick.id) : films;
 
   return (
@@ -641,7 +605,7 @@ function ResultsContent() {
           {moods.map((m) => {
             const moodKey = m.trim().toLowerCase();
             const moodAccentKey = moodMap[moodKey]?.accentColor ?? "gold";
-            const moodAccent = accentVars[moodAccentKey];
+            const moodAccent = ACCENT_VARS[moodAccentKey];
             return (
               <span
                 key={m}

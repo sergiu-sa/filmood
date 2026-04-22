@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
+import { internalError } from "@/lib/api-errors";
 
 // POST /api/watchlist/add
 // Saves a film to the user's watchlist.
@@ -56,7 +57,7 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return internalError(error, "Failed to add to watchlist");
   }
 
   return NextResponse.json({ entry: data }, { status: 201 });

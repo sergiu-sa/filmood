@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-server";
 import { resolveSession } from "@/lib/group-api";
+import { internalError } from "@/lib/api-errors";
 
 // GET /api/group/[code]
 // Returns session details + participant list for the lobby.
@@ -27,10 +28,7 @@ export async function GET(
       .order("joined_at", { ascending: true });
 
     if (participantsError) {
-      return NextResponse.json(
-        { error: "Failed to load participants" },
-        { status: 500 },
-      );
+      return internalError(participantsError, "Failed to load participants");
     }
 
     return NextResponse.json({
@@ -44,8 +42,6 @@ export async function GET(
       participants: participants ?? [],
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to load session";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return internalError(error, "Failed to load session");
   }
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { internalError } from "@/lib/api-errors";
 
 // GET /api/movies/[id]/providers
 // Streaming providers for a movie, scoped to Norway (country code "NO").
@@ -43,10 +44,7 @@ export async function GET(
     );
 
     return NextResponse.json({ providers: uniqueProviders });
-  } catch {
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
+  } catch (error) {
+    return internalError(error, "Internal server error");
   }
 }

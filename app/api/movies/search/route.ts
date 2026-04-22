@@ -1,24 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-
-type FilmRaw = {
-  id: number;
-  title: string;
-  poster_path: string | null;
-  release_date: string;
-  vote_average: number;
-  overview: string;
-};
-
-function mapFilm(film: FilmRaw) {
-  return {
-    id: film.id,
-    title: film.title,
-    poster_path: film.poster_path,
-    release_date: film.release_date,
-    vote_average: film.vote_average,
-    overview: film.overview,
-  };
-}
+import { mapTMDBFilm } from "@/lib/tmdb";
+import { internalError } from "@/lib/api-errors";
 
 // Search by film title using TMDB /search/movie
 async function searchByTitle(query: string, apiKey: string) {
@@ -32,7 +14,7 @@ async function searchByTitle(query: string, apiKey: string) {
   const res = await fetch(url.toString());
   if (!res.ok) throw new Error("Failed to fetch from TMDB");
   const data = await res.json();
-  return (data.results ?? []).slice(0, 20).map(mapFilm);
+  return (data.results ?? []).slice(0, 20).map(mapTMDBFilm);
 }
 
 // Search by actor or director:
@@ -78,7 +60,7 @@ async function searchByPerson(
           b.popularity - a.popularity,
       )
       .slice(0, 20)
-      .map(mapFilm);
+      .map(mapTMDBFilm);
   }
 
   // director — filter crew by job
@@ -89,7 +71,7 @@ async function searchByPerson(
         b.popularity - a.popularity,
     )
     .slice(0, 20)
-    .map(mapFilm);
+    .map(mapTMDBFilm);
 }
 
 export async function GET(request: NextRequest) {
@@ -138,10 +120,7 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({ films });
-  } catch {
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
+  } catch (error) {
+    return internalError(error, "Internal server error");
   }
 }

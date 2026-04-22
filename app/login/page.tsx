@@ -6,50 +6,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/AuthProvider";
 import { loginSchema, type LoginFormData } from "@/lib/validations";
-
-function useDynamicBackdrop() {
-  const [backdrops, setBackdrops] = useState<string[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [nextIndex, setNextIndex] = useState(1);
-  const [fading, setFading] = useState(false);
-
-  useEffect(() => {
-    fetch("/api/movies/trending")
-      .then((r) => r.json())
-      .then((data) => {
-        const urls: string[] = (data.results ?? data.films ?? data ?? [])
-          .filter((m: { backdrop_path?: string }) => m.backdrop_path)
-          .slice(0, 10)
-          .map(
-            (m: { backdrop_path: string }) =>
-              `https://image.tmdb.org/t/p/original${m.backdrop_path}`,
-          );
-        if (urls.length > 0) setBackdrops(urls);
-      })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (backdrops.length < 2) return;
-    const interval = setInterval(() => {
-      setFading(true);
-      setTimeout(() => {
-        setCurrentIndex((prev) => (prev + 1) % backdrops.length);
-        setNextIndex((prev) => (prev + 1) % backdrops.length);
-        setFading(false);
-      }, 800);
-    }, 6000);
-    return () => clearInterval(interval);
-  }, [backdrops]);
-
-  return {
-    current:
-      backdrops[currentIndex] ??
-      "https://image.tmdb.org/t/p/original/wabiQjakDFOPGyGZo5h83Bbtqv2.jpg",
-    next: backdrops[nextIndex] ?? null,
-    fading,
-  };
-}
+import { useDynamicBackdrop } from "@/lib/useDynamicBackdrop";
 
 export default function LoginPage() {
   const { user, loading: authLoading } = useAuth();

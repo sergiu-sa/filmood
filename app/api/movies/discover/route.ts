@@ -8,6 +8,7 @@ import {
   isEraKey,
   isTempoKey,
 } from "@/lib/moodRefinements";
+import { internalError } from "@/lib/api-errors";
 import type { EraKey, TempoKey } from "@/lib/types";
 
 interface Refinements {
@@ -222,8 +223,6 @@ export async function GET(request: NextRequest) {
         : null,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to fetch films";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return internalError(error, "Failed to fetch films");
   }
 }

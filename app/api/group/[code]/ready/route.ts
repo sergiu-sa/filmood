@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
 import { resolveSession, resolveParticipant } from "@/lib/group-api";
+import { internalError } from "@/lib/api-errors";
 
 // POST /api/group/[code]/ready
 // Toggles the is_ready flag for the calling participant.
@@ -49,16 +50,11 @@ export async function POST(
       .eq("id", participant.id);
 
     if (updateError) {
-      return NextResponse.json(
-        { error: "Failed to update ready state" },
-        { status: 500 },
-      );
+      return internalError(updateError, "Failed to update ready state");
     }
 
     return NextResponse.json({ is_ready: newReady });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to toggle ready";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return internalError(error, "Failed to toggle ready");
   }
 }

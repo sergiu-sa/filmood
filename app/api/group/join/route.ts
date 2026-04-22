@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
 import { MAX_PARTICIPANTS, isSessionExpired } from "@/lib/group";
+import { internalError } from "@/lib/api-errors";
 
 // POST /api/group/join
 // Joins an existing group session by code.
@@ -119,10 +120,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (participantError || !participant) {
-      return NextResponse.json(
-        { error: participantError?.message ?? "Failed to join session" },
-        { status: 500 },
-      );
+      return internalError(participantError, "Failed to join session");
     }
 
     return NextResponse.json({
@@ -131,8 +129,6 @@ export async function POST(request: NextRequest) {
       code: upperCode,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to join session";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return internalError(error, "Failed to join session");
   }
 }

@@ -5,6 +5,7 @@ import { resolveMoodText } from "@/lib/moodResolver";
 import { isEraKey, isTempoKey } from "@/lib/moodRefinements";
 import { resolveSession, resolveParticipant } from "@/lib/group-api";
 import { buildSharedDeck } from "@/lib/deck";
+import { internalError } from "@/lib/api-errors";
 import type { EraKey, TempoKey } from "@/lib/types";
 
 // POST /api/group/[code]/mood
@@ -108,10 +109,7 @@ export async function POST(
       .eq("id", participant.id);
 
     if (updateError) {
-      return NextResponse.json(
-        { error: "Failed to save moods" },
-        { status: 500 },
-      );
+      return internalError(updateError, "Failed to save moods");
     }
 
     // Check if all participants have now submitted. Pull the full refinement
@@ -149,10 +147,7 @@ export async function POST(
       .select("id");
 
     if (deckError) {
-      return NextResponse.json(
-        { error: "Failed to build deck" },
-        { status: 500 },
-      );
+      return internalError(deckError, "Failed to build deck");
     }
 
     return NextResponse.json({
@@ -162,8 +157,6 @@ export async function POST(
       claimedBuild: (claimed?.length ?? 0) > 0,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to submit moods";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return internalError(error, "Failed to submit moods");
   }
 }

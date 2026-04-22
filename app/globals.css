@@ -64,6 +64,14 @@
   --ember-soft: rgba(212, 122, 74, 0.10);
   --ember-glow: rgba(212, 122, 74, 0.08);
 
+  /* Accent borders — ~25% alpha, for chip borders and outline accents */
+  --gold-border:   rgba(196, 163, 90, 0.25);
+  --blue-border:   rgba(91, 143, 212, 0.25);
+  --rose-border:   rgba(196, 107, 124, 0.25);
+  --violet-border: rgba(139, 108, 196, 0.25);
+  --teal-border:   rgba(90, 170, 143, 0.25);
+  --ember-border:  rgba(212, 122, 74, 0.25);
+
   /* Fonts */
   --serif: var(--font-serif), Georgia, serif;
   --sans: var(--font-sans), system-ui, sans-serif;
@@ -129,6 +137,12 @@
   --ember-soft: rgba(176, 90, 42, 0.10);
   --ember-glow: rgba(176, 90, 42, 0.08);
 
+  --gold-border:   rgba(154, 125, 48, 0.25);
+  --blue-border:   rgba(58, 111, 184, 0.25);
+  --rose-border:   rgba(168, 72, 88, 0.25);
+  --violet-border: rgba(106, 78, 168, 0.25);
+  --teal-border:   rgba(58, 138, 112, 0.25);
+  --ember-border:  rgba(176, 90, 42, 0.25);
 }
 
 /* ═══════════════════════════════════════════════════════════

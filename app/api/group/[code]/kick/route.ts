@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
 import { resolveSession } from "@/lib/group-api";
+import { internalError } from "@/lib/api-errors";
 
 // POST /api/group/[code]/kick
 // Host removes a participant from the session.
@@ -86,16 +87,11 @@ export async function POST(
       .eq("id", target.id);
 
     if (deleteError) {
-      return NextResponse.json(
-        { error: "Failed to remove participant" },
-        { status: 500 },
-      );
+      return internalError(deleteError, "Failed to remove participant");
     }
 
     return NextResponse.json({ kicked: true });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to kick participant";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return internalError(error, "Failed to kick participant");
   }
 }

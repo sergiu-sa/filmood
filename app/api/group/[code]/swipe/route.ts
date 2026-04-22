@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
 import { resolveSession, resolveParticipant } from "@/lib/group-api";
+import { internalError } from "@/lib/api-errors";
 import type { DeckFilm, SwipeVote } from "@/lib/types";
 
 const VALID_VOTES: SwipeVote[] = ["yes", "no", "maybe"];
@@ -70,9 +71,7 @@ export async function GET(
       sessionStatus: session.status,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to load swipe state";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return internalError(error, "Failed to load swipe state");
   }
 }
 
@@ -167,10 +166,7 @@ export async function POST(
           { status: 409 },
         );
       }
-      return NextResponse.json(
-        { error: "Failed to record vote" },
-        { status: 500 },
-      );
+      return internalError(swipeError, "Failed to record vote");
     }
 
     // Count how many movies this participant has now swiped
@@ -220,8 +216,6 @@ export async function POST(
       allDone,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to record vote";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return internalError(error, "Failed to record vote");
   }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
 import { resolveSession, resolveParticipant } from "@/lib/group-api";
+import { internalError } from "@/lib/api-errors";
 
 // DELETE /api/group/[code]/leave
 // Removes a participant from the session.
@@ -53,10 +54,7 @@ export async function DELETE(
         .eq("id", session.id);
 
       if (deleteError) {
-        return NextResponse.json(
-          { error: "Failed to disband session" },
-          { status: 500 },
-        );
+        return internalError(deleteError, "Failed to disband session");
       }
 
       return NextResponse.json({ disbanded: true });
@@ -69,16 +67,11 @@ export async function DELETE(
       .eq("id", participant.id);
 
     if (deleteError) {
-      return NextResponse.json(
-        { error: "Failed to leave session" },
-        { status: 500 },
-      );
+      return internalError(deleteError, "Failed to leave session");
     }
 
     return NextResponse.json({ left: true });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to leave session";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return internalError(error, "Failed to leave session");
   }
 }

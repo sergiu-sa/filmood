@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
 import { classifyTier } from "@/lib/group";
 import { resolveSession } from "@/lib/group-api";
+import { internalError } from "@/lib/api-errors";
 import type {
   DeckFilm,
   SwipeVote,
@@ -56,10 +57,7 @@ export async function GET(
       .order("joined_at", { ascending: true });
 
     if (participantsError || !participants) {
-      return NextResponse.json(
-        { error: "Failed to load participants" },
-        { status: 500 },
-      );
+      return internalError(participantsError, "Failed to load participants");
     }
 
     // Verify the caller is a participant in this session
@@ -81,10 +79,7 @@ export async function GET(
       .eq("session_id", session.id);
 
     if (swipesError) {
-      return NextResponse.json(
-        { error: "Failed to load votes" },
-        { status: 500 },
-      );
+      return internalError(swipesError, "Failed to load votes");
     }
 
     const deck: DeckFilm[] = session.movie_deck ?? [];
@@ -170,9 +165,7 @@ export async function GET(
 
     return NextResponse.json(payload);
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to load results";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return internalError(error, "Failed to load results");
   }
 }
 
