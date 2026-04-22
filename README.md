@@ -170,6 +170,10 @@ Make sure all four migrations in `supabase/migrations/` have been applied to the
 
 The repo pins Node 20 via `.nvmrc`, which Vercel reads for both the build and function runtime. `package.json` also declares `engines.node: ">=20"` for npm's benefit.
 
+### Troubleshooting
+
+**Build fails with `Error: supabaseUrl is required.` during prerender of `/_not-found`.** The Supabase env vars aren't set (or weren't set at the time the build started). `lib/supabase.ts` constructs the client at module load, and Next's static prerender imports it via `AuthProvider`. Set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` for **all three** environments (Production, Preview, Development) and redeploy — env changes only apply to new builds.
+
 ---
 
 ## Project Structure

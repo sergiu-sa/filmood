@@ -1,31 +1,5 @@
 "use client";
 
-// Currently shows placeholder data — no Supabase queries yet.
-// TO HOOK UP BACKEND:
-// 1. Create a `group_sessions` table in Supabase:
-//        id            uuid default gen_random_uuid() primary key
-//        created_by    uuid references auth.users(id)
-//        film_id       integer
-//        film_title    text
-//        poster_path   text
-//        result        text  -- e.g. "Perfect match" | "Close call"
-//        created_at    timestamp default now()
-//
-//2. Create a `session_participants` table:
-//        session_id    uuid references group_sessions(id)
-//        user_id       uuid references auth.users(id)
-//        initial       text  -- first letter of participant's name
-//        color         text  -- accent colour for their avatar
-//
-//3. Fetch sessions here:
-//        const { data } = await supabase
-//          .from("group_sessions")
-//          .select("*, session_participants(*)")
-//          .eq("created_by", user.id)
-//          .order("created_at", { ascending: false })
-//          .limit(3)
-//        setSessions(data ?? [])
-
 import { useAuth } from "@/components/AuthProvider";
 import { useRouter } from "next/navigation";
 import Breadcrumb from "@/components/Breadcrumb";

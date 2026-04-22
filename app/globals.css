@@ -1,6 +1,16 @@
 @import "tailwindcss";
 
 /* ═══════════════════════════════════════════════════════════
+   Theme tokens — expose font families to Tailwind v4 utilities
+   so `font-serif` and `font-sans` resolve to the Next.js fonts
+   loaded in app/layout.tsx (Lora + Plus Jakarta Sans).
+   ═══════════════════════════════════════════════════════════ */
+@theme {
+  --font-serif: var(--font-serif), Georgia, serif;
+  --font-sans: var(--font-sans), system-ui, sans-serif;
+}
+
+/* ═══════════════════════════════════════════════════════════
    Dark theme (default)
    ═══════════════════════════════════════════════════════════ */
 :root {

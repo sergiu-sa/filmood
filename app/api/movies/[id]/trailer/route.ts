@@ -14,7 +14,6 @@ export async function GET(
   }
 
   try {
-    //  Call TMDB for videos (trailers, teasers, etc.)
     const response = await fetch(
       `https://api.themoviedb.org/3/movie/${id}/videos?api_key=${apiKey}`,
     );
@@ -26,7 +25,6 @@ export async function GET(
     }
     const data = await response.json();
 
-    //  Find the first YouTube "Trailer" video
     const trailer = (data.results || []).find(
       (v: any) => v.site === "YouTube" && v.type === "Trailer",
     );
@@ -34,7 +32,6 @@ export async function GET(
       return NextResponse.json({ trailer: null });
     }
 
-    //  Return the trailer data (matches TrailerData type)
     return NextResponse.json({
       trailer: {
         key: trailer.key,

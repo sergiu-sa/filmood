@@ -22,7 +22,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="text-content-secondary">Loading...</p>
+        <p style={{ color: "var(--t2)" }}>Loading...</p>
       </main>
     );
   }

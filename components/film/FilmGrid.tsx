@@ -1,16 +1,3 @@
-// =============================================
-// FILMGRID COMPONENT
-// =============================================
-// A responsive grid that displays multiple FilmCards.
-// It receives an array of films and renders one FilmCard per film.
-//
-// Responsive layout:
-// - Mobile: 2 columns
-// - Tablet (sm): 3 columns
-// - Desktop (lg): 4 columns
-//
-// If there are no films, it shows a friendly message.
-
 import FilmCard from "./FilmCard";
 import type { Film } from "@/lib/types";
 
@@ -22,7 +9,7 @@ interface FilmGridProps {
 export default function FilmGrid({ films, accentBase }: FilmGridProps) {
   if (films.length === 0) {
     return (
-      <p className="text-center py-12 text-t-2">
+      <p className="text-center py-12" style={{ color: "var(--t2)" }}>
         No films found. Try a different mood!
       </p>
     );

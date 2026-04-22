@@ -1,24 +1,6 @@
-// =============================================
-// FILMCARD COMPONENT
-// =============================================
-// Displays a single film as a card with:
-// - Poster image (from TMDB)
-// - Title
-// - Year and rating
-// - Short overview (2 lines max)
-//
-// This component is REUSABLE — it will be used on:
-// - /results page (grid of mood-matched films)
-// - /watchlist page (saved films)
-//
-// It's a Link — clicking the card navigates to /film/[id]
-
 import Image from "next/image";
 import Link from "next/link";
 
-// ---------- Props Interface ----------
-// These are the values the parent component must pass in.
-// They come directly from the TMDB API response.
 interface FilmCardProps {
   id: number;
   title: string;

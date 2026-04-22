@@ -18,8 +18,6 @@ function useDynamicBackdrop() {
     fetch("/api/movies/trending")
       .then((r) => r.json())
       .then((data) => {
-        console.log("trending data:", data);
-        console.log("first film:", data.films[0]);
         const urls: string[] = (data.results ?? data.films ?? data ?? [])
           .filter((m: { backdrop_path?: string }) => m.backdrop_path)
           .slice(0, 10)
@@ -27,7 +25,6 @@ function useDynamicBackdrop() {
             (m: { backdrop_path: string }) =>
               `https://image.tmdb.org/t/p/original${m.backdrop_path}`,
           );
-        console.log("backdrop urls:", urls);
         if (urls.length > 0) setBackdrops(urls);
       })
       .catch(() => {}); // silently fall back to static image

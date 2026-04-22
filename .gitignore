@@ -42,5 +42,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-#Sergiu's personal notes files 
-NOTES.md
+#Sergiu's personal notes files
+/docs

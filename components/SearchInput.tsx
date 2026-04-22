@@ -105,7 +105,7 @@ export default function SearchInput({ onResults, onLoading }: SearchInputProps) 
           </button>
         )}
         {/* Loading spinner */}
-        {isLoading && !query === false && (
+        {isLoading && query && (
           <span className="absolute right-4 w-4 h-4 border-2 rounded-full animate-spin" style={{ borderColor: "var(--border)", borderTopColor: "var(--t1)" }} />
         )}
       </div>
