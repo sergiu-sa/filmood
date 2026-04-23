@@ -4,6 +4,10 @@ import type { AccentColor } from "./types";
  * Consistent avatar colors for participants across all group pages.
  * Index by participant position so the same person gets the same color
  * in lobby, swipe, and results.
+ *
+ * Text choice per accent (Marquee palette):
+ *   jade / cadmium / burnt (mid-tone warms) → ink
+ *   cobalt / shadow / bougain (deeper saturated) → chalk paper
  */
 export const AVATAR_COLORS: { bg: string; text: string }[] = [
   { bg: "var(--teal)", text: "var(--accent-ink)" },

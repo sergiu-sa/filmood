@@ -90,7 +90,7 @@ export default function SignupPage() {
       style={{ background: "var(--bg)", color: "var(--t1)" }}
     >
       {/* ── Left: cinematic panel ── */}
-      <div className="hidden lg:flex flex-col justify-end flex-1 relative overflow-hidden p-12">
+      <div className="always-dark-accents hidden lg:flex flex-col justify-end flex-1 relative overflow-hidden p-12">
         <div
           className="absolute inset-0 bg-cover bg-center transition-opacity duration-800"
           style={{

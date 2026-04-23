@@ -11,87 +11,93 @@
 }
 
 /* ═══════════════════════════════════════════════════════════
-   Dark theme (default)
+   Marquee Hybrid — Dark mode (default)
+   ───────────────────────────────────────────────────────────
+   Midnight-indigo base with warm chalk text. Accents are the
+   Marquee palette (cadmium, cobalt, bougain, shadow) brightened
+   so they glow on cool dark ground rather than compete with it.
+   Cobalt is nudged cyan (#7A9EE0) so it separates from the
+   midnight bg; warm ink (#1A130F) would make it blend.
    ═══════════════════════════════════════════════════════════ */
 :root {
-  /* Backgrounds */
-  --bg: #0a0a0c;
-  --surface: #131316;
-  --surface2: #1a1a1f;
-  --surface3: #222228;
+  /* Backgrounds — midnight ramp */
+  --bg: #0D1220;
+  --surface: #161D30;
+  --surface2: #1F2740;
+  --surface3: #2A3350;
 
-  /* Text hierarchy */
-  --t1: #f0efe8;
-  --t2: #9e9e9a;
-  --t3: #5c5c58;
+  /* Text hierarchy — warm chalk on cool bg (cinematic) */
+  --t1: #F3E8D2;
+  --t2: #C4B69C;
+  --t3: #7A7160;
 
-  /* Borders */
-  --border: rgba(255, 255, 255, 0.06);
-  --border-h: rgba(255, 255, 255, 0.12);
-  --border-active: rgba(255, 255, 255, 0.20);
+  /* Borders — chalk at low alpha */
+  --border:         rgba(243, 232, 210, 0.08);
+  --border-h:       rgba(243, 232, 210, 0.18);
+  --border-active:  rgba(243, 232, 210, 0.30);
 
   /* Tags */
-  --tag-bg: rgba(255, 255, 255, 0.12);
-  --tag-border: rgba(255, 255, 255, 0.22);
+  --tag-bg:     rgba(243, 232, 210, 0.08);
+  --tag-border: rgba(243, 232, 210, 0.18);
 
-  /* Accents — gold */
-  --gold: #c4a35a;
-  --gold-soft: rgba(196, 163, 90, 0.10);
-  --gold-glow: rgba(196, 163, 90, 0.08);
+  /* Accents — cadmium (warm signature, glows on midnight) */
+  --gold:      #E8A02E;
+  --gold-soft: rgba(232, 160, 46, 0.10);
+  --gold-glow: rgba(232, 160, 46, 0.08);
 
-  /* Accents — blue */
-  --blue: #5b8fd4;
-  --blue-soft: rgba(91, 143, 212, 0.10);
-  --blue-glow: rgba(91, 143, 212, 0.08);
+  /* Accents — cobalt (nudged cyan so it reads vs blue base) */
+  --blue:      #7A9EE0;
+  --blue-soft: rgba(122, 158, 224, 0.10);
+  --blue-glow: rgba(122, 158, 224, 0.08);
 
-  /* Accents — rose */
-  --rose: #c46b7c;
-  --rose-soft: rgba(196, 107, 124, 0.10);
-  --rose-glow: rgba(196, 107, 124, 0.08);
+  /* Accents — bougain (theatrical pink on deep blue) */
+  --rose:      #E85A8E;
+  --rose-soft: rgba(232, 90, 142, 0.10);
+  --rose-glow: rgba(232, 90, 142, 0.08);
 
-  /* Accents — violet */
-  --violet: #8b6cc4;
-  --violet-soft: rgba(139, 108, 196, 0.10);
-  --violet-glow: rgba(139, 108, 196, 0.08);
+  /* Accents — shadow-bright (wine; cerebral/mindbending moods) */
+  --violet:      #D06080;
+  --violet-soft: rgba(208, 96, 128, 0.10);
+  --violet-glow: rgba(208, 96, 128, 0.08);
 
-  /* Accents — teal */
-  --teal: #5aaa8f;
-  --teal-soft: rgba(90, 170, 143, 0.10);
-  --teal-glow: rgba(90, 170, 143, 0.08);
+  /* Accents — jade (calm/weird moods) */
+  --teal:      #5AB5A0;
+  --teal-soft: rgba(90, 181, 160, 0.10);
+  --teal-glow: rgba(90, 181, 160, 0.08);
 
-  /* Accents — ember */
-  --ember: #d47a4a;
-  --ember-soft: rgba(212, 122, 74, 0.10);
-  --ember-glow: rgba(212, 122, 74, 0.08);
+  /* Accents — burnt (intense moods) */
+  --ember:      #E56338;
+  --ember-soft: rgba(229, 99, 56, 0.10);
+  --ember-glow: rgba(229, 99, 56, 0.08);
 
-  /* Accent borders — ~25% alpha, for chip borders and outline accents */
-  --gold-border:   rgba(196, 163, 90, 0.25);
-  --blue-border:   rgba(91, 143, 212, 0.25);
-  --rose-border:   rgba(196, 107, 124, 0.25);
-  --violet-border: rgba(139, 108, 196, 0.25);
-  --teal-border:   rgba(90, 170, 143, 0.25);
-  --ember-border:  rgba(212, 122, 74, 0.25);
+  /* Accent borders — 25% alpha for chip borders and outline accents */
+  --gold-border:   rgba(232, 160, 46, 0.25);
+  --blue-border:   rgba(122, 158, 224, 0.25);
+  --rose-border:   rgba(232, 90, 142, 0.25);
+  --violet-border: rgba(208, 96, 128, 0.25);
+  --teal-border:   rgba(90, 181, 160, 0.25);
+  --ember-border:  rgba(229, 99, 56, 0.25);
 
   /* Accent RGB triplets — compose tints at arbitrary alpha:
-     rgb(var(--gold-rgb) / 0.7). Prefer --*-soft / --*-glow / --*-border
-     for the common 10% / 8% / 25% cases. */
-  --gold-rgb:   196, 163, 90;
-  --blue-rgb:   91, 143, 212;
-  --rose-rgb:   196, 107, 124;
-  --violet-rgb: 139, 108, 196;
-  --teal-rgb:   90, 170, 143;
-  --ember-rgb:  212, 122, 74;
+     rgba(var(--gold-rgb), 0.7). Prefer --*-soft / --*-glow / --*-border
+     for the common 10 / 8 / 25 % cases. */
+  --gold-rgb:   232, 160, 46;
+  --blue-rgb:   122, 158, 224;
+  --rose-rgb:   232, 90, 142;
+  --violet-rgb: 208, 96, 128;
+  --teal-rgb:   90, 181, 160;
+  --ember-rgb:  229, 99, 56;
 
-  /* Contrast text on accent-colored backgrounds. Stays fixed in both themes
-     because the accent fills don't flip — a gold button stays gold, so the
-     readable text on top is always dark-or-near-white depending on the
-     accent's luminance. */
-  --accent-ink:   #0a0a0c;
-  --accent-paper: #ffffff;
+  /* Contrast text on accent-colored backgrounds. Theme-fixed because
+     accent fills don't flip with mode — a gold button is gold in both
+     themes, so the readable text on top is a palette-family constant.
+     Ink and chalk match the Marquee palette, not generic black/white. */
+  --accent-ink:   #1A130F;
+  --accent-paper: #F3E8D2;
 
   /* Dark overlay tokens — scrims over posters, floating badge backgrounds,
-     subtle card shadows. Values are fixed in both themes because overlays
-     darken content regardless of mode. */
+     subtle card shadows. Fixed across themes because overlays darken
+     content regardless of mode. */
   --overlay-weak:  rgba(0, 0, 0, 0.12);
   --overlay-scrim: rgba(0, 0, 0, 0.4);
   --overlay-heavy: rgba(0, 0, 0, 0.75);
@@ -118,62 +124,91 @@
 }
 
 /* ═══════════════════════════════════════════════════════════
-   Light theme
+   Marquee Hybrid — Light mode
+   ───────────────────────────────────────────────────────────
+   Chalk (warm cream) paper with ink text. Accents are the
+   Marquee values — cobalt as the signature, bougain as the
+   energy shot, cadmium/shadow/jade/burnt rounding out the six.
+   Accents are tuned deeper than dark-mode siblings so they stay
+   readable against cream.
    ═══════════════════════════════════════════════════════════ */
 [data-theme="light"] {
-  --bg: #f4f3ee;
-  --surface: #ffffff;
-  --surface2: #f0efe8;
-  --surface3: #e8e7e0;
+  /* Backgrounds — chalk ramp */
+  --bg: #F3E8D2;
+  --surface: #FAF2DE;
+  --surface2: #EBD9B8;
+  --surface3: #E0CFA8;
 
-  --t1: #1a1a18;
-  --t2: #6e6e6a;
-  --t3: #a0a09a;
+  /* Text hierarchy — warm ink on chalk */
+  --t1: #1A130F;
+  --t2: #52382B;
+  --t3: #8A7B6D;
 
-  --border: rgba(0, 0, 0, 0.07);
-  --border-h: rgba(0, 0, 0, 0.14);
-  --border-active: rgba(0, 0, 0, 0.22);
+  /* Borders — ink at low alpha */
+  --border:        rgba(26, 19, 15, 0.10);
+  --border-h:      rgba(26, 19, 15, 0.22);
+  --border-active: rgba(26, 19, 15, 0.35);
 
-  --tag-bg: rgba(0, 0, 0, 0.07);
-  --tag-border: rgba(0, 0, 0, 0.18);
+  --tag-bg:     rgba(26, 19, 15, 0.06);
+  --tag-border: rgba(26, 19, 15, 0.15);
 
-  --gold: #9a7d30;
-  --gold-soft: rgba(154, 125, 48, 0.10);
-  --gold-glow: rgba(154, 125, 48, 0.08);
+  /* Accents — Marquee values, darker siblings for contrast on cream */
+  --gold:      #B8761E;    /* cadmium, darkened */
+  --gold-soft: rgba(184, 118, 30, 0.10);
+  --gold-glow: rgba(184, 118, 30, 0.08);
 
-  --blue: #3a6fb8;
-  --blue-soft: rgba(58, 111, 184, 0.10);
-  --blue-glow: rgba(58, 111, 184, 0.08);
+  --blue:      #243E94;    /* cobalt (your reference) */
+  --blue-soft: rgba(36, 62, 148, 0.10);
+  --blue-glow: rgba(36, 62, 148, 0.08);
 
-  --rose: #a84858;
-  --rose-soft: rgba(168, 72, 88, 0.10);
-  --rose-glow: rgba(168, 72, 88, 0.08);
+  --rose:      #C4397A;    /* bougain, darkened */
+  --rose-soft: rgba(196, 57, 122, 0.10);
+  --rose-glow: rgba(196, 57, 122, 0.08);
 
-  --violet: #6a4ea8;
-  --violet-soft: rgba(106, 78, 168, 0.10);
-  --violet-glow: rgba(106, 78, 168, 0.08);
+  --violet:      #6B1F3A;  /* shadow (your reference) */
+  --violet-soft: rgba(107, 31, 58, 0.10);
+  --violet-glow: rgba(107, 31, 58, 0.08);
 
-  --teal: #3a8a70;
-  --teal-soft: rgba(58, 138, 112, 0.10);
-  --teal-glow: rgba(58, 138, 112, 0.08);
+  --teal:      #2E7D6E;    /* jade */
+  --teal-soft: rgba(46, 125, 110, 0.10);
+  --teal-glow: rgba(46, 125, 110, 0.08);
 
-  --ember: #b05a2a;
-  --ember-soft: rgba(176, 90, 42, 0.10);
-  --ember-glow: rgba(176, 90, 42, 0.08);
+  --ember:      #C04820;   /* burnt */
+  --ember-soft: rgba(192, 72, 32, 0.10);
+  --ember-glow: rgba(192, 72, 32, 0.08);
 
-  --gold-border:   rgba(154, 125, 48, 0.25);
-  --blue-border:   rgba(58, 111, 184, 0.25);
-  --rose-border:   rgba(168, 72, 88, 0.25);
-  --violet-border: rgba(106, 78, 168, 0.25);
-  --teal-border:   rgba(58, 138, 112, 0.25);
-  --ember-border:  rgba(176, 90, 42, 0.25);
+  --gold-border:   rgba(184, 118, 30, 0.25);
+  --blue-border:   rgba(36, 62, 148, 0.25);
+  --rose-border:   rgba(196, 57, 122, 0.25);
+  --violet-border: rgba(107, 31, 58, 0.25);
+  --teal-border:   rgba(46, 125, 110, 0.25);
+  --ember-border:  rgba(192, 72, 32, 0.25);
 
-  --gold-rgb:   154, 125, 48;
-  --blue-rgb:   58, 111, 184;
-  --rose-rgb:   168, 72, 88;
-  --violet-rgb: 106, 78, 168;
-  --teal-rgb:   58, 138, 112;
-  --ember-rgb:  176, 90, 42;
+  --gold-rgb:   184, 118, 30;
+  --blue-rgb:   36, 62, 148;
+  --rose-rgb:   196, 57, 122;
+  --violet-rgb: 107, 31, 58;
+  --teal-rgb:   46, 125, 110;
+  --ember-rgb:  192, 72, 32;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Always-dark-accents
+   ───────────────────────────────────────────────────────────
+   Scoped override: any descendant of .always-dark-accents uses
+   the dark-mode accent RGB triplets regardless of active theme.
+   Applied to the auth pages' left panel where the backdrop is
+   always a dark TMDB image, so light-mode's darker accent RGBs
+   would read as muddy. Keeps the decorative pills crisp there
+   without forcing a full nested theme.
+   ═══════════════════════════════════════════════════════════ */
+[data-theme="light"] .always-dark-accents {
+  --gold-rgb:   232, 160, 46;
+  --blue-rgb:   122, 158, 224;
+  --rose-rgb:   232, 90, 142;
+  --violet-rgb: 208, 96, 128;
+  --teal-rgb:   90, 181, 160;
+  --ember-rgb:  229, 99, 56;
 }
 
 /* ═══════════════════════════════════════════════════════════
