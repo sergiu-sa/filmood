@@ -2,6 +2,8 @@
 
 **Tell Filmood how you want to feel. It tells you what to watch — alone or as a group.**
 
+🔗 **Live demo:** [filmood-pi.vercel.app](https://filmood-pi.vercel.app/)
+
 Filmood is a film discovery and decision-making web app that starts from the user's emotional state rather than from content catalogs. Users pick a mood, and Filmood returns films that match it. The app supports both solo discovery and a real-time group session where several people swipe on a shared film deck and the app picks a winner based on everyone's votes.
 
 ## Features
