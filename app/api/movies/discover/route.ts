@@ -9,6 +9,8 @@ import {
   isTempoKey,
 } from "@/lib/moodRefinements";
 import { internalError } from "@/lib/api-errors";
+import { getAuthUser, getSupabaseAdmin } from "@/lib/supabase-server";
+import { recordMoodPicks } from "@/lib/mood-history";
 import type { EraKey, TempoKey } from "@/lib/types";
 
 interface Refinements {
@@ -154,6 +156,16 @@ export async function GET(request: NextRequest) {
           : "Provide a mood tile or describe your mood",
       },
       { status: 400 }
+    );
+  }
+
+  // Record mood picks for signed-in users. Fire-and-forget — Vercel's
+  // serverless runtime waits for pending promises before the function
+  // exits, so the insert is reliable even though we don't await it here.
+  const user = await getAuthUser(request);
+  if (user) {
+    recordMoodPicks(getSupabaseAdmin(), user.id, moodKeys).catch((err) =>
+      console.error("mood_history insert failed", err),
     );
   }
 

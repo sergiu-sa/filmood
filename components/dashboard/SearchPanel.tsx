@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import FilmGrid from "@/components/film/FilmGrid";
 import type { Film } from "@/lib/types";
@@ -242,16 +242,12 @@ export default function SearchPanel({
   const [sortOrder, setSortOrder] = useState<SortOrder>("popularity");
   const [panelQuery, setPanelQuery] = useState("");
   const [inputFocused, setInputFocused] = useState(false);
-  const [gridKey, setGridKey] = useState(0);
-  const prevFilmsRef = useRef(films);
 
-  // Bump the grid key when films change to trigger a fade-in
-  useEffect(() => {
-    if (films !== prevFilmsRef.current && films.length > 0) {
-      setGridKey((k) => k + 1);
-      prevFilmsRef.current = films;
-    }
-  }, [films]);
+  // Remount the grid wrapper when the underlying film set changes so the
+  // .search-grid-enter CSS animation re-runs. Length + first-film-ID is a
+  // cheap discriminator that's stable within a query but differs between
+  // queries (different category, genre, or search term).
+  const gridKey = `${films.length}-${films[0]?.id ?? "empty"}`;
 
   const { displayFilms, totalCount } = useMemo(() => {
     let f = films;

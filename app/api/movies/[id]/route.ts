@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { internalError } from "@/lib/api-errors";
+import { internalError, badRequest } from "@/lib/api-errors";
+import { parseTMDBId } from "@/lib/tmdb";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  const movieId = parseTMDBId(id);
+  if (movieId === null) return badRequest("Invalid movie id");
 
   const apiKey = process.env.TMDB_API_KEY;
   if (!apiKey) {
@@ -17,7 +20,7 @@ export async function GET(
 
   try {
     const response = await fetch(
-      `https://api.themoviedb.org/3/movie/${id}?api_key=${apiKey}&append_to_response=credits`,
+      `https://api.themoviedb.org/3/movie/${movieId}?api_key=${apiKey}&append_to_response=credits`,
     );
 
     if (!response.ok) {

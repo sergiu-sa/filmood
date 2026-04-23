@@ -33,8 +33,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Auto-add the host as the first participant
-    const nickname =
+    // Clamp to 20 chars to match the guest nickname constraint in join/route.ts.
+    // Trim first so leading whitespace doesn't eat the 20-char budget.
+    const rawNickname =
       user.user_metadata?.name || user.email?.split("@")[0] || "Host";
+    const nickname = rawNickname.trim().slice(0, 20) || "Host";
 
     const { data: participant, error: participantError } = await supabase
       .from("session_participants")

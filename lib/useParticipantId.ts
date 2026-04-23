@@ -1,22 +1,38 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useSyncExternalStore } from "react";
+
+// localStorage doesn't fire events for same-tab writes, and participantId is
+// only ever written once per session (on create/join). A no-op subscribe is
+// sufficient — useSyncExternalStore re-reads the snapshot on every render.
+const subscribe = () => () => {};
+const getSnapshot = () => localStorage.getItem("participantId");
+const getServerSnapshot = () => null;
+const getReadyClient = () => true;
+const getReadyServer = () => false;
 
 /**
- * Reads the guest participantId from localStorage.
- * Returns { participantId, ready } — ready is false until
- * localStorage has been checked, preventing premature API calls.
+ * Reads the guest participantId from localStorage synchronously (via
+ * useSyncExternalStore — matches the pattern in lib/useMediaQuery.ts).
+ *
+ * Returns { participantId, ready }:
+ *   - On SSR + first client paint: participantId=null, ready=false.
+ *   - After hydration: participantId=<stored value or null>, ready=true.
+ *
+ * Callers gate API requests on `ready` so authed users with no guest ID
+ * (participantId=null, ready=true) aren't confused with "haven't checked yet"
+ * (participantId=null, ready=false).
  */
 export function useParticipantId() {
-  const [state, setState] = useState<{
-    participantId: string | null;
-    ready: boolean;
-  }>({ participantId: null, ready: false });
-
-  useEffect(() => {
-    const stored = localStorage.getItem("participantId");
-    setState({ participantId: stored, ready: true });
-  }, []);
-
-  return state;
+  const participantId = useSyncExternalStore(
+    subscribe,
+    getSnapshot,
+    getServerSnapshot,
+  );
+  const ready = useSyncExternalStore(
+    subscribe,
+    getReadyClient,
+    getReadyServer,
+  );
+  return { participantId, ready };
 }

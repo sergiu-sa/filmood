@@ -14,3 +14,12 @@ export function internalError(error: unknown, fallback: string) {
     isDev && error instanceof Error && error.message ? error.message : fallback;
   return NextResponse.json({ error: message }, { status: 500 });
 }
+
+/**
+ * Build a 400 response with a user-safe message. Use for client-input
+ * validation failures (bad params, missing fields, wrong types) so route
+ * handlers read the same whether they're returning a 500 or a 400.
+ */
+export function badRequest(message: string) {
+  return NextResponse.json({ error: message }, { status: 400 });
+}

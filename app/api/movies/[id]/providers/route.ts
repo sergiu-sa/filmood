@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { internalError } from "@/lib/api-errors";
+import { internalError, badRequest } from "@/lib/api-errors";
+import { parseTMDBId, mapTMDBProvider } from "@/lib/tmdb";
+import type { TMDBProviderRaw } from "@/lib/tmdb";
 
 // GET /api/movies/[id]/providers
 // Streaming providers for a movie, scoped to Norway (country code "NO").
@@ -8,6 +10,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  const movieId = parseTMDBId(id);
+  if (movieId === null) return badRequest("Invalid movie id");
+
   const apiKey = process.env.TMDB_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
@@ -18,7 +23,7 @@ export async function GET(
 
   try {
     const response = await fetch(
-      `https://api.themoviedb.org/3/movie/${id}/watch/providers?api_key=${apiKey}`,
+      `https://api.themoviedb.org/3/movie/${movieId}/watch/providers?api_key=${apiKey}`,
     );
     if (!response.ok) {
       return NextResponse.json(
@@ -33,15 +38,15 @@ export async function GET(
       return NextResponse.json({ providers: [] });
     }
 
-    const allProviders = [
-      ...(results.flatrate || []),
-      ...(results.rent || []),
-      ...(results.buy || []),
+    const allProviders: TMDBProviderRaw[] = [
+      ...(results.flatrate ?? []),
+      ...(results.rent ?? []),
+      ...(results.buy ?? []),
     ];
 
     const uniqueProviders = Array.from(
-      new Map(allProviders.map((p: any) => [p.provider_id, p])).values(),
-    );
+      new Map(allProviders.map((p) => [p.provider_id, p])).values(),
+    ).map(mapTMDBProvider);
 
     return NextResponse.json({ providers: uniqueProviders });
   } catch (error) {

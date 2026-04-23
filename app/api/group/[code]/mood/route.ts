@@ -6,6 +6,7 @@ import { isEraKey, isTempoKey } from "@/lib/moodRefinements";
 import { resolveSession, resolveParticipant } from "@/lib/group-api";
 import { buildSharedDeck } from "@/lib/deck";
 import { internalError } from "@/lib/api-errors";
+import { recordMoodPicks } from "@/lib/mood-history";
 import type { EraKey, TempoKey } from "@/lib/types";
 
 // POST /api/group/[code]/mood
@@ -114,15 +115,30 @@ export async function POST(
 
     // Check if all participants have now submitted. Pull the full refinement
     // payload for deck-building in one round-trip.
-    const { data: allParticipants } = await supabase
+    const { data: allParticipants, error: loadErr } = await supabase
       .from("session_participants")
       .select("mood_selections, era, tempo, extra_keywords")
       .eq("session_id", session.id);
 
-    const total = allParticipants?.length ?? 0;
-    const submitted = allParticipants?.filter(
+    // Without this guard a failed query (allParticipants === null) would slip
+    // past the `submitted < total` check (both 0) and crash inside buildSharedDeck.
+    if (loadErr || !allParticipants) {
+      return internalError(loadErr, "Failed to load participants");
+    }
+
+    // Record this participant's mood picks for signed-in users (guests
+    // skipped). Fire-and-forget — serverless waits for pending promises
+    // before exit, so the insert completes reliably without blocking.
+    if (user) {
+      recordMoodPicks(supabase, user.id, mergedMoods).catch((err) =>
+        console.error("mood_history insert failed", err),
+      );
+    }
+
+    const total = allParticipants.length;
+    const submitted = allParticipants.filter(
       (p) => p.mood_selections && p.mood_selections.length > 0,
-    ).length ?? 0;
+    ).length;
 
     if (submitted < total) {
       return NextResponse.json({
@@ -133,7 +149,7 @@ export async function POST(
     }
 
     // All done — build the shared deck using mood_selections plus refinements.
-    const deck = await buildSharedDeck(allParticipants!);
+    const deck = await buildSharedDeck(allParticipants);
 
     // Atomic compare-and-set on session.status so simultaneous last-submitters
     // don't both write a deck. Whichever request wins flips status to "swiping";

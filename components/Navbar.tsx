@@ -46,7 +46,7 @@ export default function Navbar() {
 
   return (
     <nav
-      className="flex items-center justify-between"
+      className="relative flex items-center justify-between"
       style={{
         padding: "14px 28px",
         borderBottom: "1px solid var(--border)",

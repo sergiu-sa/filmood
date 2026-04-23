@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { internalError } from "@/lib/api-errors";
+import { internalError, badRequest } from "@/lib/api-errors";
+import { parseTMDBId } from "@/lib/tmdb";
+import type { TrailerData } from "@/lib/types";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  const movieId = parseTMDBId(id);
+  if (movieId === null) return badRequest("Invalid movie id");
+
   const apiKey = process.env.TMDB_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
@@ -16,7 +21,7 @@ export async function GET(
 
   try {
     const response = await fetch(
-      `https://api.themoviedb.org/3/movie/${id}/videos?api_key=${apiKey}`,
+      `https://api.themoviedb.org/3/movie/${movieId}/videos?api_key=${apiKey}`,
     );
     if (!response.ok) {
       return NextResponse.json(
@@ -26,8 +31,9 @@ export async function GET(
     }
     const data = await response.json();
 
-    const trailer = (data.results || []).find(
-      (v: any) => v.site === "YouTube" && v.type === "Trailer",
+    const results = (data.results ?? []) as TrailerData[];
+    const trailer = results.find(
+      (v) => v.site === "YouTube" && v.type === "Trailer",
     );
     if (!trailer) {
       return NextResponse.json({ trailer: null });

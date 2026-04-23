@@ -81,6 +81,11 @@ export default function SwipeDeck({
   const votingRef = useRef(false);
 
   useEffect(() => {
+    // Intentional: clamp the local index to the server-known startIndex so
+    // polling snapshots can only ever move the deck forward. Without the
+    // Math.max a stale poll that arrives after a successful vote would snap
+    // the card back to a movie the user already swiped. Documented in CLAUDE.md.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCurrentIndex((prev) => Math.max(prev, startIndex));
   }, [startIndex]);
 
