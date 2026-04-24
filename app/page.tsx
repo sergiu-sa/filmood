@@ -28,7 +28,11 @@ export default function Home() {
   return (
     <main
       className="min-h-screen font-sans"
-      style={{ background: "var(--bg)", color: "var(--t1)" }}
+      style={{
+        background: "var(--bg)",
+        color: "var(--t1)",
+        paddingBottom: 80,
+      }}
     >
       <HeroSection onPreselectMood={handlePreselectMood} />
       <DashboardShell

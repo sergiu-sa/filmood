@@ -3,16 +3,6 @@
 import Link from "next/link";
 import { useAuth } from "./AuthProvider";
 import FilmoodLogo from "./dashboard/FilmoodLogo";
-import { allMoods } from "@/lib/moodMap";
-
-const ACCENT_CSS: Record<string, string> = {
-  gold: "var(--gold)",
-  blue: "var(--blue)",
-  rose: "var(--rose)",
-  violet: "var(--violet)",
-  teal: "var(--teal)",
-  ember: "var(--ember)",
-};
 
 export default function Footer() {
   const { user, loading } = useAuth();
@@ -183,66 +173,6 @@ export default function Footer() {
           </div>
         </div>
 
-        {/* ── Mood strip ── */}
-        <div
-          style={{
-            marginTop: "36px",
-            paddingTop: "24px",
-            borderTop: "1px solid var(--border)",
-          }}
-        >
-          <p
-            className="font-sans"
-            style={{
-              fontSize: "10px",
-              fontWeight: 600,
-              textTransform: "uppercase",
-              letterSpacing: "2px",
-              color: "var(--t3)",
-              marginBottom: "12px",
-              textAlign: "center",
-            }}
-          >
-            Pick a mood
-          </p>
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              justifyContent: "center",
-              gap: "8px",
-            }}
-          >
-            {allMoods.map((mood) => {
-              const color = ACCENT_CSS[mood.accentColor] || "var(--t2)";
-              return (
-                <Link
-                  key={mood.key}
-                  href={`/results?mood=${mood.key}`}
-                  className="font-sans footer-mood-pill"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    padding: "5px 14px",
-                    borderRadius: "100px",
-                    fontSize: "11px",
-                    fontWeight: 600,
-                    textDecoration: "none",
-                    color,
-                    background: "transparent",
-                    border: `1px solid ${color}`,
-                    opacity: 0.55,
-                    transition: "opacity 0.2s, background 0.2s, transform 0.2s",
-                  }}
-                >
-                  {mood.tagLabel}
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-
         {/* ── Bottom bar ── */}
         <div
           style={{
@@ -314,10 +244,6 @@ export default function Footer() {
             grid-template-columns: 1fr;
             gap: 28px;
           }
-        }
-        .footer-mood-pill:hover {
-          opacity: 1 !important;
-          transform: translateY(-1px);
         }
       `}</style>
     </footer>

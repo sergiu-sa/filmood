@@ -34,12 +34,13 @@ export default function DashboardShell({
 
   const [openPanel, setOpenPanel] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<Film[]>([]);
+  const [defaultResults, setDefaultResults] = useState<Film[]>([]);
   const [panelCategory, setPanelCategory] = useState<string | null>(null);
   const [panelGenre, setPanelGenre] = useState<number | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
 
   const isMobile = useMediaQuery("(max-width: 899px)");
-  const panelsRef = useRef<HTMLDivElement>(null);
+  const searchResultsRef = useRef<HTMLDivElement>(null);
 
   // Close bottom sheet if viewport flips from mobile to desktop mid-open
   // Deferred to avoid synchronous setState inside effect (react-hooks/state-in-effect)
@@ -50,15 +51,41 @@ export default function DashboardShell({
     }
   }, [isMobile]);
 
-  // Desktop: scroll to panel area when a panel opens
+  // Silently preload a default "trending" list so the search panel is never empty.
+  // Fires once when the panel first opens; pills/tabs stay unhighlighted.
   useEffect(() => {
-    if (isMobile || !openPanel || !panelsRef.current) return;
-    // Small delay so the max-height animation has started expanding
-    const timeout = setTimeout(() => {
-      panelsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 150);
-    return () => clearTimeout(timeout);
-  }, [openPanel, isMobile]);
+    if (openPanel !== "search" || defaultResults.length > 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/movies/browse?category=trending");
+        const data = await res.json();
+        if (cancelled) return;
+        const films: Film[] = data.films ?? [];
+        setDefaultResults(films);
+        setSearchResults((prev) =>
+          prev.length === 0 && panelCategory === null ? films : prev,
+        );
+      } catch {
+        /* silent — panel falls back to existing empty state */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [openPanel, defaultResults.length, panelCategory]);
+
+  // Fired only on explicit search intent (Enter key, pill click) — desktop only.
+  // Small delay so the panel has re-rendered with fresh results before we scroll.
+  const handleSearchSubmit = useCallback(() => {
+    if (isMobile) return;
+    setTimeout(() => {
+      searchResultsRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 120);
+  }, [isMobile]);
 
   const togglePanel = (panel: string) => {
     setOpenPanel((prev) => (prev === panel ? null : panel));
@@ -66,12 +93,21 @@ export default function DashboardShell({
 
   const closePanel = () => setOpenPanel(null);
 
-  const handleSearchResults = useCallback((films: Film[], keepOpen?: boolean) => {
-    setSearchResults(films);
-    if (films.length === 0 && !keepOpen) {
-      setOpenPanel((prev) => (prev === "search" ? null : prev));
-    }
-  }, []);
+  const handleSearchResults = useCallback(
+    (films: Film[], keepOpen?: boolean) => {
+      // When the toolbar reports an empty result set (user cleared the query),
+      // fall back to the preloaded default list instead of collapsing the panel.
+      if (films.length === 0 && defaultResults.length > 0 && panelCategory === null) {
+        setSearchResults(defaultResults);
+        return;
+      }
+      setSearchResults(films);
+      if (films.length === 0 && !keepOpen) {
+        setOpenPanel((prev) => (prev === "search" ? null : prev));
+      }
+    },
+    [defaultResults, panelCategory],
+  );
 
   // Called from SearchBox pills to keep panel tabs in sync
   const handleActiveCategory = useCallback(
@@ -146,6 +182,7 @@ export default function DashboardShell({
         onActiveCategory={handleActiveCategory}
         onExpand={() => setOpenPanel("search")}
         onCategoryFetch={handlePanelCategoryChange}
+        onSubmit={handleSearchSubmit}
       />
 
       <div
@@ -163,8 +200,6 @@ export default function DashboardShell({
         }}
       >
         <MoodBox
-          selectedMoods={selectedMoods}
-          onSelectMood={handleSelectMood}
           onExpand={() => togglePanel("mood")}
           isExpanded={openPanel === "mood"}
           isCollapsed={isBoxCollapsed("mood")}
@@ -183,7 +218,7 @@ export default function DashboardShell({
 
       {/* Desktop: inline panels below the grid */}
       {!isMobile && (
-        <div ref={panelsRef} style={{ padding: "0 28px" }}>
+        <div ref={searchResultsRef} style={{ padding: "0 28px" }}>
           <MoodPanel
             isOpen={openPanel === "mood"}
             selectedMoods={selectedMoods}

@@ -19,6 +19,8 @@ interface SearchToolbarProps {
   onActiveCategory: (category: string | null, genreId?: number | null) => void;
   onExpand: () => void;
   onCategoryFetch?: (category: string, genreId?: number) => void;
+  /** Fired on explicit user intent (Enter key or pill click) — parent scrolls to results. */
+  onSubmit?: () => void;
 }
 
 export default function SearchToolbar({
@@ -26,6 +28,7 @@ export default function SearchToolbar({
   onActiveCategory,
   onExpand,
   onCategoryFetch,
+  onSubmit,
 }: SearchToolbarProps) {
   const [query, setQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -35,6 +38,7 @@ export default function SearchToolbar({
   const [focused, setFocused] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     onActiveCategory(activeCategory, null);
@@ -80,6 +84,15 @@ export default function SearchToolbar({
     };
   }, [query]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const handleSubmit = async () => {
+    const q = query.trim();
+    if (!q) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    await doSearch(q);
+    inputRef.current?.blur();
+    onSubmit?.();
+  };
+
   const handleCategoryClick = (id: BrowseCategory) => {
     if (activeCategory === id) {
       setActiveCategory(null);
@@ -90,6 +103,7 @@ export default function SearchToolbar({
     setQuery("");
     onExpand();
     onCategoryFetch?.(id);
+    onSubmit?.();
   };
 
   return (
@@ -108,18 +122,29 @@ export default function SearchToolbar({
     >
       <div style={{ position: "relative", flex: "1 1 220px" }}>
         <input
+          ref={inputRef}
           id="search-toolbar-input"
           name="search-toolbar-input"
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handleSubmit();
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              setQuery("");
+              inputRef.current?.blur();
+            }
+          }}
           onFocus={() => {
             setFocused(true);
             onExpand();
           }}
           onBlur={() => setFocused(false)}
-          placeholder="Film, actor, director…"
-          aria-label="Search films"
+          placeholder="Film, actor, director…  (press Enter to search)"
+          aria-label="Search films — press Enter to submit"
           style={{
             width: "100%",
             padding: "9px 14px 9px 36px",
