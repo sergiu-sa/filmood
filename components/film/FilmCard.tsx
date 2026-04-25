@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { tmdbImageUrl } from "@/lib/tmdb";
 
 interface FilmCardProps {
   id: number;
@@ -58,7 +59,7 @@ export default function FilmCard({
         >
           {posterPath ? (
             <Image
-              src={`https://image.tmdb.org/t/p/w500${posterPath}`}
+              src={tmdbImageUrl(posterPath, "w500") ?? ""}
               alt={title}
               fill
               className="object-cover"

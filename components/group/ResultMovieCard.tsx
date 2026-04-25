@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { MatchResult } from "@/lib/types";
 import VoteBreakdown from "./VoteBreakdown";
+import { tmdbImageUrl } from "@/lib/tmdb";
 
 interface ResultMovieCardProps {
   result: MatchResult;
@@ -17,9 +18,7 @@ export default function ResultMovieCard({
   const { movie, yesCount, maybeCount, noCount, votes } = result;
   const year = movie.release_date?.split("-")[0] || "";
   const rating = movie.vote_average?.toFixed(1) || "---";
-  const posterUrl = movie.poster_path
-    ? `https://image.tmdb.org/t/p/w342${movie.poster_path}`
-    : null;
+  const posterUrl = tmdbImageUrl(movie.poster_path, "w342");
 
   return (
     <Link

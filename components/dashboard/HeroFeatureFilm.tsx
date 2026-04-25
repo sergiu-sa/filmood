@@ -1,12 +1,11 @@
 "use client";
 
 import { moodMap } from "@/lib/moodMap";
+import { tmdbImageUrl } from "@/lib/tmdb";
 
 interface HeroFeatureFilmProps {
   moodKey: string;
 }
-
-const TMDB_IMG = "https://image.tmdb.org/t/p/w342";
 
 export default function HeroFeatureFilm({ moodKey }: HeroFeatureFilmProps) {
   const mood = moodMap[moodKey];
@@ -29,7 +28,7 @@ export default function HeroFeatureFilm({ moodKey }: HeroFeatureFilmProps) {
     );
   }
 
-  const posterUrl = film.posterPath ? `${TMDB_IMG}${film.posterPath}` : null;
+  const posterUrl = tmdbImageUrl(film.posterPath, "w342");
 
   return (
     <div style={{ position: "relative", display: "inline-block" }}>

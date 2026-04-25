@@ -39,6 +39,15 @@ export type TempoKey = "slowburn" | "fastpaced";
 
 // ─── Film Detail Types ─────────────────────────────
 
+/** A crew member surfaced on the film detail page (director, writer, DP, composer). */
+export interface CrewMember {
+  id: number;
+  name: string;
+  job: string;
+  department: string;
+  profile_path: string | null;
+}
+
 /** Full movie data returned by TMDB /movie/{id}?append_to_response=credits */
 export interface FilmDetail {
   id: number;
@@ -57,7 +66,9 @@ export interface FilmDetail {
       character: string;
       profile_path: string | null;
     }[];
+    crew: CrewMember[];
   };
+  external_ids?: ExternalIds | null;
 }
 
 /** A single streaming provider (e.g. Netflix, Viaplay) */
@@ -73,6 +84,80 @@ export interface TrailerData {
   name: string;
   site: string;
   type: string;
+}
+
+/** Projected single image from TMDB /movie/{id}/images. `kind` is injected at projection time. */
+export interface MovieImage {
+  file_path: string;
+  width: number;
+  height: number;
+  aspect_ratio: number;
+  kind: "poster" | "backdrop";
+}
+
+/**
+ * Projected video entry from TMDB /movie/{id}/videos.
+ * `type` is one of: "Trailer" | "Teaser" | "Clip" | "Featurette" | "Behind the Scenes" |
+ * "Bloopers" | "Opening Credits". We pass it through as a string so unknown future types
+ * don't break the projection.
+ */
+export interface MovieVideo {
+  id: string;
+  key: string;
+  name: string;
+  site: string;
+  type: string;
+  official: boolean;
+  published_at: string;
+}
+
+/** TMDB keyword associated with a movie. */
+export interface Keyword {
+  id: number;
+  name: string;
+}
+
+/**
+ * External IDs from TMDB /movie/{id}/external_ids (also exposed via
+ * append_to_response). All fields are individually nullable.
+ */
+export interface ExternalIds {
+  imdb_id: string | null;
+  facebook_id: string | null;
+  instagram_id: string | null;
+  twitter_id: string | null;
+}
+
+/**
+ * Per-country availability bundle for the film detail page. Contains the
+ * deduped provider list (flatrate/rent/buy merged), the local certification
+ * (e.g. "PG-13", "16"), and the local theatrical release date.
+ */
+export interface RegionAvailability {
+  providers: Provider[];
+  certification: string | null;
+  release_date: string | null;
+}
+
+/** Response shape for GET /api/movies/[id]/regional-availability. */
+export interface RegionalAvailabilityResponse {
+  /** Map keyed by ISO 3166-1 alpha-2 country code (uppercase). */
+  regions: Record<string, RegionAvailability>;
+  /** ISO country code chosen by the server as the default — or null when no region has data. */
+  defaultRegion: string | null;
+}
+
+/** A single user review from TMDB /movie/{id}/reviews. */
+export interface Review {
+  id: string;
+  author: string;
+  /** Author's 1–10 rating, or null when not provided. */
+  rating: number | null;
+  /** Avatar URL — already absolute (TMDB stores Gravatar paths in their bucket). */
+  avatar_url: string | null;
+  content: string;
+  created_at: string;
+  url: string;
 }
 
 // ─── Deck Film (enriched for swipe cards) ────────────

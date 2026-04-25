@@ -5,6 +5,7 @@ import { moodMap } from "@/lib/moodMap";
 import { genreMap } from "@/lib/genres";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import { ACCENT_VARS } from "@/lib/constants";
+import { tmdbImageUrl } from "@/lib/tmdb";
 
 interface SwipeCardProps {
   film: DeckFilm;
@@ -41,9 +42,7 @@ export default function SwipeCard({
 
   const year = film.release_date?.split("-")[0] || "";
   const rating = film.vote_average?.toFixed(1) || "---";
-  const posterUrl = film.poster_path
-    ? `https://image.tmdb.org/t/p/w500${film.poster_path}`
-    : null;
+  const posterUrl = tmdbImageUrl(film.poster_path, "w500");
 
   // Drag visual feedback
   const rotation = isDragging ? dragOffset.x * 0.04 : 0;

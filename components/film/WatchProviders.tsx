@@ -2,6 +2,7 @@
 // Shows streaming providers for a movie (e.g. Netflix, Viaplay)
 
 import type { Provider } from "@/lib/types";
+import { tmdbImageUrl } from "@/lib/tmdb";
 
 interface WatchProvidersProps {
   providers: Provider[];
@@ -27,7 +28,7 @@ export default function WatchProviders({ providers }: WatchProvidersProps) {
           title={provider.provider_name}
         >
           <img
-            src={`https://image.tmdb.org/t/p/w92${provider.logo_path}`}
+            src={tmdbImageUrl(provider.logo_path, "w92") ?? ""}
             alt={provider.provider_name}
             className="w-12 h-12 object-contain rounded bg-white shadow mb-1"
             loading="lazy"

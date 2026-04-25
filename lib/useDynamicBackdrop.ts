@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { tmdbImageUrl } from "@/lib/tmdb";
 
 // Fallback backdrop used while trending data is in flight (or if the request
 // fails). A real TMDB poster keeps the auth screens from flashing a blank
 // frame on first paint.
 const FALLBACK_BACKDROP =
-  "https://image.tmdb.org/t/p/original/wabiQjakDFOPGyGZo5h83Bbtqv2.jpg";
+  tmdbImageUrl("/wabiQjakDFOPGyGZo5h83Bbtqv2.jpg", "original")!;
 
 /**
  * Rotates through trending-film backdrops behind the auth screens. Fetches
@@ -26,10 +27,10 @@ export function useDynamicBackdrop() {
         const urls: string[] = (data.results ?? data.films ?? data ?? [])
           .filter((m: { backdrop_path?: string }) => m.backdrop_path)
           .slice(0, 10)
-          .map(
-            (m: { backdrop_path: string }) =>
-              `https://image.tmdb.org/t/p/original${m.backdrop_path}`,
-          );
+          .map((m: { backdrop_path: string }) =>
+            tmdbImageUrl(m.backdrop_path, "original"),
+          )
+          .filter((u: string | null): u is string => u !== null);
         if (urls.length > 0) setBackdrops(urls);
       })
       .catch(() => {});

@@ -4,6 +4,7 @@ import Footer from "../components/Footer";
 import AuthProvider from "../components/AuthProvider";
 import { Lora, Plus_Jakarta_Sans } from "next/font/google";
 import StickyHeader from "@/components/dashboard/StickyHeader";
+import { cookies } from "next/headers";
 
 const lora = Lora({
   subsets: ["latin"],
@@ -23,26 +24,25 @@ export const metadata: Metadata = {
     "Tell Filmood how you want to feel. It tells you what to watch — alone or as a group.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Theme applied server-side from cookie — Next 16 / React 19 flag the
+  // pre-paint <script> tag pattern, this avoids both the warning and a flash.
+  const cookieStore = await cookies();
+  const themeCookie = cookieStore.get("theme")?.value;
+  const theme: "light" | "dark" =
+    themeCookie === "light" ? "light" : "dark";
+
   return (
     <html
       lang="en"
-      data-theme="dark"
+      data-theme={theme}
       suppressHydrationWarning
       className={`${lora.variable} ${jakarta.variable}`}
     >
-      <head>
-        {/* Apply saved theme before paint to prevent flash */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}})()`,
-          }}
-        />
-      </head>
       <body className="antialiased">
         <AuthProvider>
           <StickyHeader />

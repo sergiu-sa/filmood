@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-
-const TMDB_IMG = "https://image.tmdb.org/t/p/w154";
+import { tmdbImageUrl } from "@/lib/tmdb";
 
 interface GroupSession {
   code: string;
@@ -77,7 +76,7 @@ export default function HeroPersonalized({ groupSession, watchlistPeek }: HeroPe
               aria-hidden
               style={{
                 width: 38, aspectRatio: "2 / 3", borderRadius: 4,
-                backgroundImage: f.poster_path ? `url(${TMDB_IMG}${f.poster_path})` : "none",
+                backgroundImage: f.poster_path ? `url(${tmdbImageUrl(f.poster_path, "w154")})` : "none",
                 backgroundColor: "var(--surface2)",
                 backgroundSize: "cover",
                 backgroundPosition: "center",

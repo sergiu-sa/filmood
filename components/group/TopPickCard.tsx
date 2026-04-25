@@ -7,6 +7,7 @@ import { genreMap } from "@/lib/genres";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import { ACCENT_VARS } from "@/lib/constants";
 import VoteBreakdown from "./VoteBreakdown";
+import { tmdbImageUrl } from "@/lib/tmdb";
 
 interface TopPickCardProps {
   result: MatchResult;
@@ -24,9 +25,7 @@ export default function TopPickCard({
 
   const year = movie.release_date?.split("-")[0] || "";
   const rating = movie.vote_average?.toFixed(1) || "---";
-  const posterUrl = movie.poster_path
-    ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
-    : null;
+  const posterUrl = tmdbImageUrl(movie.poster_path, "w500");
 
   const moodTags = (movie.mood_keys ?? [])
     .map((k) => {
@@ -319,7 +318,7 @@ export default function TopPickCard({
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={`https://image.tmdb.org/t/p/w92${p.logo_path}`}
+                      src={tmdbImageUrl(p.logo_path, "w92") ?? ""}
                       alt={p.provider_name}
                       style={{
                         width: "100%",

@@ -33,7 +33,12 @@ function useTheme() {
   const toggle = () => {
     const next = theme === "dark" ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", next);
-    localStorage.setItem("theme", next);
+    // Cookie is authoritative — server reads it for the next render.
+    // localStorage write kept for older client paths.
+    document.cookie = `theme=${next};path=/;max-age=31536000;SameSite=Lax`;
+    try {
+      localStorage.setItem("theme", next);
+    } catch {}
   };
 
   return { theme, toggle };

@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { internalError, badRequest } from "@/lib/api-errors";
 import { parseTMDBId } from "@/lib/tmdb";
-import type { TrailerData } from "@/lib/types";
+import type { Keyword } from "@/lib/types";
 
 export const revalidate = 86400;
 
+const KEYWORD_LIMIT = 20;
+
+type RawKeyword = { id: number; name: string };
+
+// GET /api/movies/[id]/keywords
+// Themes/topics associated with a movie (TMDB keywords).
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -23,34 +29,25 @@ export async function GET(
 
   try {
     const response = await fetch(
-      `https://api.themoviedb.org/3/movie/${movieId}/videos?api_key=${apiKey}`,
+      `https://api.themoviedb.org/3/movie/${movieId}/keywords?api_key=${apiKey}`,
       { next: { revalidate: 86400 } },
     );
+
     if (!response.ok) {
       return NextResponse.json(
-        { error: "Failed to fetch trailer" },
+        { error: "Failed to fetch movie keywords" },
         { status: response.status },
       );
     }
+
     const data = await response.json();
+    const raw: RawKeyword[] = data.keywords ?? [];
+    const keywords: Keyword[] = raw
+      .slice(0, KEYWORD_LIMIT)
+      .map((k) => ({ id: k.id, name: k.name }));
 
-    const results = (data.results ?? []) as TrailerData[];
-    const trailer = results.find(
-      (v) => v.site === "YouTube" && v.type === "Trailer",
-    );
-    if (!trailer) {
-      return NextResponse.json({ trailer: null });
-    }
-
-    return NextResponse.json({
-      trailer: {
-        key: trailer.key,
-        name: trailer.name,
-        site: trailer.site,
-        type: trailer.type,
-      },
-    });
+    return NextResponse.json({ keywords });
   } catch (error) {
-    return internalError(error, "Internal server error");
+    return internalError(error, "Failed to fetch movie keywords");
   }
 }

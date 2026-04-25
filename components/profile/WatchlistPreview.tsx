@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { getAuthHeaders } from "@/lib/getAuthToken";
 import { useAuth } from "@/components/AuthProvider";
+import { tmdbImageUrl } from "@/lib/tmdb";
 
 interface WatchlistEntry {
   id: string;
@@ -85,7 +86,7 @@ export default function WatchlistPreview() {
             >
               {entry.poster_path ? (
                 <Image
-                  src={`https://image.tmdb.org/t/p/w185${entry.poster_path}`}
+                  src={tmdbImageUrl(entry.poster_path, "w185") ?? ""}
                   alt={entry.movie_title}
                   fill
                   sizes="96px"

@@ -1,9 +1,23 @@
-import type { FilmDetail, Provider, TrailerData } from "@/lib/types";
-import TrailerEmbed from "@/components/film/TrailerEmbed";
-import WatchProviders from "@/components/film/WatchProviders";
+import type {
+  CrewMember,
+  Film,
+  FilmDetail,
+  Keyword,
+  MovieImage,
+  MovieVideo,
+  RegionalAvailabilityResponse,
+  Review,
+} from "@/lib/types";
 import Breadcrumb from "@/components/Breadcrumb";
+import FilmActions from "@/components/film/FilmActions";
+import FilmVideos from "@/components/film/FilmVideos";
+import FilmGallery from "@/components/film/FilmGallery";
+import FilmRail from "@/components/film/FilmRail";
+import FilmReviews from "@/components/film/FilmReviews";
+import RegionalAvailability from "@/components/film/RegionalAvailability";
 import Image from "next/image";
 import { headers } from "next/headers";
+import { tmdbImageUrl } from "@/lib/tmdb";
 
 function SectionLabel({ children }: { children: string }) {
   return (
@@ -23,6 +37,23 @@ function SectionLabel({ children }: { children: string }) {
   );
 }
 
+const CREW_DISPLAY_ORDER = [
+  "Director",
+  "Screenplay",
+  "Writer",
+  "Story",
+  "Director of Photography",
+  "Original Music Composer",
+];
+
+function sortCrew(crew: CrewMember[]): CrewMember[] {
+  return [...crew].sort((a, b) => {
+    const ai = CREW_DISPLAY_ORDER.indexOf(a.job);
+    const bi = CREW_DISPLAY_ORDER.indexOf(b.job);
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
+}
+
 export default async function FilmDetailPage({
   params,
 }: {
@@ -35,22 +66,61 @@ export default async function FilmDetailPage({
   const protocol = host && host.startsWith("localhost") ? "http" : "https";
   const baseUrl = host ? `${protocol}://${host}` : "";
 
-  const detailRes = await fetch(`${baseUrl}/api/movies/${id}`);
+  const [
+    detailRes,
+    availabilityRes,
+    videosRes,
+    imagesRes,
+    keywordsRes,
+    relatedRes,
+    reviewsRes,
+  ] = await Promise.all([
+    fetch(`${baseUrl}/api/movies/${id}`),
+    fetch(`${baseUrl}/api/movies/${id}/regional-availability`),
+    fetch(`${baseUrl}/api/movies/${id}/videos`),
+    fetch(`${baseUrl}/api/movies/${id}/images`),
+    fetch(`${baseUrl}/api/movies/${id}/keywords`),
+    fetch(`${baseUrl}/api/movies/${id}/related`),
+    fetch(`${baseUrl}/api/movies/${id}/reviews`),
+  ]);
+
   const detail: FilmDetail = await detailRes.json();
+  const availability: RegionalAvailabilityResponse = await availabilityRes.json();
+  const videosData = await videosRes.json();
+  const imagesData = await imagesRes.json();
+  const keywordsData = await keywordsRes.json();
+  const relatedData = await relatedRes.json();
+  const reviewsData = await reviewsRes.json();
 
-  const providersRes = await fetch(`${baseUrl}/api/movies/${id}/providers`);
-  const providersData = await providersRes.json();
-  const providers: Provider[] = providersData.providers || [];
+  const videos: MovieVideo[] = videosData.videos || [];
+  const posters: MovieImage[] = imagesData.posters || [];
+  const backdrops: MovieImage[] = imagesData.backdrops || [];
+  const keywords: Keyword[] = keywordsData.keywords || [];
+  const relatedFilms: Film[] = relatedData.films || [];
+  const relatedSource: "recommendations" | "similar" =
+    relatedData.source ?? "similar";
+  const reviews: Review[] = reviewsData.reviews || [];
+  const externalIds = detail.external_ids ?? null;
 
-  const trailerRes = await fetch(`${baseUrl}/api/movies/${id}/trailer`);
-  const trailerData = await trailerRes.json();
-  const trailer: TrailerData | null = trailerData.trailer || null;
+  // Compute country labels server-side — Intl.DisplayNames ICU data differs
+  // between Node and the browser ("Hong Kong SAR China" vs "Hong Kong") and
+  // would hydration-mismatch.
+  const regionCodes = Object.keys(availability.regions ?? {});
+  const regionLabels: Record<string, string> = {};
+  try {
+    const intl = new Intl.DisplayNames(["en"], { type: "region" });
+    for (const code of regionCodes) {
+      regionLabels[code] = intl.of(code) ?? code;
+    }
+  } catch {
+    // Older runtime without DisplayNames — fall back to the raw codes.
+    for (const code of regionCodes) regionLabels[code] = code;
+  }
 
   const year = detail.release_date?.slice(0, 4);
   const cast = detail.credits?.cast?.slice(0, 8) ?? [];
-  const backdropUrl = detail.backdrop_path
-    ? `https://image.tmdb.org/t/p/original${detail.backdrop_path}`
-    : null;
+  const crew = sortCrew(detail.credits?.crew ?? []);
+  const backdropUrl = tmdbImageUrl(detail.backdrop_path, "original");
 
   return (
     <main style={{ minHeight: "100vh", background: "var(--bg)" }}>
@@ -142,10 +212,6 @@ export default async function FilmDetailPage({
 
         /* ── Desktop header ── */
         .fd-desktop-header { display: block; margin-bottom: 24px; }
-        .fd-desktop-actions { display: flex; gap: 8px; margin-top: 16px; }
-        .fd-desktop-actions .fd-btn { width: auto; flex: 1; }
-
-        /* ── Mobile header ── */
         .fd-mobile-header { display: none; }
 
         /* ── Tablet (≤ 860px) ── */
@@ -191,12 +257,35 @@ export default async function FilmDetailPage({
           gap: 12px;
           overflow-x: auto;
           padding-bottom: 6px;
+          padding-right: 28px;
+          min-width: 0;
+          max-width: 100%;
           scrollbar-width: thin;
           scrollbar-color: var(--border) transparent;
         }
         .fd-cast-scroll::-webkit-scrollbar       { height: 4px; }
         .fd-cast-scroll::-webkit-scrollbar-track  { background: transparent; }
         .fd-cast-scroll::-webkit-scrollbar-thumb  { background: var(--border-h); border-radius: 2px; }
+
+        /* Right-edge fade — visual hint that a horizontal rail keeps going. */
+        .fd-scroll-fade {
+          position: relative;
+          min-width: 0;
+        }
+        .fd-scroll-fade::after {
+          content: "";
+          position: absolute;
+          top: 0;
+          right: 0;
+          bottom: 6px;
+          width: 32px;
+          background: linear-gradient(to right, rgba(13, 18, 32, 0) 0%, var(--bg) 100%);
+          pointer-events: none;
+          z-index: 1;
+        }
+        [data-theme="light"] .fd-scroll-fade::after {
+          background: linear-gradient(to right, rgba(243, 232, 210, 0) 0%, var(--bg) 100%);
+        }
       `}</style>
 
       {backdropUrl ? (
@@ -245,7 +334,7 @@ export default async function FilmDetailPage({
             <div className="fd-poster">
               {detail.poster_path ? (
                 <Image
-                  src={`https://image.tmdb.org/t/p/w500${detail.poster_path}`}
+                  src={tmdbImageUrl(detail.poster_path, "w500") ?? ""}
                   alt={detail.title}
                   width={500}
                   height={750}
@@ -369,10 +458,12 @@ export default async function FilmDetailPage({
                   </span>
                 ))}
               </div>
-              <div className="fd-desktop-actions">
-                <button className="fd-btn">♡ Watchlist</button>
-                <button className="fd-btn">↗ Share</button>
-              </div>
+              <FilmActions
+                movieId={detail.id}
+                movieTitle={detail.title}
+                posterPath={detail.poster_path}
+                layout="row"
+              />
             </div>
 
             {/* Mobile/tablet: title, meta, genres, stacked buttons */}
@@ -466,11 +557,12 @@ export default async function FilmDetailPage({
                   </span>
                 ))}
               </div>
-              {/* Stacked buttons */}
-              <div className="fd-actions" style={{ marginBottom: "20px" }}>
-                <button className="fd-btn">♡ Watchlist</button>
-                <button className="fd-btn">↗ Share</button>
-              </div>
+              <FilmActions
+                movieId={detail.id}
+                movieTitle={detail.title}
+                posterPath={detail.poster_path}
+                layout="column"
+              />
             </div>
 
             {/* Synopsis */}
@@ -487,38 +579,40 @@ export default async function FilmDetailPage({
               {detail.overview}
             </p>
 
-            {/* Trailer */}
+            {/* Videos */}
             <div style={{ marginBottom: "28px" }}>
-              <SectionLabel>Trailer</SectionLabel>
-              <div
-                style={{
-                  position: "relative",
-                  width: "100%",
-                  paddingBottom: "56.25%",
-                  borderRadius: "14px",
-                  overflow: "hidden",
-                  background: "var(--surface2)",
-                  border: "1px solid var(--border)",
-                }}
-              >
-                <div style={{ position: "absolute", inset: 0 }}>
-                  <TrailerEmbed trailer={trailer} />
-                </div>
-              </div>
+              <SectionLabel>Videos</SectionLabel>
+              <FilmVideos videos={videos} />
             </div>
 
-            {/* Where to watch */}
+            {/* Gallery */}
+            {(posters.length > 0 || backdrops.length > 0) && (
+              <div style={{ marginBottom: "28px" }}>
+                <SectionLabel>Gallery</SectionLabel>
+                <FilmGallery
+                  posters={posters}
+                  backdrops={backdrops}
+                  movieTitle={detail.title}
+                />
+              </div>
+            )}
+
+            {/* Where to watch — regional with picker */}
             <div style={{ marginBottom: "28px" }}>
-              <SectionLabel>Where to watch in Norway</SectionLabel>
-              <WatchProviders providers={providers} />
+              <SectionLabel>Where to watch</SectionLabel>
+              <RegionalAvailability
+                data={availability}
+                regionLabels={regionLabels}
+              />
             </div>
 
             {/* Cast */}
             {cast.length > 0 && (
               <div style={{ marginBottom: "28px" }}>
                 <SectionLabel>Cast</SectionLabel>
-                <div className="fd-cast-scroll">
-                  {cast.map((actor) => (
+                <div className="fd-scroll-fade">
+                  <div className="fd-cast-scroll">
+                    {cast.map((actor) => (
                     <div
                       key={actor.id}
                       style={{
@@ -541,7 +635,7 @@ export default async function FilmDetailPage({
                       >
                         {actor.profile_path ? (
                           <Image
-                            src={`https://image.tmdb.org/t/p/w185${actor.profile_path}`}
+                            src={tmdbImageUrl(actor.profile_path, "w185") ?? ""}
                             alt={actor.name}
                             fill
                             sizes="72px"
@@ -590,9 +684,204 @@ export default async function FilmDetailPage({
                       </div>
                     </div>
                   ))}
+                  </div>
                 </div>
               </div>
             )}
+
+            {/* Crew */}
+            {crew.length > 0 && (
+              <div style={{ marginBottom: "28px" }}>
+                <SectionLabel>Crew</SectionLabel>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+                    gap: "10px 18px",
+                  }}
+                >
+                  {crew.map((m) => (
+                    <div
+                      key={`${m.id}-${m.job}`}
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        padding: "8px 0",
+                        borderTop: "1px solid var(--border)",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "10px",
+                          fontWeight: 600,
+                          letterSpacing: "1px",
+                          textTransform: "uppercase",
+                          color: "var(--t2)",
+                          marginBottom: "2px",
+                        }}
+                      >
+                        {m.job}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "13px",
+                          fontWeight: 500,
+                          color: "var(--t1)",
+                        }}
+                      >
+                        {m.name}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Keywords */}
+            {keywords.length > 0 && (
+              <div style={{ marginBottom: "28px" }}>
+                <SectionLabel>Themes</SectionLabel>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "6px",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  {keywords.map((k) => (
+                    <span
+                      key={k.id}
+                      style={{
+                        padding: "5px 12px",
+                        borderRadius: "100px",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        background: "var(--tag-bg)",
+                        border: "1px solid var(--tag-border)",
+                        color: "var(--t1)",
+                      }}
+                    >
+                      {k.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* More like this — recommendations or similar fallback */}
+            {relatedFilms.length > 0 && (
+              <div style={{ marginBottom: "28px" }}>
+                <SectionLabel>
+                  {relatedSource === "recommendations"
+                    ? "More like this"
+                    : "Similar films"}
+                </SectionLabel>
+                <FilmRail films={relatedFilms} />
+              </div>
+            )}
+
+            {/* Reviews */}
+            {reviews.length > 0 && (
+              <div style={{ marginBottom: "28px" }}>
+                <SectionLabel>Reviews</SectionLabel>
+                <FilmReviews reviews={reviews} />
+              </div>
+            )}
+
+            {/* External links */}
+            {externalIds &&
+              (externalIds.imdb_id ||
+                externalIds.facebook_id ||
+                externalIds.instagram_id ||
+                externalIds.twitter_id) && (
+                <div style={{ marginBottom: "28px" }}>
+                  <SectionLabel>External links</SectionLabel>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "8px",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    {externalIds.imdb_id && (
+                      <a
+                        href={`https://www.imdb.com/title/${externalIds.imdb_id}/`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          padding: "8px 14px",
+                          borderRadius: "8px",
+                          background: "var(--gold-soft)",
+                          border: "1px solid var(--gold-border)",
+                          fontSize: "12px",
+                          fontWeight: 700,
+                          color: "var(--gold)",
+                          textDecoration: "none",
+                        }}
+                      >
+                        IMDb ↗
+                      </a>
+                    )}
+                    {externalIds.facebook_id && (
+                      <a
+                        href={`https://www.facebook.com/${externalIds.facebook_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          padding: "8px 14px",
+                          borderRadius: "8px",
+                          background: "var(--tag-bg)",
+                          border: "1px solid var(--tag-border)",
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          color: "var(--t1)",
+                          textDecoration: "none",
+                        }}
+                      >
+                        Facebook ↗
+                      </a>
+                    )}
+                    {externalIds.instagram_id && (
+                      <a
+                        href={`https://www.instagram.com/${externalIds.instagram_id}/`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          padding: "8px 14px",
+                          borderRadius: "8px",
+                          background: "var(--tag-bg)",
+                          border: "1px solid var(--tag-border)",
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          color: "var(--t1)",
+                          textDecoration: "none",
+                        }}
+                      >
+                        Instagram ↗
+                      </a>
+                    )}
+                    {externalIds.twitter_id && (
+                      <a
+                        href={`https://twitter.com/${externalIds.twitter_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          padding: "8px 14px",
+                          borderRadius: "8px",
+                          background: "var(--tag-bg)",
+                          border: "1px solid var(--tag-border)",
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          color: "var(--t1)",
+                          textDecoration: "none",
+                        }}
+                      >
+                        Twitter / X ↗
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
 
             {/* Details table */}
             <div style={{ marginBottom: "28px" }}>

@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Film } from "@/lib/types";
-
-const TMDB_IMG = "https://image.tmdb.org/t/p/w154";
+import { tmdbImageUrl } from "@/lib/tmdb";
 
 export default function HeroNowShowing() {
   const [films, setFilms] = useState<Film[]>([]);
@@ -62,7 +61,7 @@ export default function HeroNowShowing() {
               aria-hidden
               style={{
                 width: 44, aspectRatio: "2 / 3", borderRadius: 3,
-                backgroundImage: f.poster_path ? `url(${TMDB_IMG}${f.poster_path})` : "none",
+                backgroundImage: f.poster_path ? `url(${tmdbImageUrl(f.poster_path, "w154")})` : "none",
                 backgroundColor: "var(--surface2)",
                 backgroundSize: "cover",
                 backgroundPosition: "center",

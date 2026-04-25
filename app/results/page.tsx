@@ -10,6 +10,7 @@ import { useMediaQuery } from "@/lib/useMediaQuery";
 import type { Film, AccentColor, Provider } from "@/lib/types";
 import { moodMap } from "@/lib/moodMap";
 import { ACCENT_VARS } from "@/lib/constants";
+import { tmdbImageUrl } from "@/lib/tmdb";
 
 function getMeta(moods: string[]) {
   const key = moods[0]?.trim().toLowerCase() ?? "";
@@ -41,7 +42,7 @@ function TopPick({
     : "";
   const rating = film.vote_average?.toFixed(1) ?? "---";
   const posterUrl = film.poster_path
-    ? `https://image.tmdb.org/t/p/w500${film.poster_path}`
+    ? tmdbImageUrl(film.poster_path, "w500")
     : null;
 
   return (
@@ -280,7 +281,7 @@ function TopPick({
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={`https://image.tmdb.org/t/p/w92${p.logo_path}`}
+                      src={tmdbImageUrl(p.logo_path, "w92") ?? ""}
                       alt={p.provider_name}
                       style={{
                         width: "100%",

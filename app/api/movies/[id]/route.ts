@@ -1,6 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { internalError, badRequest } from "@/lib/api-errors";
 import { parseTMDBId } from "@/lib/tmdb";
+import type { CrewMember } from "@/lib/types";
+
+export const revalidate = 86400;
+
+const RELEVANT_CREW_JOBS = new Set([
+  "Director",
+  "Screenplay",
+  "Writer",
+  "Story",
+  "Director of Photography",
+  "Original Music Composer",
+]);
+
+type RawCrewMember = {
+  id: number;
+  name: string;
+  job: string;
+  department: string;
+  profile_path: string | null;
+};
 
 export async function GET(
   request: NextRequest,
@@ -20,7 +40,8 @@ export async function GET(
 
   try {
     const response = await fetch(
-      `https://api.themoviedb.org/3/movie/${movieId}?api_key=${apiKey}&append_to_response=credits`,
+      `https://api.themoviedb.org/3/movie/${movieId}?api_key=${apiKey}&append_to_response=credits,external_ids`,
+      { next: { revalidate: 86400 } },
     );
 
     if (!response.ok) {
@@ -32,6 +53,34 @@ export async function GET(
 
     const data = await response.json();
 
+    // TMDB lists the same person under multiple credit_ids for the same job
+    // — dedupe by id+job after filtering.
+    const crewSeen = new Set<string>();
+    const crew: CrewMember[] = ((data.credits?.crew ?? []) as RawCrewMember[])
+      .filter((m) => RELEVANT_CREW_JOBS.has(m.job))
+      .filter((m) => {
+        const key = `${m.id}:${m.job}`;
+        if (crewSeen.has(key)) return false;
+        crewSeen.add(key);
+        return true;
+      })
+      .map((m) => ({
+        id: m.id,
+        name: m.name,
+        job: m.job,
+        department: m.department,
+        profile_path: m.profile_path,
+      }));
+
+    const externalIds = data.external_ids
+      ? {
+          imdb_id: data.external_ids.imdb_id ?? null,
+          facebook_id: data.external_ids.facebook_id ?? null,
+          instagram_id: data.external_ids.instagram_id ?? null,
+          twitter_id: data.external_ids.twitter_id ?? null,
+        }
+      : null;
+
     return NextResponse.json({
       id: data.id,
       title: data.title,
@@ -42,6 +91,7 @@ export async function GET(
       runtime: data.runtime,
       vote_average: data.vote_average,
       genres: data.genres,
+      external_ids: externalIds,
       credits: {
         cast: data.credits.cast
           .slice(0, 10)
@@ -58,6 +108,7 @@ export async function GET(
               profile_path: member.profile_path,
             }),
           ),
+        crew,
       },
     });
   } catch (error) {

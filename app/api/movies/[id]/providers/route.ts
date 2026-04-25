@@ -3,6 +3,8 @@ import { internalError, badRequest } from "@/lib/api-errors";
 import { parseTMDBId, mapTMDBProvider } from "@/lib/tmdb";
 import type { TMDBProviderRaw } from "@/lib/tmdb";
 
+export const revalidate = 86400;
+
 // GET /api/movies/[id]/providers
 // Streaming providers for a movie, scoped to Norway (country code "NO").
 export async function GET(
@@ -24,6 +26,7 @@ export async function GET(
   try {
     const response = await fetch(
       `https://api.themoviedb.org/3/movie/${movieId}/watch/providers?api_key=${apiKey}`,
+      { next: { revalidate: 86400 } },
     );
     if (!response.ok) {
       return NextResponse.json(
