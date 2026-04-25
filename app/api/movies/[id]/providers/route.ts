@@ -24,10 +24,13 @@ export async function GET(
   }
 
   try {
-    const response = await fetch(
-      `https://api.themoviedb.org/3/movie/${movieId}/watch/providers?api_key=${apiKey}`,
-      { next: { revalidate: 86400 } },
+    const url = new URL(
+      `https://api.themoviedb.org/3/movie/${movieId}/watch/providers`,
     );
+    url.searchParams.set("api_key", apiKey);
+    const response = await fetch(url.toString(), {
+      next: { revalidate: 86400 },
+    });
     if (!response.ok) {
       return NextResponse.json(
         { error: "Failed to fetch watch providers" },

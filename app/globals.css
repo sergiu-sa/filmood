@@ -523,12 +523,17 @@ svg.logo-static { overflow: visible; }
 /* Light theme — increase orb visibility since bg is lighter */
 [data-theme="light"] .hero-orb { opacity: 0.5 !important; }
 
-/* Staggered entrance for hero content */
+/* Staggered entrance for hero content. Pre-Session-7 delays were
+   2.8s/3.2s/3.6s, presumably synced to a 3s logo orbit that has since
+   been replaced by the faster `entryFast-c*` keyframes — users were
+   waiting nearly 3 seconds to see headline copy. Tightened to a normal
+   editorial cadence (0.4s / 0.8s / 1.2s) so hero content lands within
+   the first moment. */
 .hero-content > *:nth-child(1) { animation: fadeUp 0.8s ease both; animation-delay: 0.2s; }
-.hero-content > *:nth-child(2) { animation: fadeUp 0.8s ease both; animation-delay: 2.8s; }
-.hero-content > *:nth-child(3) { animation: fadeUp 0.8s ease both; animation-delay: 3.2s; }
+.hero-content > *:nth-child(2) { animation: fadeUp 0.8s ease both; animation-delay: 0.4s; }
+.hero-content > *:nth-child(3) { animation: fadeUp 0.8s ease both; animation-delay: 0.8s; }
 
-.hero-scroll-hint { animation: fadeUp 0.6s ease both; animation-delay: 3.6s; }
+.hero-scroll-hint { animation: fadeUp 0.6s ease both; animation-delay: 1.2s; }
 
 /* ── Reduced motion ── */
 @media (prefers-reduced-motion: reduce) {
@@ -663,6 +668,44 @@ svg.logo-static { overflow: visible; }
   color: var(--t1) !important;
   background: var(--surface3) !important;
   transform: translateY(-1px);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Hover + focus parity
+   Inline JS hover mutations were pre-Session-7 — these CSS classes
+   replace them so keyboard users see the same affordance as mouse users.
+   ═══════════════════════════════════════════════════════════ */
+.film-card-frame {
+  transition:
+    border-color var(--t-fast),
+    transform var(--t-fast),
+    box-shadow var(--t-fast);
+}
+.film-card-link:hover .film-card-frame,
+.film-card-link:focus-visible .film-card-frame {
+  border-color: var(--accent-on-card, var(--gold));
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px var(--overlay-weak);
+}
+.film-card-link:focus-visible {
+  outline: none;
+}
+
+.crumb-link {
+  transition: color 0.15s, background 0.15s;
+}
+.crumb-link:hover,
+.crumb-link:focus-visible {
+  background: var(--tag-bg);
+  outline: none;
+}
+
+/* Generic keyboard focus ring — applies to interactive elements that
+   don't already paint their own focus state. */
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
 }
 
 /* ═══════════════════════════════════════════════════════════

@@ -39,10 +39,12 @@ export async function GET(
   }
 
   try {
-    const response = await fetch(
-      `https://api.themoviedb.org/3/movie/${movieId}?api_key=${apiKey}&append_to_response=credits,external_ids`,
-      { next: { revalidate: 86400 } },
-    );
+    const url = new URL(`https://api.themoviedb.org/3/movie/${movieId}`);
+    url.searchParams.set("api_key", apiKey);
+    url.searchParams.set("append_to_response", "credits,external_ids");
+    const response = await fetch(url.toString(), {
+      next: { revalidate: 86400 },
+    });
 
     if (!response.ok) {
       return NextResponse.json(

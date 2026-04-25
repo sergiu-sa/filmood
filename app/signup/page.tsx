@@ -32,20 +32,6 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [navHeight, setNavHeight] = useState(64);
-
-  useEffect(() => {
-    const updateNavHeight = () => {
-      const nav = document.querySelector("nav");
-      if (nav instanceof HTMLElement) {
-        setNavHeight(nav.offsetHeight);
-      }
-    };
-
-    updateNavHeight();
-    window.addEventListener("resize", updateNavHeight);
-    return () => window.removeEventListener("resize", updateNavHeight);
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,7 +114,7 @@ export default function SignupPage() {
             style={{
               fontSize: "28px",
               fontWeight: 600,
-              color: "#f0efe8",
+              color: "var(--accent-paper)",
               letterSpacing: "-0.3px",
             }}
           >

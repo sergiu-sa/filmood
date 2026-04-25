@@ -17,7 +17,8 @@ import FilmReviews from "@/components/film/FilmReviews";
 import RegionalAvailability from "@/components/film/RegionalAvailability";
 import Image from "next/image";
 import { headers } from "next/headers";
-import { tmdbImageUrl } from "@/lib/tmdb";
+import { notFound } from "next/navigation";
+import { tmdbImageUrl, parseTMDBId } from "@/lib/tmdb";
 
 function SectionLabel({ children }: { children: string }) {
   return (
@@ -61,6 +62,10 @@ export default async function FilmDetailPage({
 }) {
   const { id } = await params;
 
+  // Fail fast on malformed ids so we render the framework's not-found page
+  // rather than a half-broken detail surface.
+  if (parseTMDBId(id) === null) notFound();
+
   const headersList = await headers();
   const host = headersList.get("host");
   const protocol = host && host.startsWith("localhost") ? "http" : "https";
@@ -83,6 +88,13 @@ export default async function FilmDetailPage({
     fetch(`${baseUrl}/api/movies/${id}/related`),
     fetch(`${baseUrl}/api/movies/${id}/reviews`),
   ]);
+
+  // Detail is the load-bearing fetch. 404 => not-found page; other failures
+  // bubble up to error.tsx via the throw below.
+  if (detailRes.status === 404) notFound();
+  if (!detailRes.ok) {
+    throw new Error(`Failed to load film ${id}: ${detailRes.status}`);
+  }
 
   const detail: FilmDetail = await detailRes.json();
   const availability: RegionalAvailabilityResponse = await availabilityRes.json();

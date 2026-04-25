@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import type { Film } from "@/lib/types";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
 
 type FilterType = "title" | "actor" | "director";
 
@@ -20,38 +21,41 @@ export default function SearchInput({ onResults, onLoading }: SearchInputProps) 
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterType>("title");
   const [isLoading, setIsLoading] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debouncedQuery = useDebouncedValue(query, 400);
 
   useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-
-    if (!query.trim()) {
+    const trimmed = debouncedQuery.trim();
+    if (!trimmed) {
       onResults([]);
       onLoading?.(false);
       return;
     }
 
-    debounceRef.current = setTimeout(async () => {
-      setIsLoading(true);
-      onLoading?.(true);
+    let cancelled = false;
+    setIsLoading(true);
+    onLoading?.(true);
+    (async () => {
       try {
         const res = await fetch(
-          `/api/movies/search?query=${encodeURIComponent(query.trim())}&type=${filter}`
+          `/api/movies/search?query=${encodeURIComponent(trimmed)}&type=${filter}`,
         );
         const data = await res.json();
-        onResults(data.films ?? []);
+        if (!cancelled) onResults(data.films ?? []);
       } catch {
-        onResults([]);
+        if (!cancelled) onResults([]);
       } finally {
-        setIsLoading(false);
-        onLoading?.(false);
+        if (!cancelled) {
+          setIsLoading(false);
+          onLoading?.(false);
+        }
       }
-    }, 400);
+    })();
 
     return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
+      cancelled = true;
     };
-  }, [query, filter]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onResults / onLoading are intentionally excluded; re-running the effect on every parent render would fire spurious fetches. The callbacks are read at fetch time.
+  }, [debouncedQuery, filter]);
 
   const placeholders: Record<FilterType, string> = {
     title: "Search for a film title...",

@@ -11,24 +11,19 @@ import LobbyActions from "@/components/group/LobbyActions";
 import InviteStrip from "@/components/group/InviteStrip";
 import ToastContainer from "@/components/group/Toast";
 import { useToasts } from "@/components/group/useToasts";
+import { MAX_PARTICIPANTS } from "@/lib/group";
+import type { GroupSession, SessionParticipant } from "@/lib/types";
 
-interface SessionData {
-  id: string;
-  code: string;
-  host_id: string;
-  status: string;
-  created_at: string;
-}
-
-interface Participant {
-  id: string;
-  nickname: string;
-  user_id: string | null;
-  is_ready: boolean;
-  joined_at: string;
-}
-
-const MAX_PARTICIPANTS = 10;
+// Narrow projections of the canonical types in lib/types.ts — the lobby
+// only needs a subset of each row.
+type SessionData = Pick<
+  GroupSession,
+  "id" | "code" | "host_id" | "status" | "created_at"
+>;
+type Participant = Pick<
+  SessionParticipant,
+  "id" | "nickname" | "user_id" | "is_ready" | "joined_at"
+>;
 
 export default function LobbyPage() {
   const params = useParams<{ code: string }>();

@@ -147,7 +147,7 @@ export default function Navbar() {
             </button>
             <Link href="/profile" style={{ textDecoration: "none" }}>
               <div
-                className="flex items-center justify-center transition-shadow duration-200 hover:shadow-[0_0_0_2px_var(--gold)]"
+                className="flex items-center justify-center transition-shadow duration-200 hover:shadow-[0_0_0_2px_var(--gold)] focus-visible:shadow-[0_0_0_2px_var(--gold)]"
                 style={{
                   width: "32px",
                   height: "32px",

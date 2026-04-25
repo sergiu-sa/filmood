@@ -28,29 +28,24 @@ export default function FilmCard({
   return (
     <Link
       href={`/film/${id}`}
-      className="group"
-      style={{ textDecoration: "none" }}
+      className="group film-card-link"
+      // `--accent-on-card` is consumed by the CSS hover/focus rule in
+      // globals.css to drive the per-card accent without prop-drilling
+      // CSS into a className.
+      style={
+        {
+          textDecoration: "none",
+          ["--accent-on-card" as string]: accent,
+        } as React.CSSProperties
+      }
     >
       <div
+        className="film-card-frame"
         style={{
           borderRadius: "var(--r)",
           overflow: "hidden",
           background: "var(--surface)",
           border: "1px solid var(--border)",
-          transition:
-            "border-color var(--t-fast), transform var(--t-fast), box-shadow var(--t-fast)",
-        }}
-        onMouseEnter={(e) => {
-          const card = e.currentTarget as HTMLDivElement;
-          card.style.borderColor = accent;
-          card.style.transform = "translateY(-2px)";
-          card.style.boxShadow = "0 8px 24px var(--overlay-weak)";
-        }}
-        onMouseLeave={(e) => {
-          const card = e.currentTarget as HTMLDivElement;
-          card.style.borderColor = "var(--border)";
-          card.style.transform = "none";
-          card.style.boxShadow = "none";
         }}
       >
         <div
@@ -89,7 +84,7 @@ export default function FilmCard({
               fontWeight: 700,
               lineHeight: 1,
               color: "var(--gold)",
-              background: "rgba(10,10,12,0.82)",
+              background: "var(--overlay-heavy)",
               border: "1px solid rgba(255,255,255,0.06)",
               boxShadow: "0 6px 18px rgba(0,0,0,0.24)",
               zIndex: 2,
@@ -131,7 +126,7 @@ export default function FilmCard({
               overflow: "hidden",
             }}
           >
-            {overview || "\u00A0"}
+            {overview || " "}
           </p>
         </div>
       </div>

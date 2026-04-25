@@ -108,7 +108,7 @@ export default function LoginPage() {
             style={{
               fontSize: "28px",
               fontWeight: 600,
-              color: "#f0efe8",
+              color: "var(--accent-paper)",
               letterSpacing: "-0.3px",
             }}
           >

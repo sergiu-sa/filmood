@@ -35,18 +35,28 @@ export default function AuthProvider({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Safety net: if the auth server is unreachable, onAuthStateChange may
+    // never fire and AuthGuard would render "Loading..." forever. Flip
+    // loading to false after 5s; the user proceeds as a guest until the
+    // real auth event arrives (which then re-resolves the state).
+    const timeout = setTimeout(() => setLoading(false), 5000);
+
     // onAuthStateChange fires for every auth event:
     // INITIAL_SESSION (on mount), SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED
     // This single listener handles all of them.
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      clearTimeout(timeout);
       setSession(newSession);
       setUser(newSession?.user ?? null);
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signOut = async () => {

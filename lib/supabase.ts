@@ -2,8 +2,14 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 // Lazy singleton — avoids crashing at module load during Next.js static
 // prerender when env vars aren't set. Mirrors the pattern in supabase-server.ts.
-// The Proxy preserves the original `supabase.xxx` call-site ergonomics while
-// deferring client creation until the first property access.
+//
+// Why the API shape differs from supabase-server.ts: clients import this as
+// `import { supabase }` and use it as a value (`supabase.auth.onAuthStateChange`,
+// `supabase.channel(...)`, `supabase.from(...)`). A Proxy preserves those
+// call-site ergonomics while deferring real client creation until first access.
+// supabase-server.ts exposes a function (`getSupabaseAdmin()`) instead because
+// route handlers create the admin client on demand and don't need the same
+// long-lived value-shaped surface.
 let _client: SupabaseClient | null = null;
 
 function getClient(): SupabaseClient {

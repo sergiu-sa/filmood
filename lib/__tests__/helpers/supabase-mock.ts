@@ -73,8 +73,7 @@ export function mockRequest(
     init.body = JSON.stringify(body);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- NextRequest has a stricter RequestInit type
-  return new NextRequest(new URL(url, "http://localhost"), init as any);
+  return new NextRequest(new URL(url, "http://localhost"), init as RequestInit);
 }
 
 /**

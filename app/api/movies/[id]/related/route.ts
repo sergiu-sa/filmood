@@ -39,15 +39,17 @@ export async function GET(
   }
 
   try {
+    const recUrl = new URL(
+      `https://api.themoviedb.org/3/movie/${movieId}/recommendations`,
+    );
+    recUrl.searchParams.set("api_key", apiKey);
+    const simUrl = new URL(
+      `https://api.themoviedb.org/3/movie/${movieId}/similar`,
+    );
+    simUrl.searchParams.set("api_key", apiKey);
     const [recRes, simRes] = await Promise.all([
-      fetch(
-        `https://api.themoviedb.org/3/movie/${movieId}/recommendations?api_key=${apiKey}`,
-        { next: { revalidate: 86400 } },
-      ),
-      fetch(
-        `https://api.themoviedb.org/3/movie/${movieId}/similar?api_key=${apiKey}`,
-        { next: { revalidate: 86400 } },
-      ),
+      fetch(recUrl.toString(), { next: { revalidate: 86400 } }),
+      fetch(simUrl.toString(), { next: { revalidate: 86400 } }),
     ]);
 
     const recData: RawListResponse = recRes.ok ? await recRes.json() : {};

@@ -199,10 +199,14 @@ export async function POST(
       allDone = (allParticipants ?? []).every((p) => p.has_swiped);
 
       if (allDone) {
+        // Compare-and-set on status so two simultaneous final-submitters
+        // can't both flip the session — only the first observer of the
+        // "swiping" state succeeds. Mirrors the pattern in mood/route.ts.
         await supabase
           .from("sessions")
           .update({ status: "done" })
-          .eq("id", session.id);
+          .eq("id", session.id)
+          .eq("status", "swiping");
       }
     }
 

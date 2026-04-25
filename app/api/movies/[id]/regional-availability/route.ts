@@ -86,15 +86,17 @@ export async function GET(
   }
 
   try {
+    const provUrl = new URL(
+      `https://api.themoviedb.org/3/movie/${movieId}/watch/providers`,
+    );
+    provUrl.searchParams.set("api_key", apiKey);
+    const releaseUrl = new URL(
+      `https://api.themoviedb.org/3/movie/${movieId}/release_dates`,
+    );
+    releaseUrl.searchParams.set("api_key", apiKey);
     const [provRes, releaseRes] = await Promise.all([
-      fetch(
-        `https://api.themoviedb.org/3/movie/${movieId}/watch/providers?api_key=${apiKey}`,
-        { next: { revalidate: 86400 } },
-      ),
-      fetch(
-        `https://api.themoviedb.org/3/movie/${movieId}/release_dates?api_key=${apiKey}`,
-        { next: { revalidate: 86400 } },
-      ),
+      fetch(provUrl.toString(), { next: { revalidate: 86400 } }),
+      fetch(releaseUrl.toString(), { next: { revalidate: 86400 } }),
     ]);
 
     const providersByCountry: ProvidersByCountry = provRes.ok

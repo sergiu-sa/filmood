@@ -83,21 +83,15 @@ export default function Breadcrumb({ items }: { items: BreadcrumbItem[] }) {
               /* Clickable link */
               <Link
                 href={item.href}
+                className="crumb-link"
                 style={{
                   color: "var(--t1)",
                   textDecoration: "none",
-                  transition: "color 0.15s, background 0.15s",
                   padding: "3px 8px",
                   borderRadius: "6px",
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "5px",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "var(--tag-bg)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "transparent";
                 }}
               >
                 {/* Home icon for the first "/" link */}

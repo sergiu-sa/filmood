@@ -3,6 +3,11 @@ import { NextRequest } from "next/server";
 
 // Lazy singleton — avoids crashing during Next.js static page collection
 // when env vars aren't available yet. The client is only created on first use.
+//
+// Function-based (vs the Proxy in lib/supabase.ts) because route handlers
+// reach for the admin client at call time and don't need a long-lived
+// value-shaped surface; explicit `getSupabaseAdmin()` calls also make the
+// service-role boundary easier to grep.
 let _supabaseAdmin: SupabaseClient | null = null;
 
 export function getSupabaseAdmin() {

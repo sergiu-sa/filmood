@@ -46,10 +46,14 @@ export async function GET(
   }
 
   try {
-    const response = await fetch(
-      `https://api.themoviedb.org/3/movie/${movieId}/images?api_key=${apiKey}&include_image_language=en,null`,
-      { next: { revalidate: 86400 } },
+    const url = new URL(
+      `https://api.themoviedb.org/3/movie/${movieId}/images`,
     );
+    url.searchParams.set("api_key", apiKey);
+    url.searchParams.set("include_image_language", "en,null");
+    const response = await fetch(url.toString(), {
+      next: { revalidate: 86400 },
+    });
 
     if (!response.ok) {
       return NextResponse.json(

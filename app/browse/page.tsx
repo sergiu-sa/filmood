@@ -1,164 +1,20 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, Suspense } from "react";
+import { useState, useEffect, useCallback, useMemo, Suspense } from "react";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { useSearchParams } from "next/navigation";
 import Breadcrumb from "@/components/Breadcrumb";
 import FilmCard from "@/components/film/FilmCard";
 import type { Film } from "@/lib/types";
-
-type BrowseCategory =
-  | "trending"
-  | "top-rated"
-  | "new-releases"
-  | "in-cinemas"
-  | "by-genre"
-  | "streaming-norway";
+import {
+  BROWSE_CATEGORIES,
+  CategoryIcon,
+  type BrowseCategory,
+} from "@/lib/browseCategories";
 
 type SortOrder = "popularity" | "rating" | "newest" | "title";
 
-const TABS: {
-  id: BrowseCategory;
-  label: string;
-  heading: string;
-  icon: React.ReactNode;
-}[] = [
-  {
-    id: "trending",
-    label: "Trending",
-    heading: "Trending today",
-    icon: (
-      <span style={{ color: "var(--ember)", display: "flex" }}>
-        <svg
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-        </svg>
-      </span>
-    ),
-  },
-  {
-    id: "top-rated",
-    label: "Top Rated",
-    heading: "Top rated of all time",
-    icon: (
-      <span style={{ color: "var(--gold)", display: "flex" }}>
-        <svg
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-        </svg>
-      </span>
-    ),
-  },
-  {
-    id: "new-releases",
-    label: "New Releases",
-    heading: "New releases",
-    icon: (
-      <span style={{ color: "var(--blue)", display: "flex" }}>
-        <svg
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <polyline points="12 6 12 12 16 14" />
-        </svg>
-      </span>
-    ),
-  },
-  {
-    id: "in-cinemas",
-    label: "In Cinemas",
-    heading: "Now in cinemas (Norway)",
-    icon: (
-      <span style={{ color: "var(--rose)", display: "flex" }}>
-        <svg
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
-          <line x1="7" y1="2" x2="7" y2="22" />
-          <line x1="17" y1="2" x2="17" y2="22" />
-          <line x1="2" y1="12" x2="22" y2="12" />
-        </svg>
-      </span>
-    ),
-  },
-  {
-    id: "by-genre",
-    label: "By Genre",
-    heading: "Browse by genre",
-    icon: (
-      <span style={{ color: "var(--violet)", display: "flex" }}>
-        <svg
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <line x1="8" y1="6" x2="21" y2="6" />
-          <line x1="8" y1="12" x2="21" y2="12" />
-          <line x1="8" y1="18" x2="21" y2="18" />
-          <line x1="3" y1="6" x2="3.01" y2="6" />
-          <line x1="3" y1="12" x2="3.01" y2="12" />
-          <line x1="3" y1="18" x2="3.01" y2="18" />
-        </svg>
-      </span>
-    ),
-  },
-  {
-    id: "streaming-norway",
-    label: "Streaming in Norway",
-    heading: "Streaming in Norway",
-    icon: (
-      <span style={{ color: "var(--teal)", display: "flex" }}>
-        <svg
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <polygon points="10 8 16 12 10 16 10 8" />
-        </svg>
-      </span>
-    ),
-  },
-];
+const TABS = BROWSE_CATEGORIES;
 
 const GENRES = [
   { id: 28, label: "Action" },
@@ -229,7 +85,6 @@ function BrowseContent() {
   const [totalPages, setTotalPages] = useState(1);
   const [inputFocused, setInputFocused] = useState(false);
   const [gridKey, setGridKey] = useState(0);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchFilms = useCallback(
     async (
@@ -277,27 +132,17 @@ function BrowseContent() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // Client-side search filter + sort
-  const [displayFilms, setDisplayFilms] = useState<Film[]>([]);
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      if (!searchQuery.trim()) {
-        setDisplayFilms(sortFilms(films, sortOrder));
-        return;
-      }
-      const q = searchQuery.trim().toLowerCase();
-      setDisplayFilms(
-        sortFilms(
-          films.filter((f) => f.title.toLowerCase().includes(q)),
-          sortOrder,
-        ),
-      );
-    }, 200);
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [films, searchQuery, sortOrder]);
+  // Client-side search filter + sort, debounced via the shared hook so the
+  // pattern matches SearchInput. Derived state — no useEffect needed.
+  const debouncedSearch = useDebouncedValue(searchQuery, 200);
+  const displayFilms = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase();
+    if (!q) return sortFilms(films, sortOrder);
+    return sortFilms(
+      films.filter((f) => f.title.toLowerCase().includes(q)),
+      sortOrder,
+    );
+  }, [films, debouncedSearch, sortOrder]);
 
   const currentTab = TABS.find((t) => t.id === activeTab) ?? TABS[0];
   const activeGenreLabel = GENRES.find((g) => g.id === activeGenre)?.label;
@@ -581,7 +426,7 @@ function BrowseContent() {
                     }
                   }}
                 >
-                  {tab.icon}
+                  <CategoryIcon category={tab} size={13} />
                   {tab.label}
                 </button>
               );
