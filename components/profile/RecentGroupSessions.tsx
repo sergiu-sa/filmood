@@ -1,114 +1,104 @@
 "use client";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// RecentGroupSessions.tsx
-// Shows the user's 3 most recent group movie sessions with participants
-// and match result badges.
-// Currently shows placeholder data — no Supabase queries yet.
-//
-// 🔌 TO HOOK UP BACKEND:
-//   1. Create a `group_sessions` table in Supabase:
-//        id            uuid default gen_random_uuid() primary key
-//        created_by    uuid references auth.users(id)
-//        film_id       integer
-//        film_title    text
-//        poster_path   text
-//        result        text  -- e.g. "Perfect match" | "Close call"
-//        created_at    timestamp default now()
-//
-//   2. Create a `session_participants` table:
-//        session_id    uuid references group_sessions(id)
-//        user_id       uuid references auth.users(id)
-//        initial       text
-//        color         text
-//
-//   3. Fetch sessions here:
-//        const { data } = await supabase
-//          .from("group_sessions")
-//          .select("*, session_participants(*)")
-//          .eq("created_by", user.id)
-//          .order("created_at", { ascending: false })
-//          .limit(3)
-//        setSessions(data ?? [])
-// ─────────────────────────────────────────────────────────────────────────────
-
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useAuth } from "@/components/AuthProvider";
+import { getAuthHeaders } from "@/lib/getAuthToken";
+import { tmdbImageUrl } from "@/lib/tmdb";
 
-interface Participant {
-  initial: string;
-  color: string;
+interface SessionParticipant {
+  nickname: string;
+  user_id: string | null;
 }
 
-interface Session {
+interface RecentSession {
   id: string;
-  filmTitle: string;
-  posterUrl: string;
-  meta: string;
-  result: "match" | "close";
-  resultLabel: string;
-  participants: Participant[];
+  code: string;
+  status: string;
+  created_at: string;
+  participantCount: number;
+  participants: SessionParticipant[];
+  topPickTitle: string | null;
+  topPickPoster: string | null;
 }
 
-// ── PLACEHOLDER DATA ──────────────────────────────────────────────────────────
-// 🔌 Replace this with real data loaded from Supabase (see above)
-const PLACEHOLDER_SESSIONS: Session[] = [
-  {
-    id: "1",
-    filmTitle: "Dune: Part Two",
-    posterUrl:
-      "https://image.tmdb.org/t/p/w300/8b8R8l88Qje9dn9OE8PY05Nxl1X.jpg",
-    meta: "2 days ago · 4 participants",
-    result: "match",
-    resultLabel: "Perfect match",
-    participants: [
-      { initial: "S", color: "var(--gold)" },
-      { initial: "M", color: "var(--blue)" },
-      { initial: "A", color: "var(--teal)" },
-      { initial: "K", color: "var(--rose)" },
-    ],
-  },
-  {
-    id: "2",
-    filmTitle: "Flow",
-    posterUrl:
-      "https://image.tmdb.org/t/p/w300/jKCdBeyMRJdpUCvZXg0Y4jRKt5E.jpg",
-    meta: "Last week · 3 participants",
-    result: "close",
-    resultLabel: "Close call",
-    participants: [
-      { initial: "S", color: "var(--gold)" },
-      { initial: "M", color: "var(--blue)" },
-      { initial: "L", color: "var(--violet)" },
-    ],
-  },
-  {
-    id: "3",
-    filmTitle: "The Wild Robot",
-    posterUrl:
-      "https://image.tmdb.org/t/p/w300/wTnV0ANpRTbRkN1UrdAgW2hgPuW.jpg",
-    meta: "2 weeks ago · 5 participants",
-    result: "match",
-    resultLabel: "Perfect match",
-    participants: [
-      { initial: "S", color: "var(--gold)" },
-      { initial: "M", color: "var(--blue)" },
-      { initial: "A", color: "var(--teal)" },
-      { initial: "K", color: "var(--rose)" },
-      { initial: "J", color: "var(--ember)" },
-    ],
-  },
+const PARTICIPANT_COLORS = [
+  "var(--gold)",
+  "var(--blue)",
+  "var(--teal)",
+  "var(--rose)",
+  "var(--violet)",
+  "var(--ember)",
 ];
 
+function relativeTime(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return "Just now";
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d === 1) return "Yesterday";
+  if (d < 7) return `${d} days ago`;
+  if (d < 30) return `${Math.floor(d / 7)} weeks ago`;
+  return new Date(iso).toLocaleDateString(undefined, {
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function statusLabel(status: string): { text: string; tone: "match" | "neutral" | "live" } {
+  switch (status) {
+    case "done":
+      return { text: "Match resolved", tone: "match" };
+    case "swiping":
+      return { text: "Swiping", tone: "live" };
+    case "mood":
+      return { text: "Picking moods", tone: "live" };
+    case "lobby":
+      return { text: "In lobby", tone: "live" };
+    default:
+      return { text: status, tone: "neutral" };
+  }
+}
+
 export default function RecentGroupSessions() {
-  // Replace PLACEHOLDER_SESSIONS with state loaded from Supabase
-  const sessions = PLACEHOLDER_SESSIONS;
+  const { user } = useAuth();
+  const [sessions, setSessions] = useState<RecentSession[] | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setSessions([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/profile/recent-sessions", {
+          headers: await getAuthHeaders(),
+        });
+        if (!res.ok) throw new Error("Failed to load sessions");
+        const data = await res.json();
+        if (!cancelled) setSessions((data.sessions ?? []) as RecentSession[]);
+      } catch {
+        if (!cancelled) setSessions([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  const isLoading = sessions === null;
+  const list = sessions ?? [];
 
   return (
     <div
       className="mb-4 rounded-2xl border p-5.5"
       style={{ background: "var(--surface)", borderColor: "var(--border)" }}
     >
-      {/* Section label */}
       <div
         className="mb-4 text-[10px] font-semibold uppercase tracking-[1.8px]"
         style={{ color: "var(--t3)" }}
@@ -116,85 +106,176 @@ export default function RecentGroupSessions() {
         Recent group sessions
       </div>
 
-      {/* Session list */}
-      <div className="flex flex-col gap-2.5">
-        {sessions.map((session) => (
-          <Link
-            key={session.id}
-            href={`/film/${session.id}`}
-            className="flex cursor-pointer items-start gap-3 rounded-xl p-3 no-underline transition-colors"
-            style={{
-              border: "1px solid var(--border)",
-              background: "var(--surface2)",
-            }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.borderColor = "var(--border-h)")
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.borderColor = "var(--border)")
-            }
-          >
-            {/* Poster */}
+      {isLoading ? (
+        <div className="flex flex-col gap-2.5">
+          {Array.from({ length: 3 }).map((_, i) => (
             <div
-              role="img"
-              aria-label={`${session.filmTitle} poster`}
-              className="h-15 w-10.5 shrink-0 rounded-[7px] bg-(--surface3) bg-cover bg-center"
-              style={{ backgroundImage: `url('${session.posterUrl}')` }}
+              key={i}
+              className="search-skeleton-bar"
+              style={{ height: "78px", borderRadius: "12px" }}
             />
-
-            {/* Info + badge — stacked vertically so badge never overlaps */}
-            <div className="min-w-0 flex-1 flex flex-col gap-1.5">
-              {/* Top: title */}
-              <div
-                className="overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-semibold leading-[1.2]"
-                style={{ color: "var(--t1)" }}
+          ))}
+        </div>
+      ) : list.length === 0 ? (
+        <div className="py-6 text-center">
+          <p style={{ fontSize: "13px", color: "var(--t2)", margin: "0 0 4px" }}>
+            No sessions yet
+          </p>
+          <p style={{ fontSize: "11px", color: "var(--t3)", margin: 0 }}>
+            Start one with friends — it&apos;ll show up here.
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2.5">
+          {list.map((session) => {
+            const status = statusLabel(session.status);
+            const posterUrl = tmdbImageUrl(session.topPickPoster, "w185");
+            const targetHref =
+              session.status === "done"
+                ? `/group/${session.code}/results`
+                : `/group/${session.code}`;
+            return (
+              <Link
+                key={session.id}
+                href={targetHref}
+                className="flex items-start gap-3 rounded-xl p-3 no-underline transition-colors"
+                style={{
+                  border: "1px solid var(--border)",
+                  background: "var(--surface2)",
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.borderColor = "var(--border-h)")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.borderColor = "var(--border)")
+                }
+                onFocus={(e) =>
+                  (e.currentTarget.style.borderColor = "var(--border-h)")
+                }
+                onBlur={(e) =>
+                  (e.currentTarget.style.borderColor = "var(--border)")
+                }
               >
-                {session.filmTitle}
-              </div>
+                {/* Poster slot — falls back to a code-tagged placeholder */}
+                {posterUrl ? (
+                  <div
+                    role="img"
+                    aria-label={session.topPickTitle ?? `Session ${session.code}`}
+                    className="shrink-0 rounded-[7px] bg-cover bg-center"
+                    style={{
+                      width: "42px",
+                      height: "60px",
+                      background: `var(--surface3) url('${posterUrl}') center/cover`,
+                    }}
+                  />
+                ) : (
+                  <div
+                    className="font-serif flex shrink-0 items-center justify-center rounded-[7px]"
+                    style={{
+                      width: "42px",
+                      height: "60px",
+                      background: "var(--surface3)",
+                      color: "var(--t3)",
+                      fontSize: "10px",
+                      fontWeight: 700,
+                      letterSpacing: "1.2px",
+                    }}
+                  >
+                    {session.code.slice(0, 4)}
+                  </div>
+                )}
 
-              {/* Meta */}
-              <div
-                className="text-[11px] leading-none"
-                style={{ color: "var(--t3)" }}
-              >
-                {session.meta}
-              </div>
+                <div className="min-w-0 flex-1 flex flex-col gap-1.5">
+                  <div
+                    className="truncate"
+                    style={{
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      color: "var(--t1)",
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {session.topPickTitle ?? `Session ${session.code}`}
+                  </div>
 
-              {/* Bottom row: avatars + badge */}
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                {/* Participant avatars */}
-                <div className="flex items-center">
-                  {session.participants.map((p, i) => (
-                    <div
-                      key={i}
-                      className="flex h-5 w-5 items-center justify-center rounded-full text-[8px] font-semibold text-(--accent-ink)"
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      color: "var(--t3)",
+                      lineHeight: 1,
+                    }}
+                  >
+                    {relativeTime(session.created_at)} · {session.participantCount} participants
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center">
+                      {session.participants.slice(0, 5).map((p, i) => (
+                        <div
+                          key={`${p.nickname}-${i}`}
+                          className="font-serif flex items-center justify-center rounded-full"
+                          style={{
+                            width: "20px",
+                            height: "20px",
+                            fontSize: "9px",
+                            fontWeight: 700,
+                            color: "var(--accent-ink)",
+                            background:
+                              PARTICIPANT_COLORS[
+                                i % PARTICIPANT_COLORS.length
+                              ],
+                            marginLeft: i === 0 ? 0 : "-4px",
+                            border: "2px solid var(--surface2)",
+                          }}
+                          title={p.nickname}
+                        >
+                          {p.nickname.charAt(0).toUpperCase()}
+                        </div>
+                      ))}
+                      {session.participants.length > 5 && (
+                        <span
+                          style={{
+                            marginLeft: "6px",
+                            fontSize: "10px",
+                            color: "var(--t3)",
+                          }}
+                        >
+                          +{session.participants.length - 5}
+                        </span>
+                      )}
+                    </div>
+
+                    <span
                       style={{
-                        background: p.color,
-                        marginLeft: i === 0 ? 0 : "-4px",
-                        border: "2px solid var(--surface2)",
+                        padding: "3px 8px",
+                        borderRadius: "6px",
+                        fontSize: "10px",
+                        fontWeight: 700,
+                        letterSpacing: "0.4px",
+                        whiteSpace: "nowrap",
+                        background:
+                          status.tone === "match"
+                            ? "var(--teal-soft)"
+                            : status.tone === "live"
+                              ? "var(--gold-soft)"
+                              : "var(--tag-bg)",
+                        color:
+                          status.tone === "match"
+                            ? "var(--teal)"
+                            : status.tone === "live"
+                              ? "var(--gold)"
+                              : "var(--t2)",
                       }}
                     >
-                      {p.initial}
-                    </div>
-                  ))}
+                      {status.text}
+                    </span>
+                  </div>
                 </div>
-
-                {/* Result badge */}
-                <span
-                  className="rounded-md px-2 py-1 text-[10px] font-semibold leading-none whitespace-nowrap"
-                  style={
-                    session.result === "match"
-                      ? { background: "var(--teal-soft)", color: "var(--teal)" }
-                      : { background: "var(--gold-soft)", color: "var(--gold)" }
-                  }
-                >
-                  {session.resultLabel}
-                </span>
-              </div>
-            </div>
-          </Link>
-        ))}
-      </div>
+              </Link>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

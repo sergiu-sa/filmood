@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { internalError, badRequest } from "@/lib/api-errors";
 import { parseTMDBId } from "@/lib/tmdb";
 import type { CrewMember } from "@/lib/types";
+import { getAuthUser, getSupabaseAdmin } from "@/lib/supabase-server";
+import { recordFilmView } from "@/lib/film-views";
 
 export const revalidate = 86400;
 
@@ -82,6 +84,18 @@ export async function GET(
           twitter_id: data.external_ids.twitter_id ?? null,
         }
       : null;
+
+    // Fire-and-forget: record the view for authenticated users so the
+    // profile "Continue researching" rail has data. Guests are skipped.
+    // Errors are caught and logged — must not block the response.
+    const user = await getAuthUser(request);
+    if (user) {
+      recordFilmView(getSupabaseAdmin(), user.id, {
+        movie_id: data.id,
+        movie_title: data.title,
+        poster_path: data.poster_path,
+      }).catch((err) => console.error("film_views insert failed", err));
+    }
 
     return NextResponse.json({
       id: data.id,

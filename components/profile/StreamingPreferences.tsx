@@ -1,27 +1,10 @@
 "use client";
 
-//
-// TO HOOK UP BACKEND:
-//1. Create a `streaming_preferences` table in Supabase:
-//        user_id  uuid primary key references auth.users(id)
-//        platforms text[]
-//
-// 2. Load saved platforms on mount:
-//        const { data } = await supabase
-//          .from("streaming_preferences")
-//          .select("platforms")
-//          .eq("user_id", user.id)
-//          .single()
-//        if (data?.platforms) setActive(data.platforms)
-//
-//3. Save on toggle:
-//        await supabase
-//          .from("streaming_preferences")
-//          .upsert({ user_id: user.id, platforms: next }, { onConflict: "user_id" })
+import { useEffect, useState } from "react";
+import { useAuth } from "@/components/AuthProvider";
+import { getAuthHeaders } from "@/lib/getAuthToken";
+import Icon from "@/components/ui/Icon";
 
-import { useState } from "react";
-
-// List of available streaming platforms in Norway
 const PLATFORMS = [
   "Netflix",
   "Viaplay",
@@ -32,17 +15,62 @@ const PLATFORMS = [
 ];
 
 export default function StreamingPreferences() {
-  //Replace this with data loaded from Supabase (see above)
-  const [active, setActive] = useState<string[]>([]);
+  const { user } = useAuth();
+  const [active, setActive] = useState<string[] | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(false);
 
-  function toggle(platform: string) {
-    // After updating state, also save to Supabase
-    setActive((prev) =>
-      prev.includes(platform)
-        ? prev.filter((p) => p !== platform)
-        : [...prev, platform],
-    );
+  // Load on mount.
+  useEffect(() => {
+    if (!user) {
+      setActive([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/streaming-preferences", {
+          headers: await getAuthHeaders(),
+        });
+        if (!res.ok) throw new Error("Failed to load preferences");
+        const data = await res.json();
+        if (!cancelled) setActive((data.platforms ?? []) as string[]);
+      } catch {
+        if (!cancelled) setActive([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  async function toggle(platform: string) {
+    if (active === null) return;
+    const previous = active;
+    const next = previous.includes(platform)
+      ? previous.filter((p) => p !== platform)
+      : [...previous, platform];
+    setActive(next);
+    setSaveError(false);
+    setSaving(true);
+    try {
+      const res = await fetch("/api/streaming-preferences", {
+        method: "PUT",
+        headers: await getAuthHeaders(),
+        body: JSON.stringify({ platforms: next }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+    } catch {
+      setActive(previous);
+      setSaveError(true);
+      setTimeout(() => setSaveError(false), 2400);
+    } finally {
+      setSaving(false);
+    }
   }
+
+  const isLoading = active === null;
+  const list = active ?? [];
 
   return (
     <div className="mb-4 rounded-2xl border border-(--border) bg-(--surface) p-5.5">
@@ -56,29 +84,50 @@ export default function StreamingPreferences() {
 
       <div className="flex flex-wrap gap-2">
         {PLATFORMS.map((platform) => {
-          const isActive = active.includes(platform);
+          const isActive = list.includes(platform);
           return (
             <button
               key={platform}
               onClick={() => toggle(platform)}
-              className={`flex cursor-pointer items-center gap-1.5 rounded-[10px] border px-3.5 py-2 text-xs font-medium transition-all ${
-                isActive
-                  ? "border-(--teal)var(--teal-soft)] text-(--teal)"
-                  : "border-(--border) bg-(--surface2) text-(--t2) hover:border-(--border-h) hover:text-(--t1)"
-              }`}
+              disabled={isLoading || saving}
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border px-3.5 py-2 text-xs font-medium transition-all disabled:cursor-default disabled:opacity-60"
+              style={{
+                background: isActive ? "var(--teal-soft)" : "var(--surface2)",
+                borderColor: isActive ? "var(--teal-border)" : "var(--border)",
+                color: isActive ? "var(--teal)" : "var(--t2)",
+              }}
             >
-              {/* Dot indicator */}
               <span
-                className="h-2 w-2 shrink-0 rounded-full transition-colors"
+                aria-hidden
+                className="rounded-full transition-colors"
                 style={{
+                  width: "8px",
+                  height: "8px",
                   background: isActive ? "var(--teal)" : "var(--border-h)",
                 }}
               />
               {platform}
+              {isActive && (
+                <span style={{ marginLeft: "2px" }}>
+                  <Icon name="check" size={11} />
+                </span>
+              )}
             </button>
           );
         })}
       </div>
+
+      {saveError && (
+        <p
+          style={{
+            marginTop: "10px",
+            fontSize: "11px",
+            color: "var(--rose)",
+          }}
+        >
+          Couldn&apos;t save — your selection has been reverted.
+        </p>
+      )}
     </div>
   );
 }

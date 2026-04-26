@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/AuthProvider";
 import { signupSchema, type SignupFormData } from "@/lib/validations";
 import { useDynamicBackdrop } from "@/lib/useDynamicBackdrop";
+import Icon from "@/components/ui/Icon";
 
 export default function SignupPage() {
   const { user, loading: authLoading } = useAuth();
@@ -331,7 +332,7 @@ export default function SignupPage() {
                   className="absolute right-3.5 top-1/2 -translate-y-1/2 cursor-pointer border-none bg-transparent text-sm"
                   style={{ color: "var(--t3)" }}
                 >
-                  {showPassword ? "🔒" : "👁"}
+                  <Icon name={showPassword ? "eye-off" : "eye"} size={16} />
                 </button>
               </div>
               {fieldErrors.password && (
@@ -375,7 +376,7 @@ export default function SignupPage() {
                   className="absolute right-3.5 top-1/2 -translate-y-1/2 cursor-pointer border-none bg-transparent text-sm"
                   style={{ color: "var(--t3)" }}
                 >
-                  {showConfirm ? "🔒" : "👁"}
+                  <Icon name={showConfirm ? "eye-off" : "eye"} size={16} />
                 </button>
               </div>
               {fieldErrors.confirmPassword && (

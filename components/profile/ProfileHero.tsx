@@ -1,44 +1,62 @@
 "use client";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ProfileHero.tsx
-// Shows the user's avatar, name, email, join date, and a stats strip.
-//
-// 🔌 TO HOOK UP BACKEND (stats strip):
-//   Replace the hardcoded stats values with real data from Supabase:
-//
-//   const [stats, setStats] = useState({ watchlist: 0, moodPicks: 0, topMood: "—" })
-//
-//   useEffect(() => {
-//     async function load() {
-//       // Watchlist count
-//       const { count: wlCount } = await supabase
-//         .from("watchlist").select("id", { count: "exact", head: true }).eq("user_id", user.id)
-//
-//       // Mood picks + top mood
-//       const { data: moods } = await supabase
-//         .from("mood_history").select("mood").eq("user_id", user.id)
-//       const freq: Record<string, number> = {}
-//       moods?.forEach(({ mood }) => { freq[mood] = (freq[mood] ?? 0) + 1 })
-//       const topMood = Object.entries(freq).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—"
-//
-//       setStats({ watchlist: wlCount ?? 0, moodPicks: moods?.length ?? 0, topMood })
-//     }
-//     load()
-//   }, [user.id])
-// ─────────────────────────────────────────────────────────────────────────────
-
+import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
-import { useAuth } from "@/components/AuthProvider";
+import { getAuthHeaders } from "@/lib/getAuthToken";
+import { moodMap } from "@/lib/moodMap";
+import { ACCENT_VARS } from "@/lib/constants";
+import type { AccentColor } from "@/lib/types";
+import Icon from "@/components/ui/Icon";
 
 interface Props {
   user: User;
 }
 
-export default function ProfileHero({ user }: Props) {
-  const { signOut } = useAuth();
+interface Stats {
+  watchlistCount: number;
+  moodPicks: number;
+  topMood: string | null;
+  sessionsJoined: number;
+}
 
-  // Derive display values from the Supabase user object
+function moodAccent(moodKey: string | null): AccentColor {
+  if (!moodKey) return "gold";
+  return (moodMap[moodKey]?.accentColor ?? "gold") as AccentColor;
+}
+
+function moodLabel(moodKey: string | null): string {
+  if (!moodKey) return "—";
+  return moodKey.charAt(0).toUpperCase() + moodKey.slice(1);
+}
+
+export default function ProfileHero({ user }: Props) {
+  const [stats, setStats] = useState<Stats | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/profile/stats", {
+          headers: await getAuthHeaders(),
+        });
+        if (!res.ok) throw new Error("Failed to load stats");
+        const data: Stats = await res.json();
+        if (!cancelled) setStats(data);
+      } catch {
+        if (!cancelled)
+          setStats({
+            watchlistCount: 0,
+            moodPicks: 0,
+            topMood: null,
+            sessionsJoined: 0,
+          });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const initial = user.email?.[0]?.toUpperCase() ?? "U";
   const displayName =
     user.user_metadata?.full_name ?? user.email?.split("@")[0] ?? "User";
@@ -47,226 +65,228 @@ export default function ProfileHero({ user }: Props) {
     year: "numeric",
   });
 
-  // ── PLACEHOLDER STATS ──────────────────────────────────────────────────────
-  // 🔌 Replace these with real values from Supabase (see comment at top)
-  const stats = [
-    { value: "—", label: "Watchlist", color: "text-[var(--gold)]" },
-    { value: "—", label: "Mood Picks", color: "text-[var(--blue)]" },
-    { value: "—", label: "Top Mood", color: "text-[var(--violet)]" },
-    { value: "✓", label: "Active", color: "text-[var(--teal)]" },
-  ];
+  const topMoodKey = stats?.topMood ?? null;
+  const topMoodAccent = moodAccent(topMoodKey);
 
   return (
-    <div
-      className="relative mb-5 overflow-hidden rounded-[20px] border px-5 pb-5 pt-6 md:px-9 md:pb-7 md:pt-9"
-      style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+    <section
+      className="relative mb-7 overflow-hidden rounded-[18px] border px-7 pb-6 pt-7 md:px-9 md:pb-7 md:pt-8"
+      style={{
+        background: "var(--surface)",
+        borderColor: "var(--border)",
+      }}
     >
-      {/* Gold glow orb */}
+      {/* Subtle radial wash tinted to the user's top-mood accent. */}
       <div
-        className="pointer-events-none absolute -right-14 -top-14 h-56 w-56 rounded-full blur-[60px]"
-        style={{ background: "var(--gold-glow)" }}
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background: `radial-gradient(60% 80% at 12% 0%, rgba(var(--${topMoodAccent}-rgb), 0.16), transparent 60%), radial-gradient(40% 60% at 100% 100%, rgba(var(--violet-rgb), 0.10), transparent 60%)`,
+        }}
       />
 
-      {/* ── Top row ── */}
-      {/* On mobile: avatar + logout on same row, then name/email/badges below */}
-      {/* On desktop: avatar + info + logout all in one row */}
-      <div className="relative mb-5">
-        {/* Mobile: avatar row with logout pushed right */}
-        <div className="flex items-start justify-between md:hidden mb-3">
-          <div className="relative">
-            <div
-              className="flex cursor-pointer items-center justify-center rounded-full border-[3px] text-[22px] font-bold leading-none text-(--accent-ink) transition-shadow hover:shadow-[0_0_0_2px_var(--gold)]"
-              style={{
-                width: "68px",
-                height: "68px",
-                background: "var(--gold)",
-                borderColor: "var(--bg)",
-                boxShadow: "0 0 0 1px var(--border)",
-              }}
-            >
-              {initial}
-            </div>
-            <div
-              className="absolute bottom-0 right-0 flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border text-[11px] transition-colors hover:border-(--border-h)]"
-              style={{
-                background: "var(--surface2)",
-                borderColor: "var(--border)",
-              }}
-            >
-              ✎
-            </div>
+      <div className="relative grid grid-cols-[auto_1fr] items-center gap-5 md:gap-6">
+        {/* Avatar */}
+        <div className="relative shrink-0">
+          <div
+            className="font-serif flex items-center justify-center rounded-full leading-none transition-shadow"
+            style={{
+              width: "72px",
+              height: "72px",
+              background: "var(--gold)",
+              color: "var(--accent-ink)",
+              fontSize: "26px",
+              fontWeight: 700,
+              boxShadow:
+                "0 0 0 1px var(--border), 0 8px 28px rgba(var(--gold-rgb), 0.30)",
+            }}
+          >
+            {initial}
           </div>
           <button
-            onClick={signOut}
-            className="cursor-pointer rounded-[10px] border bg-transparent px-3 py-1.5 text-xs font-medium leading-none transition-all"
-            style={{ borderColor: "var(--border)", color: "var(--t2)" }}
+            type="button"
+            aria-label="Edit avatar"
+            className="absolute bottom-0 right-0 flex items-center justify-center rounded-full border transition-colors"
+            style={{
+              width: "26px",
+              height: "26px",
+              background: "var(--surface2)",
+              borderColor: "var(--border)",
+              color: "var(--t2)",
+            }}
           >
-            Log out
+            <Icon name="pencil" size={12} />
           </button>
         </div>
 
-        {/* Mobile: name, email, badges below avatar row */}
-        <div className="md:hidden">
-          <div
-            className="font-serif mb-1 text-xl font-semibold leading-[1.1]"
-            style={{ color: "var(--t1)" }}
+        {/* Name + email + meta */}
+        <div className="min-w-0">
+          <p
+            className="font-serif"
+            style={{
+              fontSize: "clamp(22px, 4vw, 28px)",
+              fontWeight: 600,
+              color: "var(--t1)",
+              lineHeight: 1.1,
+              letterSpacing: "-0.4px",
+              margin: "0 0 4px",
+            }}
           >
             {displayName}
-          </div>
-          <div
-            className="mb-2.5 text-sm truncate leading-none"
-            style={{ color: "var(--t2)" }}
+          </p>
+          <p
+            style={{
+              fontSize: "13px",
+              color: "var(--t2)",
+              margin: "0 0 14px",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
           >
             {user.email}
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            <span
-              className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium leading-none"
-              style={{
-                background: "var(--tag-bg)",
-                borderColor: "var(--tag-border)",
-                color: "var(--t2)",
-              }}
-            >
-              📅 Member since {joinedDate}
-            </span>
-            <span
-              className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium leading-none"
-              style={{
-                background: "var(--tag-bg)",
-                borderColor: "var(--tag-border)",
-                color: "var(--gold)",
-              }}
-            >
-              ✦ Filmood member
-            </span>
-          </div>
-        </div>
+          </p>
 
-        {/* Desktop: single row with avatar + info + logout */}
-        <div className="hidden md:flex items-start gap-6">
-          {/* Avatar */}
-          <div className="relative shrink-0">
-            <div
-              className="flex cursor-pointer items-center justify-center rounded-full border-[3px] text-[28px] font-bold leading-none text-(--accent-ink) transition-shadow hover:shadow-[0_0_0_2px_var(--gold)]"
-              style={{
-                width: "84px",
-                height: "84px",
-                background: "var(--gold)",
-                borderColor: "var(--bg)",
-                boxShadow: "0 0 0 1px var(--border)",
-              }}
-            >
-              {initial}
-            </div>
-            <div
-              className="absolute bottom-0 right-0 flex h-6.5 w-6.5 cursor-pointer items-center justify-center rounded-full border text-[11px] transition-colors hover:border-(--border-h)]"
-              style={{
-                background: "var(--surface2)",
-                borderColor: "var(--border)",
-              }}
-            >
-              ✎
-            </div>
-          </div>
-
-          {/* Info */}
-          <div className="flex-1 min-w-0">
-            <div
-              className="font-serif mb-1.25 text-[26px] font-semibold leading-[1.1]"
-              style={{ color: "var(--t1)" }}
-            >
-              {displayName}
-            </div>
-            <div
-              className="mb-2.5 text-sm leading-none"
-              style={{ color: "var(--t2)" }}
-            >
-              {user.email}
-            </div>
-            <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <span className="inline-flex items-baseline gap-2">
               <span
-                className="inline-flex items-center gap-1.25 rounded-full border px-2.5 py-1 text-[11px] font-medium leading-none"
                 style={{
-                  background: "var(--tag-bg)",
-                  borderColor: "var(--tag-border)",
+                  fontSize: "10px",
+                  fontWeight: 700,
+                  letterSpacing: "1.4px",
+                  textTransform: "uppercase",
+                  color: "var(--t3)",
+                }}
+              >
+                Member since
+              </span>
+              <span
+                style={{
+                  fontSize: "12px",
                   color: "var(--t2)",
                 }}
               >
-                📅 Member since {joinedDate}
+                {joinedDate}
               </span>
+            </span>
+
+            <span
+              aria-hidden
+              style={{
+                width: "1px",
+                height: "14px",
+                background: "var(--border-h)",
+              }}
+              className="hidden md:block"
+            />
+
+            <span className="inline-flex items-center gap-2">
               <span
-                className="inline-flex items-center gap-1.25 rounded-full border px-2.5 py-1 text-[11px] font-medium leading-none"
                 style={{
-                  background: "var(--tag-bg)",
-                  borderColor: "var(--tag-border)",
-                  color: "var(--gold)",
+                  fontSize: "10px",
+                  fontWeight: 700,
+                  letterSpacing: "1.4px",
+                  textTransform: "uppercase",
+                  color: "var(--t3)",
                 }}
               >
-                ✦ Filmood member
+                Top mood
               </span>
-            </div>
-          </div>
-
-          {/* Logout */}
-          <div className="ml-auto shrink-0">
-            <button
-              onClick={signOut}
-              className="cursor-pointer rounded-[10px] border bg-transparent px-3.5 py-
-               text-xs font-medium leading-none transition-all hover:text-(--t1)]"
-              style={{ borderColor: "var(--border)", color: "var(--t2)" }}
-            >
-              Log out
-            </button>
+              <span
+                className="inline-flex items-center gap-1.5"
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  letterSpacing: "1.4px",
+                  textTransform: "uppercase",
+                  color: ACCENT_VARS[topMoodAccent].base,
+                }}
+              >
+                <Icon name="mark" size={11} />
+                {moodLabel(topMoodKey)}
+              </span>
+            </span>
           </div>
         </div>
       </div>
 
-      {/* ── Stats strip ── */}
-      {/* 🔌 Replace each stat.value with real Supabase data when ready */}
+      {/* Stats strip */}
       <div
-        className="grid grid-cols-4 overflow-hidden rounded-xl border"
+        className="relative mt-6 grid grid-cols-2 sm:grid-cols-4 overflow-hidden rounded-xl border"
         style={{
           gap: "1px",
           background: "var(--border)",
           borderColor: "var(--border)",
         }}
       >
-        {stats.map((stat, i) => (
-          <div
-            key={stat.label}
-            className={`py-3 text-center px-2 sm:px-3 md:px-4.5 ${
-              i === 0
-                ? "rounded-l-xl"
-                : i === stats.length - 1
-                  ? "rounded-r-xl"
-                  : ""
-            }`}
-            style={{ background: "var(--surface2)" }}
-          >
-            {/* Stat value */}
-            <div
-              className={`mb-1 font-bold leading-none ${stat.color}`}
-              style={{ fontSize: "clamp(15px, 4vw, 22px)" }}
-            >
-              {stat.value}
-            </div>
-            {/* Full label from sm up */}
-            <div
-              className="hidden text-[10px] uppercase tracking-[0.8px] sm:block"
-              style={{ color: "var(--t3)" }}
-            >
-              {stat.label}
-            </div>
-            {/* Abbreviated label on tiny screens */}
-            <div
-              className="block text-[9px] uppercase tracking-[0.5px] sm:hidden"
-              style={{ color: "var(--t3)" }}
-            >
-              {stat.label.split(" ")[0]}
-            </div>
-          </div>
-        ))}
+        <Stat
+          value={stats == null ? "·" : String(stats.watchlistCount)}
+          label="Watchlist"
+          color="var(--gold)"
+        />
+        <Stat
+          value={stats == null ? "·" : String(stats.moodPicks)}
+          label="Mood picks"
+          color="var(--blue)"
+        />
+        <Stat
+          value={moodLabel(topMoodKey)}
+          label="Top mood"
+          color={ACCENT_VARS[topMoodAccent].base}
+          italic
+        />
+        <Stat
+          value={stats == null ? "·" : String(stats.sessionsJoined).padStart(2, "0")}
+          label="Sessions"
+          color="var(--teal)"
+        />
+      </div>
+    </section>
+  );
+}
+
+function Stat({
+  value,
+  label,
+  color,
+  italic,
+}: {
+  value: string;
+  label: string;
+  color: string;
+  italic?: boolean;
+}) {
+  return (
+    <div
+      className="px-3 py-3.5 text-center"
+      style={{ background: "var(--surface2)" }}
+    >
+      <div
+        className="font-serif"
+        style={{
+          fontWeight: 600,
+          fontStyle: italic ? "italic" : "normal",
+          color,
+          fontSize: italic ? "clamp(13px, 3vw, 16px)" : "clamp(15px, 4vw, 22px)",
+          lineHeight: 1,
+          marginBottom: "6px",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {value}
+      </div>
+      <div
+        style={{
+          fontSize: "9.5px",
+          fontWeight: 700,
+          letterSpacing: "1.4px",
+          textTransform: "uppercase",
+          color: "var(--t3)",
+        }}
+      >
+        {label}
       </div>
     </div>
   );

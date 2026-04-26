@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/AuthProvider";
 import { loginSchema, type LoginFormData } from "@/lib/validations";
 import { useDynamicBackdrop } from "@/lib/useDynamicBackdrop";
+import Icon from "@/components/ui/Icon";
 
 export default function LoginPage() {
   const { user, loading: authLoading } = useAuth();
@@ -299,7 +300,7 @@ export default function LoginPage() {
                   className="absolute right-3.5 top-1/2 -translate-y-1/2 cursor-pointer border-none bg-transparent text-sm"
                   style={{ color: "var(--t3)" }}
                 >
-                  {showPassword ? "🔒" : "👁"}
+                  <Icon name={showPassword ? "eye-off" : "eye"} size={16} />
                 </button>
               </div>
               {fieldErrors.password && (
