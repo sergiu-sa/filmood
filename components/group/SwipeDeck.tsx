@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import type { DeckFilm, SwipeVote } from "@/lib/types";
 import SwipeCard from "./SwipeCard";
+import Icon from "@/components/ui/Icon";
 
 interface SwipeDeckProps {
   deck: DeckFilm[];
@@ -31,11 +32,7 @@ const VOTE_BUTTONS: {
     hoverBg: "var(--rose)",
     hoverText: "var(--accent-paper)",
     size: 56,
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-        <path d="M5 5l10 10M15 5L5 15" />
-      </svg>
-    ),
+    icon: <Icon name="close" size={20} />,
   },
   {
     vote: "maybe",
@@ -44,6 +41,7 @@ const VOTE_BUTTONS: {
     hoverBg: "var(--gold)",
     hoverText: "var(--accent-ink)",
     size: 46,
+    // Squiggle is unique to the "maybe" vote semantic — kept inline.
     icon: (
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
         <path d="M4 10.5c2-3 4-3 6 0s4 3 6 0" />
@@ -57,11 +55,7 @@ const VOTE_BUTTONS: {
     hoverBg: "var(--teal)",
     hoverText: "var(--accent-ink)",
     size: 56,
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M4.5 10.5l4 4 7-7" />
-      </svg>
-    ),
+    icon: <Icon name="check" size={20} />,
   },
 ];
 

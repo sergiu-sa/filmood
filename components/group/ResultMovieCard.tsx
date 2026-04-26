@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { MatchResult } from "@/lib/types";
 import VoteBreakdown from "./VoteBreakdown";
 import { tmdbImageUrl } from "@/lib/tmdb";
+import Icon from "@/components/ui/Icon";
 
 interface ResultMovieCardProps {
   result: MatchResult;
@@ -80,9 +81,7 @@ export default function ResultMovieCard({
             color: "var(--gold)",
           }}
         >
-          <svg width="9" height="9" viewBox="0 0 12 12" fill="currentColor">
-            <path d="M6 .5l1.55 3.6 3.95.5-2.9 2.7.7 3.9L6 9.3 2.7 11.2l.7-3.9L.5 4.6l3.95-.5z" />
-          </svg>
+          <Icon name="star-burst" size={9} />
           {rating}
         </div>
       </div>

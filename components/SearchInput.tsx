@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import type { Film } from "@/lib/types";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
+import Icon from "@/components/ui/Icon";
 
 type FilterType = "title" | "actor" | "director";
 
@@ -67,19 +68,12 @@ export default function SearchInput({ onResults, onLoading }: SearchInputProps) 
     <div className="w-full max-w-2xl mx-auto flex flex-col gap-4">
       {/* Search Input */}
       <div className="relative flex items-center">
-        <svg
-          className="absolute left-4 w-5 h-5 pointer-events-none"
-          style={{ color: "var(--t3)" }}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          viewBox="0 0 24 24"
+        <span
+          className="absolute left-4 pointer-events-none"
+          style={{ color: "var(--t3)", display: "flex" }}
         >
-          <circle cx="11" cy="11" r="8" />
-          <line x1="21" y1="21" x2="16.65" y2="16.65" />
-        </svg>
+          <Icon name="search" size={20} />
+        </span>
         <input
           type="text"
           value={query}
@@ -102,10 +96,7 @@ export default function SearchInput({ onResults, onLoading }: SearchInputProps) 
             style={{ color: "var(--t3)" }}
             aria-label="Clear search"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
+            <Icon name="close" size={16} />
           </button>
         )}
         {/* Loading spinner */}

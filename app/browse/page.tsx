@@ -11,6 +11,7 @@ import {
   CategoryIcon,
   type BrowseCategory,
 } from "@/lib/browseCategories";
+import Icon from "@/components/ui/Icon";
 
 type SortOrder = "popularity" | "rating" | "newest" | "title";
 
@@ -285,7 +286,7 @@ function BrowseContent() {
           {/* Search input */}
           <div style={{ paddingTop: "18px" }}>
             <div style={{ position: "relative", maxWidth: "520px" }}>
-              <svg
+              <span
                 style={{
                   position: "absolute",
                   left: "14px",
@@ -294,19 +295,11 @@ function BrowseContent() {
                   color: inputFocused ? "var(--blue)" : "var(--t3)",
                   pointerEvents: "none",
                   transition: "color 0.2s",
+                  display: "flex",
                 }}
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
               >
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
+                <Icon name="search" size={15} />
+              </span>
               <input
                 id="browse-search"
                 name="browse-search"
@@ -621,20 +614,9 @@ function BrowseContent() {
                 margin: "0 auto 16px",
               }}
             >
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="var(--blue)"
-                strokeWidth={1.5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                style={{ opacity: 0.7 }}
-              >
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
+              <span style={{ color: "var(--blue)", opacity: 0.7, display: "flex" }}>
+                <Icon name="search" size={24} />
+              </span>
             </div>
             <p
               style={{
@@ -701,18 +683,7 @@ function BrowseContent() {
                 e.currentTarget.style.borderColor = "var(--border)";
               }}
             >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M10 3L5 8l5 5" />
-              </svg>
+              <Icon name="chevron-left" size={16} />
             </button>
 
             {/* Page numbers */}
@@ -806,18 +777,7 @@ function BrowseContent() {
                 e.currentTarget.style.borderColor = "var(--border)";
               }}
             >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M6 3l5 5-5 5" />
-              </svg>
+              <Icon name="chevron-right" size={16} />
             </button>
           </div>
         )}

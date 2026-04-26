@@ -1,47 +1,43 @@
 "use client";
 
 import Link from "next/link";
-import type { MatchResult, Provider } from "@/lib/types";
-import { moodMap } from "@/lib/moodMap";
-import { genreMap } from "@/lib/genres";
+import Image from "next/image";
 import { useMediaQuery } from "@/lib/useMediaQuery";
+import type { Film, Provider } from "@/lib/types";
+import { moodMap } from "@/lib/moodMap";
 import { ACCENT_VARS } from "@/lib/constants";
-import VoteBreakdown from "./VoteBreakdown";
 import { tmdbImageUrl } from "@/lib/tmdb";
 import Icon from "@/components/ui/Icon";
 
-interface TopPickCardProps {
-  result: MatchResult;
+interface TopPickProps {
+  film: Film;
+  moods: string[];
+  accent: { base: string; soft: string; glow: string };
   providers: Provider[] | null;
   providersLoading: boolean;
 }
 
-export default function TopPickCard({
-  result,
+/**
+ * Hero card for the solo-results page — the single film picked as the
+ * "top match" for the user's mood query. Renders the poster + title +
+ * rating + mood chips + overview + streaming providers + a CTA into
+ * the film detail page. Pure presentational; receives all data via props.
+ */
+export default function TopPick({
+  film,
+  moods,
+  accent,
   providers,
   providersLoading,
-}: TopPickCardProps) {
-  const isMobile = useMediaQuery("(max-width: 720px)");
-  const { movie, tier, yesCount, maybeCount, noCount, votes } = result;
-
-  const year = movie.release_date?.split("-")[0] || "";
-  const rating = movie.vote_average?.toFixed(1) || "---";
-  const posterUrl = tmdbImageUrl(movie.poster_path, "w500");
-
-  const moodTags = (movie.mood_keys ?? [])
-    .map((k) => {
-      const config = moodMap[k];
-      if (!config) return null;
-      return { label: config.tagLabel, accent: config.accentColor };
-    })
-    .filter(Boolean) as { label: string; accent: string }[];
-
-  const genres = (movie.genre_ids ?? [])
-    .map((id) => genreMap[id])
-    .filter(Boolean)
-    .slice(0, 4);
-
-  const posterWidth = isMobile ? "100%" : "300px";
+}: TopPickProps) {
+  const isMobile = useMediaQuery("(max-width: 820px)");
+  const year = film.release_date
+    ? new Date(film.release_date).getFullYear()
+    : "";
+  const rating = film.vote_average?.toFixed(1) ?? "---";
+  const posterUrl = film.poster_path
+    ? tmdbImageUrl(film.poster_path, "w500")
+    : null;
 
   return (
     <div
@@ -49,17 +45,16 @@ export default function TopPickCard({
         position: "relative",
         width: "100%",
         maxWidth: "820px",
-        margin: "0 auto",
+        margin: isMobile ? "0 auto 28px" : "0 auto 40px",
       }}
     >
-      {/* Gold glow aura sitting behind the card */}
+      {/* Accent glow aura */}
       <div
         aria-hidden="true"
         style={{
           position: "absolute",
-          inset: "-40px",
-          background:
-            "radial-gradient(ellipse at center, var(--gold-glow) 0%, transparent 60%)",
+          inset: isMobile ? "-20px" : "-40px",
+          background: `radial-gradient(ellipse at center, ${accent.glow} 0%, transparent 60%)`,
           filter: "blur(40px)",
           opacity: 0.9,
           pointerEvents: "none",
@@ -74,32 +69,50 @@ export default function TopPickCard({
           position: "relative",
           zIndex: 1,
           background: "var(--surface)",
-          border: "1px solid var(--gold)",
+          border: `1px solid ${accent.base}`,
           borderRadius: "18px",
           overflow: "hidden",
-          boxShadow:
-            "0 20px 60px var(--overlay-scrim), 0 0 0 1px rgba(var(--gold-rgb), 0.15)",
+          boxShadow: `0 20px 60px var(--overlay-scrim), 0 0 0 1px ${accent.soft}`,
           display: isMobile ? "flex" : "grid",
           flexDirection: "column",
-          gridTemplateColumns: `${posterWidth} 1fr`,
+          gridTemplateColumns: isMobile ? "1fr" : "300px 1fr",
         }}
       >
         {/* Poster */}
         <div
-          role="img"
-          aria-label={`${movie.title} poster`}
           style={{
             position: "relative",
             width: "100%",
-            minHeight: isMobile ? "360px" : "450px",
-            backgroundImage: posterUrl
-              ? `url(${posterUrl})`
-              : "linear-gradient(160deg, #1a1520, #2a1f35 30%, #0d1520)",
-            backgroundSize: "cover",
-            backgroundPosition: "center top",
+            minHeight: isMobile ? "320px" : "450px",
+            background: "var(--surface2)",
           }}
         >
-          {/* Tier badge — sits on the poster */}
+          {posterUrl ? (
+            <Image
+              src={posterUrl}
+              alt={film.title}
+              fill
+              sizes="(max-width: 820px) 100vw, 300px"
+              style={{ objectFit: "cover" }}
+              priority
+            />
+          ) : (
+            <div
+              style={{
+                width: "100%",
+                height: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--t3)",
+                fontSize: "13px",
+              }}
+            >
+              No Poster
+            </div>
+          )}
+
+          {/* Badge */}
           <div
             className="font-sans"
             style={{
@@ -114,15 +127,15 @@ export default function TopPickCard({
               fontWeight: 700,
               textTransform: "uppercase",
               letterSpacing: "1.8px",
-              color: "var(--gold)",
-              border: "1px solid rgba(var(--gold-rgb), 0.4)",
+              color: accent.base,
+              border: `1px solid ${accent.soft}`,
             }}
           >
-            {tier === "perfect" ? "★ Perfect Match" : "★ Top Pick"}
+            ★ Top Match
           </div>
         </div>
 
-        {/* Info column */}
+        {/* Info */}
         <div
           style={{
             padding: isMobile ? "22px 22px 26px" : "34px 36px",
@@ -144,7 +157,7 @@ export default function TopPickCard({
                 marginBottom: "8px",
               }}
             >
-              {movie.title}
+              {film.title}
             </h2>
             <div
               className="font-sans"
@@ -152,8 +165,8 @@ export default function TopPickCard({
                 display: "flex",
                 alignItems: "center",
                 gap: "12px",
-                fontSize: "12px",
-                color: "var(--t3)",
+                fontSize: "13px",
+                color: "var(--t2)",
               }}
             >
               {year && <span>{year}</span>}
@@ -162,7 +175,7 @@ export default function TopPickCard({
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "4px",
-                  color: "var(--gold)",
+                  color: accent.base,
                   fontWeight: 700,
                 }}
               >
@@ -172,46 +185,31 @@ export default function TopPickCard({
             </div>
           </div>
 
-          {/* Mood + genre chips */}
-          {(moodTags.length > 0 || genres.length > 0) && (
+          {/* Mood chips */}
+          {moods.length > 0 && (
             <div style={{ display: "flex", gap: "5px", flexWrap: "wrap" }}>
-              {moodTags.map((tag) => {
-                const vars = ACCENT_VARS[tag.accent as keyof typeof ACCENT_VARS] ?? ACCENT_VARS.gold;
+              {moods.map((m) => {
+                const moodKey = m.trim().toLowerCase();
+                const moodAccentKey = moodMap[moodKey]?.accentColor ?? "gold";
+                const moodAccent = ACCENT_VARS[moodAccentKey];
                 return (
                   <span
-                    key={tag.label}
+                    key={m}
                     className="font-sans"
                     style={{
                       padding: "4px 10px",
                       borderRadius: "100px",
                       fontSize: "10px",
                       fontWeight: 600,
-                      color: vars.base,
-                      background: vars.soft,
-                      border: `1px solid ${vars.border}`,
+                      color: moodAccent.base,
+                      background: moodAccent.soft,
+                      border: `1px solid ${moodAccent.soft}`,
                     }}
                   >
-                    {tag.label}
+                    {moodMap[moodKey]?.tagLabel ?? m}
                   </span>
                 );
               })}
-              {genres.map((name) => (
-                <span
-                  key={name}
-                  className="font-sans"
-                  style={{
-                    padding: "4px 10px",
-                    borderRadius: "100px",
-                    fontSize: "10px",
-                    fontWeight: 500,
-                    background: "var(--tag-bg)",
-                    border: "1px solid var(--tag-border)",
-                    color: "var(--t2)",
-                  }}
-                >
-                  {name}
-                </span>
-              ))}
             </div>
           )}
 
@@ -228,55 +226,8 @@ export default function TopPickCard({
               overflow: "hidden",
             }}
           >
-            {movie.overview}
+            {film.overview}
           </p>
-
-          {/* Vote summary */}
-          <div
-            style={{
-              display: "flex",
-              gap: "20px",
-              padding: "12px 0",
-              borderTop: "1px solid var(--border)",
-              borderBottom: "1px solid var(--border)",
-            }}
-          >
-            {[
-              { label: "Yes", count: yesCount, color: "var(--teal)" },
-              { label: "Maybe", count: maybeCount, color: "var(--gold)" },
-              { label: "No", count: noCount, color: "var(--rose)" },
-            ].map((s) => (
-              <div key={s.label} style={{ display: "flex", flexDirection: "column" }}>
-                <span
-                  className="font-sans"
-                  style={{
-                    fontSize: "22px",
-                    fontWeight: 800,
-                    lineHeight: 1,
-                    color: s.color,
-                  }}
-                >
-                  {s.count}
-                </span>
-                <span
-                  className="font-sans"
-                  style={{
-                    fontSize: "9px",
-                    fontWeight: 600,
-                    textTransform: "uppercase",
-                    letterSpacing: "1px",
-                    color: "var(--t3)",
-                    marginTop: "3px",
-                  }}
-                >
-                  {s.label}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          {/* Per-participant vote breakdown */}
-          <VoteBreakdown votes={votes} variant="full" />
 
           {/* Streaming providers */}
           <div>
@@ -340,7 +291,7 @@ export default function TopPickCard({
 
           {/* CTA */}
           <Link
-            href={`/film/${movie.id}`}
+            href={`/film/${film.id}`}
             className="font-sans"
             style={{
               display: "inline-flex",
@@ -348,9 +299,9 @@ export default function TopPickCard({
               justifyContent: "center",
               gap: "8px",
               marginTop: "4px",
-              padding: "14px 24px",
+              padding: isMobile ? "12px 20px" : "14px 24px",
               borderRadius: "10px",
-              background: "var(--gold)",
+              background: accent.base,
               color: "var(--accent-ink)",
               fontSize: "13px",
               fontWeight: 700,
@@ -358,6 +309,7 @@ export default function TopPickCard({
               transition: "all 0.25s ease",
               textTransform: "uppercase",
               letterSpacing: "1px",
+              width: isMobile ? "100%" : "auto",
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.filter = "brightness(1.1)";
@@ -368,7 +320,7 @@ export default function TopPickCard({
               e.currentTarget.style.transform = "translateY(0)";
             }}
           >
-            Watch this →
+            View details →
           </Link>
         </div>
       </div>

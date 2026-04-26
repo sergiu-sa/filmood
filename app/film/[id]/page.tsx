@@ -9,12 +9,17 @@ import type {
   Review,
 } from "@/lib/types";
 import Breadcrumb from "@/components/Breadcrumb";
-import FilmActions from "@/components/film/FilmActions";
 import FilmVideos from "@/components/film/FilmVideos";
 import FilmGallery from "@/components/film/FilmGallery";
 import FilmRail from "@/components/film/FilmRail";
 import FilmReviews from "@/components/film/FilmReviews";
 import RegionalAvailability from "@/components/film/RegionalAvailability";
+import FilmHeaderInfo from "@/components/film/FilmHeaderInfo";
+import FilmCastStrip from "@/components/film/FilmCastStrip";
+import FilmCrewGrid from "@/components/film/FilmCrewGrid";
+import FilmKeywordChips from "@/components/film/FilmKeywordChips";
+import FilmExternalLinks from "@/components/film/FilmExternalLinks";
+import FilmDetailsTable from "@/components/film/FilmDetailsTable";
 import Image from "next/image";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
@@ -378,204 +383,15 @@ export default async function FilmDetailPage({
 
           {/* ── Info column ── */}
           <div className="fd-info">
-            {/* Desktop: title, meta, genres, buttons */}
-            <div className="fd-desktop-header">
-              <p
-                role="presentation"
-                className="font-serif"
-                style={{
-                  fontSize: "clamp(22px, 5vw, 32px)",
-                  fontWeight: 600,
-                  color: "var(--t1)",
-                  lineHeight: 1.15,
-                  margin: "0 0 10px",
-                  transition: "color 0.2s",
-                }}
-              >
-                {detail.title}
-              </p>
-              <span
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  flexWrap: "wrap",
-                  marginBottom: "12px",
-                }}
-              >
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    padding: "3px 8px",
-                    borderRadius: "6px",
-                    background: "var(--gold-soft)",
-                    border: "1px solid var(--gold-border)",
-                    fontSize: "12px",
-                    fontWeight: 700,
-                    color: "var(--gold)",
-                  }}
-                >
-                  ★ {detail.vote_average?.toFixed(1)}
-                </span>
-                <span
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: 500,
-                    color: "var(--t1)",
-                  }}
-                >
-                  {year}
-                </span>
-                {detail.runtime && (
-                  <>
-                    <span style={{ fontSize: "10px", color: "var(--t2)" }}>
-                      ·
-                    </span>
-                    <span
-                      style={{
-                        fontSize: "13px",
-                        fontWeight: 500,
-                        color: "var(--t1)",
-                      }}
-                    >
-                      {detail.runtime} min
-                    </span>
-                  </>
-                )}
-              </span>
-              <div
-                style={{
-                  display: "flex",
-                  gap: "6px",
-                  flexWrap: "wrap",
-                  marginBottom: "16px",
-                }}
-              >
-                {detail.genres?.map((g) => (
-                  <span
-                    key={g.id}
-                    style={{
-                      padding: "5px 12px",
-                      borderRadius: "100px",
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      background: "var(--tag-bg)",
-                      border: "1px solid var(--tag-border)",
-                      color: "var(--t1)",
-                    }}
-                  >
-                    {g.name}
-                  </span>
-                ))}
-              </div>
-              <FilmActions
-                movieId={detail.id}
-                movieTitle={detail.title}
-                posterPath={detail.poster_path}
-                layout="row"
-              />
-            </div>
-
-            {/* Mobile/tablet: title, meta, genres, stacked buttons */}
-            <div className="fd-mobile-header">
-              <h1
-                className="font-serif"
-                style={{
-                  fontSize: "clamp(20px, 5vw, 28px)",
-                  fontWeight: 600,
-                  color: "var(--t1)",
-                  lineHeight: 1.15,
-                  margin: "0 0 10px",
-                  transition: "color 0.2s",
-                }}
-              >
-                {detail.title}
-              </h1>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  flexWrap: "wrap",
-                  marginBottom: "10px",
-                }}
-              >
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    padding: "3px 8px",
-                    borderRadius: "6px",
-                    background: "var(--gold-soft)",
-                    border: "1px solid var(--gold-border)",
-                    fontSize: "12px",
-                    fontWeight: 700,
-                    color: "var(--gold)",
-                  }}
-                >
-                  ★ {detail.vote_average?.toFixed(1)}
-                </span>
-                <span
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: 500,
-                    color: "var(--t1)",
-                  }}
-                >
-                  {year}
-                </span>
-                {detail.runtime && (
-                  <>
-                    <span style={{ fontSize: "10px", color: "var(--t2)" }}>
-                      ·
-                    </span>
-                    <span
-                      style={{
-                        fontSize: "13px",
-                        fontWeight: 500,
-                        color: "var(--t1)",
-                      }}
-                    >
-                      {detail.runtime} min
-                    </span>
-                  </>
-                )}
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  gap: "6px",
-                  flexWrap: "wrap",
-                  marginBottom: "14px",
-                }}
-              >
-                {detail.genres?.map((g) => (
-                  <span
-                    key={g.id}
-                    style={{
-                      padding: "5px 12px",
-                      borderRadius: "100px",
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      background: "var(--tag-bg)",
-                      border: "1px solid var(--tag-border)",
-                      color: "var(--t1)",
-                    }}
-                  >
-                    {g.name}
-                  </span>
-                ))}
-              </div>
-              <FilmActions
-                movieId={detail.id}
-                movieTitle={detail.title}
-                posterPath={detail.poster_path}
-                layout="column"
-              />
-            </div>
+            <FilmHeaderInfo
+              movieId={detail.id}
+              title={detail.title}
+              voteAverage={detail.vote_average}
+              year={year}
+              runtime={detail.runtime}
+              genres={detail.genres ?? []}
+              posterPath={detail.poster_path}
+            />
 
             {/* Synopsis */}
             <SectionLabel>Synopsis</SectionLabel>
@@ -622,82 +438,7 @@ export default async function FilmDetailPage({
             {cast.length > 0 && (
               <div style={{ marginBottom: "28px" }}>
                 <SectionLabel>Cast</SectionLabel>
-                <div className="fd-scroll-fade">
-                  <div className="fd-cast-scroll">
-                    {cast.map((actor) => (
-                    <div
-                      key={actor.id}
-                      style={{
-                        flexShrink: 0,
-                        width: "90px",
-                        textAlign: "center",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: "72px",
-                          height: "72px",
-                          borderRadius: "50%",
-                          background: "var(--surface2)",
-                          border: "1px solid var(--border)",
-                          margin: "0 auto 8px",
-                          overflow: "hidden",
-                          position: "relative",
-                        }}
-                      >
-                        {actor.profile_path ? (
-                          <Image
-                            src={tmdbImageUrl(actor.profile_path, "w185") ?? ""}
-                            alt={actor.name}
-                            fill
-                            sizes="72px"
-                            style={{ objectFit: "cover" }}
-                          />
-                        ) : (
-                          <div
-                            style={{
-                              width: "100%",
-                              height: "100%",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              color: "var(--t3)",
-                              fontSize: "16px",
-                            }}
-                          >
-                            ?
-                          </div>
-                        )}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "11px",
-                          fontWeight: 600,
-                          color: "var(--t1)",
-                          marginBottom: "2px",
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          transition: "color 0.2s",
-                        }}
-                      >
-                        {actor.name}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "10px",
-                          color: "var(--t3)",
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }}
-                      >
-                        {actor.character}
-                      </div>
-                    </div>
-                  ))}
-                  </div>
-                </div>
+                <FilmCastStrip cast={cast} />
               </div>
             )}
 
@@ -705,47 +446,7 @@ export default async function FilmDetailPage({
             {crew.length > 0 && (
               <div style={{ marginBottom: "28px" }}>
                 <SectionLabel>Crew</SectionLabel>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
-                    gap: "10px 18px",
-                  }}
-                >
-                  {crew.map((m) => (
-                    <div
-                      key={`${m.id}-${m.job}`}
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        padding: "8px 0",
-                        borderTop: "1px solid var(--border)",
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: "10px",
-                          fontWeight: 600,
-                          letterSpacing: "1px",
-                          textTransform: "uppercase",
-                          color: "var(--t2)",
-                          marginBottom: "2px",
-                        }}
-                      >
-                        {m.job}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "13px",
-                          fontWeight: 500,
-                          color: "var(--t1)",
-                        }}
-                      >
-                        {m.name}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                <FilmCrewGrid crew={crew} />
               </div>
             )}
 
@@ -753,30 +454,7 @@ export default async function FilmDetailPage({
             {keywords.length > 0 && (
               <div style={{ marginBottom: "28px" }}>
                 <SectionLabel>Themes</SectionLabel>
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "6px",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  {keywords.map((k) => (
-                    <span
-                      key={k.id}
-                      style={{
-                        padding: "5px 12px",
-                        borderRadius: "100px",
-                        fontSize: "12px",
-                        fontWeight: 600,
-                        background: "var(--tag-bg)",
-                        border: "1px solid var(--tag-border)",
-                        color: "var(--t1)",
-                      }}
-                    >
-                      {k.name}
-                    </span>
-                  ))}
-                </div>
+                <FilmKeywordChips keywords={keywords} />
               </div>
             )}
 
@@ -808,144 +486,18 @@ export default async function FilmDetailPage({
                 externalIds.twitter_id) && (
                 <div style={{ marginBottom: "28px" }}>
                   <SectionLabel>External links</SectionLabel>
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "8px",
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    {externalIds.imdb_id && (
-                      <a
-                        href={`https://www.imdb.com/title/${externalIds.imdb_id}/`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          padding: "8px 14px",
-                          borderRadius: "8px",
-                          background: "var(--gold-soft)",
-                          border: "1px solid var(--gold-border)",
-                          fontSize: "12px",
-                          fontWeight: 700,
-                          color: "var(--gold)",
-                          textDecoration: "none",
-                        }}
-                      >
-                        IMDb ↗
-                      </a>
-                    )}
-                    {externalIds.facebook_id && (
-                      <a
-                        href={`https://www.facebook.com/${externalIds.facebook_id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          padding: "8px 14px",
-                          borderRadius: "8px",
-                          background: "var(--tag-bg)",
-                          border: "1px solid var(--tag-border)",
-                          fontSize: "12px",
-                          fontWeight: 600,
-                          color: "var(--t1)",
-                          textDecoration: "none",
-                        }}
-                      >
-                        Facebook ↗
-                      </a>
-                    )}
-                    {externalIds.instagram_id && (
-                      <a
-                        href={`https://www.instagram.com/${externalIds.instagram_id}/`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          padding: "8px 14px",
-                          borderRadius: "8px",
-                          background: "var(--tag-bg)",
-                          border: "1px solid var(--tag-border)",
-                          fontSize: "12px",
-                          fontWeight: 600,
-                          color: "var(--t1)",
-                          textDecoration: "none",
-                        }}
-                      >
-                        Instagram ↗
-                      </a>
-                    )}
-                    {externalIds.twitter_id && (
-                      <a
-                        href={`https://twitter.com/${externalIds.twitter_id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          padding: "8px 14px",
-                          borderRadius: "8px",
-                          background: "var(--tag-bg)",
-                          border: "1px solid var(--tag-border)",
-                          fontSize: "12px",
-                          fontWeight: 600,
-                          color: "var(--t1)",
-                          textDecoration: "none",
-                        }}
-                      >
-                        Twitter / X ↗
-                      </a>
-                    )}
-                  </div>
+                  <FilmExternalLinks externalIds={externalIds} />
                 </div>
               )}
 
             {/* Details table */}
             <div style={{ marginBottom: "28px" }}>
               <SectionLabel>Details</SectionLabel>
-              {[
-                {
-                  label: "Runtime",
-                  value: detail.runtime
-                    ? `${detail.runtime} minutes`
-                    : undefined,
-                },
-                { label: "Release year", value: year },
-                {
-                  label: "Genres",
-                  value: detail.genres?.map((g) => g.name).join(", "),
-                },
-              ]
-                .filter((r) => r.value)
-                .map((row) => (
-                  <div
-                    key={row.label}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      padding: "10px 0",
-                      borderBottom: "1px solid var(--border)",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: "12px",
-                        fontWeight: 500,
-                        color: "var(--t2)",
-                        transition: "color 0.2s",
-                      }}
-                    >
-                      {row.label}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: "12px",
-                        fontWeight: 500,
-                        color: "var(--t1)",
-                        textAlign: "right",
-                        maxWidth: "60%",
-                        transition: "color 0.2s",
-                      }}
-                    >
-                      {row.value}
-                    </span>
-                  </div>
-                ))}
+              <FilmDetailsTable
+                runtime={detail.runtime}
+                year={year}
+                genres={detail.genres ?? []}
+              />
             </div>
           </div>
         </div>

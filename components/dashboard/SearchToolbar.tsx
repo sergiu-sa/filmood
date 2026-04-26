@@ -2,7 +2,12 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { Film } from "@/lib/types";
+import Icon from "@/components/ui/Icon";
 
+// Compact toolbar variant — uses the shared BROWSE_CATEGORIES ids but
+// keeps shorter labels for the tight horizontal real estate. The label
+// override is the only reason this list isn't pulled directly from
+// `lib/browseCategories.tsx`.
 const BROWSE_CATEGORIES = [
   { id: "trending", label: "Trending" },
   { id: "top-rated", label: "Top Rated" },
@@ -157,25 +162,19 @@ export default function SearchToolbar({
             transition: "border-color 0.2s",
           }}
         />
-        <svg
+        <span
           aria-hidden
-          width={14}
-          height={14}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="var(--t3)"
-          strokeWidth={2}
-          strokeLinecap="round"
           style={{
             position: "absolute",
             left: 12,
             top: "50%",
             transform: "translateY(-50%)",
+            color: "var(--t3)",
+            display: "flex",
           }}
         >
-          <circle cx="11" cy="11" r="8" />
-          <line x1="21" y1="21" x2="16.65" y2="16.65" />
-        </svg>
+          <Icon name="search" size={14} />
+        </span>
         {isLoading && (
           <span
             style={{

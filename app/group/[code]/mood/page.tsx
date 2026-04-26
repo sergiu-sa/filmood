@@ -11,6 +11,7 @@ import type { EraKey, TempoKey } from "@/lib/types";
 import Breadcrumb from "@/components/Breadcrumb";
 import MoodCard from "@/components/dashboard/MoodCard";
 import MoodExtras from "@/components/mood/MoodExtras";
+import Icon from "@/components/ui/Icon";
 
 type Phase = "selecting" | "submitting" | "waiting" | "building";
 
@@ -407,19 +408,9 @@ export default function GroupMoodPage() {
           className="lobby-section-2 flex items-center justify-center gap-2"
           style={{ marginBottom: "24px", marginTop: "16px" }}
         >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="var(--violet)"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-            <path d="M7 11V7a5 5 0 0110 0v4" />
-          </svg>
+          <span style={{ color: "var(--violet)", display: "flex" }}>
+            <Icon name="lock" size={14} />
+          </span>
           <span
             className="font-sans"
             style={{

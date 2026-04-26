@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Icon from "@/components/ui/Icon";
 
 export interface BreadcrumbItem {
   label: string;
@@ -41,25 +42,16 @@ export default function Breadcrumb({ items }: { items: BreadcrumbItem[] }) {
           >
             {/* Chevron separator */}
             {i > 0 && (
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 16 16"
-                fill="none"
+              <span
                 style={{
                   color: "var(--t2)",
                   flexShrink: 0,
                   margin: "0 3px",
+                  display: "flex",
                 }}
               >
-                <path
-                  d="M6 4l4 4-4 4"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
+                <Icon name="chevron-right" size={16} />
+              </span>
             )}
 
             {isLast || !item.href ? (
@@ -96,20 +88,11 @@ export default function Breadcrumb({ items }: { items: BreadcrumbItem[] }) {
               >
                 {/* Home icon for the first "/" link */}
                 {isHome && (
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    style={{ flexShrink: 0, marginTop: "-1px" }}
+                  <span
+                    style={{ flexShrink: 0, marginTop: "-1px", display: "flex" }}
                   >
-                    <path d="M2.5 6.5L8 2l5.5 4.5" />
-                    <path d="M4 8v5a1 1 0 001 1h2v-3h2v3h2a1 1 0 001-1V8" />
-                  </svg>
+                    <Icon name="home" size={14} />
+                  </span>
                 )}
                 {item.label}
               </Link>

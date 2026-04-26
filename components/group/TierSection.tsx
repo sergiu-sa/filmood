@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { MatchResult } from "@/lib/types";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import ResultMovieCard from "./ResultMovieCard";
+import Icon from "@/components/ui/Icon";
 
 interface TierSectionProps {
   label: string;
@@ -120,21 +121,15 @@ export default function TierSection({
             }}
           >
             {open ? "Hide" : "Show"}
-            <svg
-              width="10"
-              height="10"
-              viewBox="0 0 10 10"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
+            <span
               style={{
+                display: "flex",
                 transform: open ? "rotate(180deg)" : "rotate(0deg)",
                 transition: "transform 0.2s ease",
               }}
             >
-              <path d="M2 3.5l3 3 3-3" />
-            </svg>
+              <Icon name="chevron-down" size={10} />
+            </span>
           </span>
         )}
       </button>

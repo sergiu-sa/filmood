@@ -26,7 +26,14 @@ export type IconName =
   | "play"
   | "share"
   | "eye"
-  | "eye-off";
+  | "eye-off"
+  | "search"
+  | "chevron-left"
+  | "chevron-right"
+  | "chevron-down"
+  | "arrow-right"
+  | "home"
+  | "star-burst";
 
 interface IconProps {
   name: IconName;
@@ -245,6 +252,95 @@ export default function Icon({ name, size = 16, className }: IconProps) {
           <path d="M10.6 6.1 a10.5 10.5 0 0 1 1.4-.1 c6.5 0 10 7 10 7 a18.5 18.5 0 0 1-3.2 4" />
           <path d="M6.6 6.6 C3.8 8.4 2 12 2 12 s3.5 7 10 7 a10.5 10.5 0 0 0 4.4-.9" />
           <path d="M9.9 9.9 a3 3 0 0 0 4.2 4.2" />
+        </svg>
+      );
+    case "search":
+      return (
+        <svg
+          {...common}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.8}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
+      );
+    case "chevron-left":
+      return (
+        <svg
+          {...common}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.8}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M15 6 L9 12 L15 18" />
+        </svg>
+      );
+    case "chevron-right":
+      return (
+        <svg
+          {...common}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.8}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M9 6 L15 12 L9 18" />
+        </svg>
+      );
+    case "chevron-down":
+      return (
+        <svg
+          {...common}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.8}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M6 9 L12 15 L18 9" />
+        </svg>
+      );
+    case "arrow-right":
+      return (
+        <svg
+          {...common}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.8}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <line x1="4" y1="12" x2="20" y2="12" />
+          <polyline points="14 6 20 12 14 18" />
+        </svg>
+      );
+    case "home":
+      return (
+        <svg
+          {...common}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M3 11 L12 3 L21 11 V20 a1 1 0 0 1-1 1 h-5 v-7 h-4 v7 H4 a1 1 0 0 1-1-1 V11 z" />
+        </svg>
+      );
+    case "star-burst":
+      // 5-pointed asymmetric star, re-authored from the 12x12 viewBox path
+      // duplicated across results/page, TopPickCard, SwipeCard,
+      // ResultMovieCard. Filled (currentColor) — used as a rating glyph.
+      return (
+        <svg {...common} fill="currentColor" stroke="none">
+          <path d="M12 1 L15.1 8.2 L23 9.2 L17.2 14.6 L18.6 22.4 L12 18.6 L5.4 22.4 L6.8 14.6 L1 9.2 L8.9 8.2 Z" />
         </svg>
       );
   }

@@ -10,6 +10,7 @@ import Breadcrumb from "@/components/Breadcrumb";
 import SwipeDeck from "@/components/group/SwipeDeck";
 import type { DeckFilm, SwipeVote } from "@/lib/types";
 import { AVATAR_COLORS } from "@/lib/constants";
+import Icon from "@/components/ui/Icon";
 
 interface ParticipantStatus {
   id: string;
@@ -437,18 +438,9 @@ export default function GroupSwipePage() {
                 margin: "0 auto 20px",
               }}
             >
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="var(--teal)"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M5 12.5l5.5 5.5 8.5-8.5" />
-              </svg>
+              <span style={{ color: "var(--teal)", display: "flex" }}>
+                <Icon name="check" size={24} />
+              </span>
             </div>
 
             <h2 className="font-serif" style={{
