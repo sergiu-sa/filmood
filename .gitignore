@@ -47,3 +47,6 @@ next-env.d.ts
 
 # brainstorming companion (mockups & events)
 /.superpowers
+
+# supabase temp
+supabase/.temp
