@@ -6,13 +6,14 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/AuthProvider";
 import { signupSchema, type SignupFormData } from "@/lib/validations";
-import { useDynamicBackdrop } from "@/lib/useDynamicBackdrop";
+import { authErrorMessage } from "@/lib/auth-errors";
+import AuthCinemaPanel from "@/components/auth/AuthCinemaPanel";
+import { authInputClass } from "@/components/auth/authInputClass";
 import Icon from "@/components/ui/Icon";
 
 export default function SignupPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-  const { current, next, fading } = useDynamicBackdrop();
 
   useEffect(() => {
     if (!authLoading && user) router.push("/");
@@ -47,7 +48,7 @@ export default function SignupPage() {
 
     setLoading(true);
 
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email: result.data.email,
       password: result.data.password,
       options: { data: { name: result.data.name } },
@@ -56,7 +57,17 @@ export default function SignupPage() {
     setLoading(false);
 
     if (error) {
-      setGeneralError(error.message);
+      setGeneralError(authErrorMessage(error));
+      return;
+    }
+
+    // A session in the response means email confirmation is off;
+    //    the user is already signed in, so send them into the app.
+    // No session means a confirmation link was mailed; tell them to check it.
+    // (An existing-account signup also lands here with no session and empty identities;
+    //   the message stays deliberately vague so it can't confirm the address is registered.)
+    if (data.session) {
+      router.push("/");
       return;
     }
 
@@ -64,130 +75,13 @@ export default function SignupPage() {
     setTimeout(() => router.push("/login"), 2000);
   };
 
-  const inputClass = (hasError?: boolean) =>
-    `w-full px-4 py-[13px] rounded-xl text-sm outline-none transition-all border ${
-      hasError
-        ? "border-[var(--rose)] shadow-[0_0_0_3px_var(--rose-soft)]"
-        : "border-[var(--border)] focus:border-[var(--gold)] focus:shadow-[0_0_0_3px_var(--gold-soft)]"
-    }`;
 
   return (
     <main
       className="flex min-h-screen"
       style={{ background: "var(--bg)", color: "var(--t1)" }}
     >
-      {/* ── Left: cinematic panel ── */}
-      <div className="always-dark-accents hidden lg:flex flex-col justify-end flex-1 relative overflow-hidden p-12">
-        <div
-          className="absolute inset-0 bg-cover bg-center transition-opacity duration-800"
-          style={{
-            backgroundImage: `url('${current}')`,
-            opacity: fading ? 0 : 1,
-          }}
-        />
-
-        {/* Next backdrop (pre-loaded underneath) */}
-        {next && (
-          <div
-            className="absolute inset-0 bg-cover bg-center"
-            style={{
-              backgroundImage: `url('${next}')`,
-              opacity: 1,
-              zIndex: -1,
-            }}
-          />
-        )}
-
-        {/* Gradient overlay */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(to top, rgba(10,10,12,0.94) 0%, rgba(10,10,12,0.45) 50%, rgba(10,10,12,0.18) 100%)",
-            zIndex: 1,
-          }}
-        />
-
-        <div className="relative z-10">
-          <Link
-            href="/"
-            className="font-serif block mb-8 no-underline"
-            style={{
-              fontSize: "28px",
-              fontWeight: 600,
-              color: "var(--accent-paper)",
-              letterSpacing: "-0.3px",
-            }}
-          >
-            Filmood
-          </Link>
-          <div
-            className="mb-3 text-[11px] font-medium uppercase tracking-[1.5px]"
-            style={{ color: "rgba(240,239,232,0.4)" }}
-          >
-            How films should be found
-          </div>
-          <div
-            className="font-serif mb-5 text-2xl italic leading-relaxed"
-            style={{ color: "rgba(240,239,232,0.9)", maxWidth: "360px" }}
-          >
-            What do you feel like watching tonight?
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {[
-              {
-                label: "Cozy and warm",
-                color: "rgba(var(--gold-rgb), 0.7)",
-                border: "var(--gold-border)",
-              },
-              {
-                label: "On the edge",
-                color: "rgba(var(--ember-rgb), 0.7)",
-                border: "var(--ember-border)",
-              },
-              {
-                label: "Mind-bending",
-                color: "rgba(var(--blue-rgb), 0.7)",
-                border: "var(--blue-border)",
-              },
-              {
-                label: "Butterflies",
-                color: "rgba(var(--rose-rgb), 0.7)",
-                border: "var(--rose-border)",
-              },
-              {
-                label: "Deeply moved",
-                color: "rgba(var(--violet-rgb), 0.7)",
-                border: "var(--violet-border)",
-              },
-              {
-                label: "Easy and light",
-                color: "rgba(var(--teal-rgb), 0.7)",
-                border: "var(--teal-border)",
-              },
-            ].map((pill) => (
-              <span
-                key={pill.label}
-                className="rounded-full px-4 py-1.5 text-xs font-medium"
-                style={{
-                  border: `1px solid ${pill.border}`,
-                  color: pill.color,
-                  background: "rgba(255,255,255,0.03)",
-                }}
-              >
-                {pill.label}
-              </span>
-            ))}
-          </div>
-          <p
-            className="mt-5 text-xs leading-relaxed"
-            style={{ color: "rgba(240,239,232,0.3)" }}
-          >
-            Join Filmood and discover films that match your mood, not just your
-            search.
-          </p>
-        </div>
-      </div>
+      <AuthCinemaPanel />
 
       {/* ── Right: form panel ── */}
       <div className="flex flex-1 items-center justify-center overflow-y-auto px-5 py-12 lg:px-12">
@@ -222,7 +116,8 @@ export default function SignupPage() {
                 color: "var(--teal)",
               }}
             >
-              Account created! Check your email to confirm — redirecting…
+              Account created! Check your email for a confirmation link, then
+              log in.
             </div>
           )}
 
@@ -261,7 +156,7 @@ export default function SignupPage() {
                   setFormData({ ...formData, name: e.target.value })
                 }
                 placeholder="Your name"
-                className={inputClass(!!fieldErrors.name)}
+                className={authInputClass(!!fieldErrors.name)}
                 style={{ background: "var(--surface)", color: "var(--t1)" }}
               />
               {fieldErrors.name && (
@@ -291,7 +186,7 @@ export default function SignupPage() {
                   setFormData({ ...formData, email: e.target.value })
                 }
                 placeholder="you@example.com"
-                className={inputClass(!!fieldErrors.email)}
+                className={authInputClass(!!fieldErrors.email)}
                 style={{ background: "var(--surface)", color: "var(--t1)" }}
               />
               {fieldErrors.email && (
@@ -321,8 +216,8 @@ export default function SignupPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, password: e.target.value })
                   }
-                  placeholder="At least 6 characters"
-                  className={inputClass(!!fieldErrors.password)}
+                  placeholder="At least 8 characters"
+                  className={authInputClass(!!fieldErrors.password)}
                   style={{ background: "var(--surface)", color: "var(--t1)" }}
                 />
                 <button
@@ -366,7 +261,7 @@ export default function SignupPage() {
                     })
                   }
                   placeholder="Re-enter your password"
-                  className={inputClass(!!fieldErrors.confirmPassword)}
+                  className={authInputClass(!!fieldErrors.confirmPassword)}
                   style={{ background: "var(--surface)", color: "var(--t1)" }}
                 />
                 <button

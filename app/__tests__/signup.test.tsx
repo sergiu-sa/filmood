@@ -83,7 +83,12 @@ function submitForm() {
 }
 
 beforeEach(() => {
-  mockSignUp.mockResolvedValue({ error: null });
+  // No session in the response = email confirmation is on → "check your email" path.
+  // Tests that need the auto-signed-in path override this per-case.
+  mockSignUp.mockResolvedValue({
+    data: { user: { id: "new-user" }, session: null },
+    error: null,
+  });
   (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
     ok: true,
     json: async () => ({ results: [] }),
@@ -99,7 +104,7 @@ describe("SignupPage", () => {
     expect(screen.getByPlaceholderText("Your name")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("you@example.com")).toBeInTheDocument();
     expect(
-      screen.getByPlaceholderText(/at least 6 characters/i),
+      screen.getByPlaceholderText(/at least 8 characters/i),
     ).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/re-enter/i)).toBeInTheDocument();
   });
@@ -123,18 +128,18 @@ describe("SignupPage", () => {
     });
   });
 
-  it("shows password error when password is < 6 characters", async () => {
+  it("shows password error when password is < 8 characters", async () => {
     render(<SignupPage />);
     const user = userEvent.setup();
     await user.type(screen.getByPlaceholderText("Your name"), "Alice");
     await user.type(screen.getByPlaceholderText("you@example.com"), "a@b.com");
     await user.type(
-      screen.getByPlaceholderText(/at least 6 characters/i),
+      screen.getByPlaceholderText(/at least 8 characters/i),
       "123",
     );
     submitForm();
     await waitFor(() => {
-      expect(screen.getByText(/at least 6 characters/i)).toBeInTheDocument();
+      expect(screen.getByText(/at least 8 characters/i)).toBeInTheDocument();
     });
   });
 
@@ -168,6 +173,21 @@ describe("SignupPage", () => {
     await waitFor(() => {
       expect(screen.getByText(/account created/i)).toBeInTheDocument();
     });
+  });
+
+  it("skips the confirm message and enters the app when a session is returned", async () => {
+    // Email confirmation off → signUp returns a session (user already signed in)
+    mockSignUp.mockResolvedValueOnce({
+      data: { user: { id: "new-user" }, session: { access_token: "t" } },
+      error: null,
+    });
+    render(<SignupPage />);
+    await fillSignupForm();
+    submitForm();
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith("/");
+    });
+    expect(screen.queryByText(/account created/i)).not.toBeInTheDocument();
   });
 
   it("shows Supabase error when signUp fails", async () => {

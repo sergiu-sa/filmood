@@ -39,8 +39,8 @@ describe("signupSchema", () => {
   const validData = {
     name: "Sergiu",
     email: "sergiu@example.com",
-    password: "pass123",
-    confirmPassword: "pass123",
+    password: "password123",
+    confirmPassword: "password123",
   };
 
   it("accepts valid signup data", () => {
@@ -68,13 +68,13 @@ describe("signupSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("rejects password shorter than 6 characters", () => {
-    const result = signupSchema.safeParse({ ...validData, password: "12345", confirmPassword: "12345" });
+  it("rejects password shorter than 8 characters", () => {
+    const result = signupSchema.safeParse({ ...validData, password: "1234567", confirmPassword: "1234567" });
     expect(result.success).toBe(false);
   });
 
   it("rejects when passwords do not match", () => {
-    const result = signupSchema.safeParse({ ...validData, password: "pass123", confirmPassword: "different" });
+    const result = signupSchema.safeParse({ ...validData, password: "password123", confirmPassword: "different" });
     expect(result.success).toBe(false);
     if (!result.success) {
       const matchError = result.error.issues.find((i) => i.path[0] === "confirmPassword");
