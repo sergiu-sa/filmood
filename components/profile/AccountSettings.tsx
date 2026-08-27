@@ -24,6 +24,7 @@ export default function AccountSettings({ user }: Props) {
 
   // Change-password flow state
   const [changingPassword, setChangingPassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [pwSaving, setPwSaving] = useState(false);
@@ -54,6 +55,10 @@ export default function AccountSettings({ user }: Props) {
 
   async function submitPasswordChange() {
     setPwError(null);
+    if (currentPassword.length === 0) {
+      setPwError("Enter your current password.");
+      return;
+    }
     if (newPassword.length < 8) {
       setPwError("Password must be at least 8 characters.");
       return;
@@ -67,12 +72,13 @@ export default function AccountSettings({ user }: Props) {
       const res = await fetch("/api/account/change-password", {
         method: "POST",
         headers: await getAuthHeaders(),
-        body: JSON.stringify({ newPassword }),
+        body: JSON.stringify({ currentPassword, newPassword }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data?.error ?? "Failed to update password");
       }
+      setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
       setChangingPassword(false);
@@ -130,8 +136,23 @@ export default function AccountSettings({ user }: Props) {
             }}
           >
             <label
-              htmlFor="profile-newpw"
+              htmlFor="profile-currentpw"
               className="text-[10px] text-(--t3)"
+            >
+              Current password
+            </label>
+            <input
+              id="profile-currentpw"
+              type="password"
+              autoComplete="current-password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              className="w-full bg-transparent text-[13px] font-medium text-(--t1) outline-none"
+              placeholder="Your current password"
+            />
+            <label
+              htmlFor="profile-newpw"
+              className="mt-1 text-[10px] text-(--t3)"
             >
               New password
             </label>
@@ -185,6 +206,7 @@ export default function AccountSettings({ user }: Props) {
               <button
                 onClick={() => {
                   setChangingPassword(false);
+                  setCurrentPassword("");
                   setNewPassword("");
                   setConfirmPassword("");
                   setPwError(null);
