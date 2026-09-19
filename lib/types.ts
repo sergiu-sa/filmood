@@ -78,14 +78,6 @@ export interface Provider {
   logo_path: string;
 }
 
-/** A YouTube trailer from TMDB /movie/{id}/videos */
-export interface TrailerData {
-  key: string;
-  name: string;
-  site: string;
-  type: string;
-}
-
 /** Projected single image from TMDB /movie/{id}/images. `kind` is injected at projection time. */
 export interface MovieImage {
   file_path: string;

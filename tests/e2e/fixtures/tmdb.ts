@@ -91,13 +91,6 @@ export const fakeProviders = [
   { provider_id: 8, provider_name: "Netflix", logo_path: "/fake-netflix.jpg" },
 ];
 
-export const fakeTrailer = {
-  key: "dQw4w9WgXcQ",
-  name: "Official Trailer",
-  site: "YouTube",
-  type: "Trailer",
-};
-
 /**
  * Intercepts movie API routes with fixtures. Call before `page.goto()`.
  * Uses regex (not globs) to prevent `**\/api/movies/*` from swallowing sub-routes.
@@ -156,15 +149,7 @@ export async function mockTmdb(page: Page) {
     }),
   );
 
-  await page.route(/\/api\/movies\/\d+\/trailer$/, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(fakeTrailer),
-    }),
-  );
-
-  // Film detail — `$` anchor keeps /providers and /trailer from matching here.
+  // Film detail — the `$` anchor keeps /providers from matching here.
   await page.route(/\/api\/movies\/\d+$/, (route) =>
     route.fulfill({
       status: 200,

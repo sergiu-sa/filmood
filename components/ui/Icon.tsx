@@ -12,7 +12,6 @@
  */
 
 export type IconName =
-  | "calendar"
   | "mark"
   | "pencil"
   | "user"
@@ -22,7 +21,6 @@ export type IconName =
   | "close"
   | "logout"
   | "trash"
-  | "signal"
   | "play"
   | "share"
   | "eye"
@@ -53,22 +51,6 @@ export default function Icon({ name, size = 16, className }: IconProps) {
   };
 
   switch (name) {
-    case "calendar":
-      return (
-        <svg
-          {...common}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={1.5}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <rect x="3" y="4" width="18" height="17" rx="2" />
-          <line x1="3" y1="9" x2="21" y2="9" />
-          <line x1="8" y1="2" x2="8" y2="6" />
-          <line x1="16" y1="2" x2="16" y2="6" />
-        </svg>
-      );
     case "mark":
       return (
         <svg {...common} fill="currentColor" stroke="none">
@@ -186,22 +168,6 @@ export default function Icon({ name, size = 16, className }: IconProps) {
           <path d="M19 6 L18 20 a2 2 0 0 1-2 2 H8 a2 2 0 0 1-2-2 L5 6" />
           <path d="M10 11 V17 M14 11 V17" />
           <path d="M9 6 V4 a1 1 0 0 1 1-1 h4 a1 1 0 0 1 1 1 V6" />
-        </svg>
-      );
-    case "signal":
-      return (
-        <svg
-          {...common}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={1.5}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M2 12 a14 14 0 0 1 20 0" />
-          <path d="M5 15 a10 10 0 0 1 14 0" />
-          <path d="M8.5 18 a6 6 0 0 1 7 0" />
-          <circle cx="12" cy="20.5" r="0.8" fill="currentColor" stroke="none" />
         </svg>
       );
     case "play":
