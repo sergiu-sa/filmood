@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
 import { internalError } from "@/lib/api-errors";
-import { tmdbJsonOptional } from "@/lib/tmdb";
+import { tmdbJsonOptional } from "@/lib/tmdb-fetch";
 import { genreMap } from "@/lib/genres";
 
 const TOP_MOODS = 3;
@@ -22,7 +22,6 @@ export async function GET(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
 
   try {
     const supabase = getSupabaseAdmin();

@@ -111,18 +111,32 @@ describe("buildSharedDeck", () => {
     expect(film1Entries.length).toBe(1);
   });
 
-  // deck.ts used to call .json() on whatever came back, so a TMDB outage was
-  // indistinguishable from an empty result set. A failed mood now contributes
-  // no films instead of risking a parse error on an HTML error page.
-  it("returns an empty deck when TMDB fails, without throwing", async () => {
+  // A mood with genuinely no results contributes nothing and the deck still
+  // builds from the others.
+  it("treats a 404 for one mood as no films for that mood", async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: false,
-      status: 503,
+      status: 404,
       json: () => Promise.reject(new Error("not JSON")),
     });
 
     const result = await buildSharedDeck([{ mood_selections: ["laugh"] }]);
     expect(result).toEqual([]);
+  });
+
+  // An outage or a rotated key must NOT look like "no films matched": the
+  // caller would write movie_deck: [] and flip the session to swiping, landing
+  // the whole group on a zero-card deck with nothing reported.
+  it.each([401, 429, 503])("propagates %i instead of yielding an empty deck", async (status) => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status,
+      json: () => Promise.reject(new Error("not JSON")),
+    });
+
+    await expect(
+      buildSharedDeck([{ mood_selections: ["laugh"] }]),
+    ).rejects.toThrow();
   });
 
   // The deck tests otherwise only inspect the films that come back, so the

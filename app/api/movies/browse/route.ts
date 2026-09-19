@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { mapTMDBFilm, tmdbJson } from "@/lib/tmdb";
+import { mapTMDBFilm } from "@/lib/tmdb";
+import { tmdbJson } from "@/lib/tmdb-fetch";
 import { tmdbError, badRequest } from "@/lib/api-errors";
 
 type Endpoint = { path: string; params: Record<string, string> };

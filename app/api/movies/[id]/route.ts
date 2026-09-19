@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { tmdbError, badRequest } from "@/lib/api-errors";
-import { parseTMDBId, tmdbJson } from "@/lib/tmdb";
+import { parseTMDBId } from "@/lib/tmdb";
+import { tmdbJson } from "@/lib/tmdb-fetch";
 import type { CrewMember } from "@/lib/types";
 import { getAuthUser, getSupabaseAdmin } from "@/lib/supabase-server";
 import { recordFilmView } from "@/lib/film-views";

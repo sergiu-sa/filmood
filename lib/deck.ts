@@ -1,5 +1,5 @@
 import { buildTMDBParams } from "@/lib/moodMap";
-import { tmdbJsonOptional } from "@/lib/tmdb";
+import { tmdbJsonOptional } from "@/lib/tmdb-fetch";
 import {
   applyEra,
   applyTempo,

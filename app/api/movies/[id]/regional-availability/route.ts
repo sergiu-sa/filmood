@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { tmdbError, badRequest } from "@/lib/api-errors";
-import {
-  parseTMDBId,
-  mapTMDBProvider,
-  tmdbJsonOptional,
-  type TMDBProviderRaw,
-} from "@/lib/tmdb";
+import { parseTMDBId, mapTMDBProvider, type TMDBProviderRaw } from "@/lib/tmdb";
+import { tmdbJsonOptional } from "@/lib/tmdb-fetch";
 import type {
   RegionAvailability,
   RegionalAvailabilityResponse,
@@ -115,13 +111,13 @@ export async function GET(
       regions[country] = { ...existing, certification, release_date };
     }
 
-    // Vercel geo header → ?country= override → fallback. Skips any step
-    // that doesn't have data for this film.
+    // Explicit ?country= wins, then the Vercel geo header, then the fallback.
+    // Skips any step that has no data for this film.
     const headerRegion = request.headers.get("x-vercel-ip-country")?.toUpperCase();
     const queryRegion = request.nextUrl.searchParams
       .get("country")
       ?.toUpperCase();
-    const candidates = [headerRegion, queryRegion, FALLBACK_DEFAULT].filter(
+    const candidates = [queryRegion, headerRegion, FALLBACK_DEFAULT].filter(
       (c): c is string => !!c,
     );
     const defaultRegion =

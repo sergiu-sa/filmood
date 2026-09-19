@@ -9,7 +9,7 @@ import {
   isTempoKey,
 } from "@/lib/moodRefinements";
 import { tmdbError } from "@/lib/api-errors";
-import { tmdbJson } from "@/lib/tmdb";
+import { tmdbJson, TMDBError } from "@/lib/tmdb-fetch";
 import { getAuthUser, getSupabaseAdmin } from "@/lib/supabase-server";
 import { recordMoodPicks } from "@/lib/mood-history";
 import type { EraKey, TempoKey } from "@/lib/types";
@@ -79,8 +79,12 @@ async function fetchDiscoverPage(
       false,
     );
     return data.results ?? [];
-  } catch {
-    return [];
+  } catch (error) {
+    // One page genuinely missing shouldn't sink the search. Anything else —
+    // a missing key, a rotated key, a rate limit — must reach the handler's
+    // catch, or a broken deploy renders as "no films match your mood".
+    if (error instanceof TMDBError && error.status === 404) return [];
+    throw error;
   }
 }
 

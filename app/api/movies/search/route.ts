@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { mapTMDBFilm, tmdbJson } from "@/lib/tmdb";
+import { mapTMDBFilm } from "@/lib/tmdb";
+import { tmdbJson } from "@/lib/tmdb-fetch";
 import { tmdbError, badRequest } from "@/lib/api-errors";
 
 type RawCredit = Parameters<typeof mapTMDBFilm>[0] & {
@@ -24,7 +25,20 @@ async function searchByTitle(query: string) {
 // 1. Find the person via /search/person
 // 2. Fetch their movie credits
 // 3. Return cast credits for actor, crew credits (directed) for director
-async function searchByPerson(query: string, role: "actor" | "director") {
+function topByPopularity(credits: RawCredit[]) {
+  return [...credits]
+    .sort((a, b) => b.popularity - a.popularity)
+    .slice(0, 20)
+    .map(mapTMDBFilm);
+}
+
+/**
+ * Look the person up once and return both role slices. `type=all` needs acting
+ * and directing credits from the same payload — asking per role would repeat
+ * the person lookup and the credits fetch for an identical query, which the
+ * uncached search path cannot absorb.
+ */
+async function searchPersonCredits(query: string) {
   const personData = await tmdbJson<{ results?: { id: number }[] }>(
     "/search/person",
     { language: "en-US", query, page: "1", include_adult: "false" },
@@ -32,7 +46,7 @@ async function searchByPerson(query: string, role: "actor" | "director") {
   );
 
   const person = personData.results?.[0];
-  if (!person) return [];
+  if (!person) return { actor: [], director: [] };
 
   const credits = await tmdbJson<{ cast?: RawCredit[]; crew?: RawCredit[] }>(
     `/person/${person.id}/movie_credits`,
@@ -40,15 +54,12 @@ async function searchByPerson(query: string, role: "actor" | "director") {
     UNCACHED,
   );
 
-  const relevant =
-    role === "actor"
-      ? (credits.cast ?? [])
-      : (credits.crew ?? []).filter((c) => c.job === "Director");
-
-  return [...relevant]
-    .sort((a, b) => b.popularity - a.popularity)
-    .slice(0, 20)
-    .map(mapTMDBFilm);
+  return {
+    actor: topByPopularity(credits.cast ?? []),
+    director: topByPopularity(
+      (credits.crew ?? []).filter((c) => c.job === "Director"),
+    ),
+  };
 }
 
 export async function GET(request: NextRequest) {
@@ -66,17 +77,16 @@ export async function GET(request: NextRequest) {
     let films;
 
     if (type === "actor") {
-      films = await searchByPerson(trimmed, "actor");
+      films = (await searchPersonCredits(trimmed)).actor;
     } else if (type === "director") {
-      films = await searchByPerson(trimmed, "director");
+      films = (await searchPersonCredits(trimmed)).director;
     } else if (type === "all") {
-      const [titleFilms, actorFilms, directorFilms] = await Promise.all([
+      const [titleFilms, person] = await Promise.all([
         searchByTitle(trimmed),
-        searchByPerson(trimmed, "actor"),
-        searchByPerson(trimmed, "director"),
+        searchPersonCredits(trimmed),
       ]);
       const seen = new Set<number>();
-      films = [...titleFilms, ...actorFilms, ...directorFilms]
+      films = [...titleFilms, ...person.actor, ...person.director]
         .filter((f: { id: number }) => {
           if (seen.has(f.id)) return false;
           seen.add(f.id);

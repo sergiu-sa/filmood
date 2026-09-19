@@ -1,4 +1,4 @@
-import { tmdbJson, tmdbJsonOptional, TMDBError } from "@/lib/tmdb";
+import { tmdbJson, tmdbJsonOptional, TMDBError } from "@/lib/tmdb-fetch";
 
 function mockFetch(status: number, body: unknown = {}) {
   // The generic carries fetch's signature so `calls[0][1]` (the init object)
@@ -34,10 +34,22 @@ describe("tmdbJson", () => {
     expect(init).toEqual({ next: { revalidate: 86400 } });
   });
 
-  it("sends no cache options when revalidate is false", async () => {
+  // Explicit no-store, not an omitted option: "uncached" must not depend on a
+  // route happening to lack an `export const revalidate`.
+  it("asks for no-store when revalidate is false", async () => {
     const spy = mockFetch(200);
     await tmdbJson("/search/movie", { query: "dune" }, false);
-    expect(spy.mock.calls[0][1]).toBeUndefined();
+    expect(spy.mock.calls[0][1]).toEqual({ cache: "no-store" });
+  });
+
+  // `new URL` normalises dot segments, so an unguarded `..` would climb out of
+  // /3 and reach another endpoint with the real key attached.
+  it("rejects a path that could escape the API version prefix", async () => {
+    mockFetch(200);
+    await expect(
+      tmdbJson("/person/1/../../authentication/token/new"),
+    ).rejects.toThrow(/Invalid TMDB path/);
+    await expect(tmdbJson("movie/1")).rejects.toThrow(/Invalid TMDB path/);
   });
 
   it("throws TMDBError carrying the upstream status", async () => {
@@ -56,9 +68,16 @@ describe("tmdbJson", () => {
 });
 
 describe("tmdbJsonOptional", () => {
-  it("absorbs an upstream failure into an empty object", async () => {
+  it("absorbs a 404 into an empty object", async () => {
     mockFetch(404);
     await expect(tmdbJsonOptional("/movie/999/similar")).resolves.toEqual({});
+  });
+
+  // The distinction the docstring promises: a wrong key or a rate limit is our
+  // problem and must not degrade into a silent 200 with empty results.
+  it.each([401, 429, 500, 503])("rethrows %i rather than absorbing it", async (status) => {
+    mockFetch(status);
+    await expect(tmdbJsonOptional("/movie/1/similar")).rejects.toBeInstanceOf(TMDBError);
   });
 
   // The distinction that matters: a misconfigured deployment must still 500
