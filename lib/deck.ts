@@ -1,4 +1,5 @@
 import { buildTMDBParams } from "@/lib/moodMap";
+import { tmdbJsonOptional } from "@/lib/tmdb";
 import {
   applyEra,
   applyTempo,
@@ -64,8 +65,10 @@ function topKeywords(participants: ParticipantInput[], limit: number): number[] 
 export async function buildSharedDeck(
   participants: ParticipantInput[],
 ): Promise<DeckFilm[]> {
-  const apiKey = process.env.TMDB_API_KEY;
-  if (!apiKey) throw new Error("TMDB API key not configured");
+  // Looks redundant with tmdbJson's own check, but isn't: a participant list with no moods never reaches a fetch, so without this a keyless deploy would return an empty deck instead of failing.
+  if (!process.env.TMDB_API_KEY) {
+    throw new Error("TMDB API key not configured");
+  }
 
   // Count mood frequency across all participants
   const moodCounts: Record<string, number> = {};
@@ -120,8 +123,10 @@ export async function buildSharedDeck(
   // Fetch TMDB results for each unique mood in parallel
   const fetchResults = allocations.map(async ({ mood, count }) => {
     const moodParams = buildTMDBParams(mood);
+    // A URL purely for its searchParams ergonomics, the refinement helpers below mutate `url.searchParams`.
+    // Only the query string is read back out;
+    //  the origin is discarded and tmdbJson owns the real base URL.
     const url = new URL("https://api.themoviedb.org/3/discover/movie");
-    url.searchParams.set("api_key", apiKey);
     url.searchParams.set("language", "en-US");
     url.searchParams.set("page", "1");
 
@@ -135,8 +140,15 @@ export async function buildSharedDeck(
     applyEra(url, sharedEra);
     appendExtraKeywords(url, sharedKeywords);
 
-    const res = await fetch(url.toString());
-    const data = await res.json();
+    // One mood failing upstream shouldn't sink the whole session;
+    //  that mood just contributes no films and the allocation below redistributes.
+    // A missing API key still throws, so a misconfigured deploy is loud.
+    const data = await tmdbJsonOptional<{ results?: TMDBDiscoverResult[] }>(
+      "/discover/movie",
+      Object.fromEntries(url.searchParams),
+      // Uncached: every mood + refinement combination is a distinct query.
+      false,
+    );
     const results: DeckFilm[] = (data.results ?? []).map(
       (r: TMDBDiscoverResult) => ({
         id: r.id,

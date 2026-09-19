@@ -49,6 +49,7 @@ describe("buildSharedDeck", () => {
 
   it("fetches films and returns a deck of up to 15 films", async () => {
     global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
       json: () => Promise.resolve(fakeTMDBResponse(20)),
     });
 
@@ -74,6 +75,7 @@ describe("buildSharedDeck", () => {
       const response = responses[callIndex % responses.length];
       callIndex++;
       return Promise.resolve({
+        ok: true,
         json: () => Promise.resolve(response),
       });
     });
@@ -96,6 +98,7 @@ describe("buildSharedDeck", () => {
   it("deduplicates films and merges mood_keys", async () => {
     const sharedResponse = fakeTMDBResponse(20, 1);
     global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
       json: () => Promise.resolve(sharedResponse),
     });
 
@@ -108,8 +111,23 @@ describe("buildSharedDeck", () => {
     expect(film1Entries.length).toBe(1);
   });
 
+  // deck.ts used to call .json() on whatever came back, so a TMDB outage was
+  // indistinguishable from an empty result set. A failed mood now contributes
+  // no films instead of risking a parse error on an HTML error page.
+  it("returns an empty deck when TMDB fails, without throwing", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: () => Promise.reject(new Error("not JSON")),
+    });
+
+    const result = await buildSharedDeck([{ mood_selections: ["laugh"] }]);
+    expect(result).toEqual([]);
+  });
+
   it("each film in the deck has the correct shape", async () => {
     global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
       json: () => Promise.resolve(fakeTMDBResponse(20)),
     });
 
