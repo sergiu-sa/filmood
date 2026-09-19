@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { TMDBError } from "@/lib/tmdb";
 
 /**
  * Build a 500 response from an arbitrary thrown/returned error. Always logs
@@ -22,4 +23,18 @@ export function internalError(error: unknown, fallback: string) {
  */
 export function badRequest(message: string) {
   return NextResponse.json({ error: message }, { status: 400 });
+}
+
+/**
+ * Build an error response for a failed TMDB call. A `TMDBError` carries the
+ * upstream status, so a 404 for an unknown film stays a 404 to the client
+ * rather than becoming a generic 500. Anything else (missing key, network
+ * failure, bad JSON) is a genuine server fault and routes to `internalError`.
+ */
+export function tmdbError(error: unknown, fallback: string) {
+  if (error instanceof TMDBError) {
+    console.error(fallback, error.message);
+    return NextResponse.json({ error: fallback }, { status: error.status });
+  }
+  return internalError(error, fallback);
 }

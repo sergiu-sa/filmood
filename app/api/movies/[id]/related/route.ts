@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { internalError, badRequest } from "@/lib/api-errors";
-import { parseTMDBId, mapTMDBFilm } from "@/lib/tmdb";
+import { tmdbError, badRequest } from "@/lib/api-errors";
+import { parseTMDBId, mapTMDBFilm, tmdbJsonOptional } from "@/lib/tmdb";
 import type { Film } from "@/lib/types";
 
 export const revalidate = 86400;
@@ -30,33 +30,20 @@ export async function GET(
   const movieId = parseTMDBId(id);
   if (movieId === null) return badRequest("Invalid movie id");
 
-  const apiKey = process.env.TMDB_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "TMDB API key not configured" },
-      { status: 500 },
-    );
-  }
-
   try {
-    const recUrl = new URL(
-      `https://api.themoviedb.org/3/movie/${movieId}/recommendations`,
-    );
-    recUrl.searchParams.set("api_key", apiKey);
-    const simUrl = new URL(
-      `https://api.themoviedb.org/3/movie/${movieId}/similar`,
-    );
-    simUrl.searchParams.set("api_key", apiKey);
-    const [recRes, simRes] = await Promise.all([
-      fetch(recUrl.toString(), { next: { revalidate: 86400 } }),
-      fetch(simUrl.toString(), { next: { revalidate: 86400 } }),
+    // Either list may 404 for an obscure film; a missing one just means the
+    // other wins the fallback, so an upstream failure is not fatal here.
+    const [recData, simData] = await Promise.all([
+      tmdbJsonOptional(`/movie/${movieId}/recommendations`),
+      tmdbJsonOptional(`/movie/${movieId}/similar`),
     ]);
 
-    const recData: RawListResponse = recRes.ok ? await recRes.json() : {};
-    const simData: RawListResponse = simRes.ok ? await simRes.json() : {};
-
-    const rec = (recData.results ?? []).filter((f) => f.poster_path);
-    const sim = (simData.results ?? []).filter((f) => f.poster_path);
+    const rec = ((recData as RawListResponse).results ?? []).filter(
+      (f) => f.poster_path,
+    );
+    const sim = ((simData as RawListResponse).results ?? []).filter(
+      (f) => f.poster_path,
+    );
 
     const useRecommendations = rec.length > 0;
     const source: "recommendations" | "similar" = useRecommendations
@@ -69,6 +56,6 @@ export async function GET(
 
     return NextResponse.json({ films, source });
   } catch (error) {
-    return internalError(error, "Failed to fetch related films");
+    return tmdbError(error, "Failed to fetch related films");
   }
 }

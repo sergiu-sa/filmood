@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { internalError, badRequest } from "@/lib/api-errors";
-import { parseTMDBId } from "@/lib/tmdb";
+import { tmdbError, badRequest } from "@/lib/api-errors";
+import { parseTMDBId, tmdbJson } from "@/lib/tmdb";
 import type { MovieImage } from "@/lib/types";
 
 export const revalidate = 86400;
@@ -37,34 +37,12 @@ export async function GET(
   const movieId = parseTMDBId(id);
   if (movieId === null) return badRequest("Invalid movie id");
 
-  const apiKey = process.env.TMDB_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "TMDB API key not configured" },
-      { status: 500 },
-    );
-  }
-
   try {
-    const url = new URL(
-      `https://api.themoviedb.org/3/movie/${movieId}/images`,
-    );
-    url.searchParams.set("api_key", apiKey);
-    url.searchParams.set("include_image_language", "en,null");
-    const response = await fetch(url.toString(), {
-      next: { revalidate: 86400 },
+    const data = await tmdbJson(`/movie/${movieId}/images`, {
+      include_image_language: "en,null",
     });
-
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: "Failed to fetch movie images" },
-        { status: response.status },
-      );
-    }
-
-    const data = await response.json();
-    const rawPosters: RawImage[] = data.posters ?? [];
-    const rawBackdrops: RawImage[] = data.backdrops ?? [];
+    const rawPosters = (data.posters ?? []) as RawImage[];
+    const rawBackdrops = (data.backdrops ?? []) as RawImage[];
 
     const posters = [...rawPosters]
       .sort((a, b) => b.vote_average - a.vote_average)
@@ -78,6 +56,6 @@ export async function GET(
 
     return NextResponse.json({ posters, backdrops });
   } catch (error) {
-    return internalError(error, "Failed to fetch movie images");
+    return tmdbError(error, "Failed to fetch movie images");
   }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
 import { internalError } from "@/lib/api-errors";
+import { tmdbJsonOptional } from "@/lib/tmdb";
 import { genreMap } from "@/lib/genres";
 
 const TOP_MOODS = 3;
@@ -22,13 +23,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const apiKey = process.env.TMDB_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "TMDB API key not configured" },
-      { status: 500 },
-    );
-  }
 
   try {
     const supabase = getSupabaseAdmin();
@@ -68,15 +62,10 @@ export async function GET(request: NextRequest) {
     if (movieIds.length > 0) {
       const results = await Promise.all(
         movieIds.map(async (id) => {
-          const url = new URL(`https://api.themoviedb.org/3/movie/${id}`);
-          url.searchParams.set("api_key", apiKey);
-          const res = await fetch(url.toString(), {
-            next: { revalidate: 86400 },
-          });
-          if (!res.ok) return [];
-          const data = (await res.json()) as {
-            genres?: { id: number }[];
-          };
+          // One unknown film shouldn't sink the whole fingerprint.
+          const data = await tmdbJsonOptional<{ genres?: { id: number }[] }>(
+            `/movie/${id}`,
+          );
           return data.genres ?? [];
         }),
       );

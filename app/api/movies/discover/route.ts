@@ -8,7 +8,8 @@ import {
   isEraKey,
   isTempoKey,
 } from "@/lib/moodRefinements";
-import { internalError } from "@/lib/api-errors";
+import { tmdbError } from "@/lib/api-errors";
+import { tmdbJson } from "@/lib/tmdb";
 import { getAuthUser, getSupabaseAdmin } from "@/lib/supabase-server";
 import { recordMoodPicks } from "@/lib/mood-history";
 import type { EraKey, TempoKey } from "@/lib/types";
@@ -32,12 +33,13 @@ const RESULT_LIMIT = 20;
 // Shared helper: build a TMDB discover URL from param object + refinements.
 // Page is set by fetchDiscoverPage so the same base URL can be reused.
 function buildDiscoverURL(
-  apiKey: string,
   moodParams: Record<string, string>,
   refinements: Refinements,
 ): URL {
+  // A URL purely for its searchParams ergonomics — the refinement helpers in
+  // lib/moodRefinements.ts mutate `url.searchParams`, and lib/deck.ts shares
+  // them. Only the query string is read back out; the origin is discarded.
   const url = new URL("https://api.themoviedb.org/3/discover/movie");
-  url.searchParams.set("api_key", apiKey);
   url.searchParams.set("language", "en-US");
 
   for (const [k, v] of Object.entries(moodParams)) {
@@ -76,13 +78,14 @@ async function fetchDiscoverPage(
   baseURL: URL,
   page: number,
 ): Promise<{ id: number }[]> {
-  const paged = new URL(baseURL.toString());
-  paged.searchParams.set("page", String(page));
   try {
-    const res = await fetch(paged.toString());
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (data.results ?? []) as { id: number }[];
+    const data = await tmdbJson<{ results?: { id: number }[] }>(
+      "/discover/movie",
+      { ...Object.fromEntries(baseURL.searchParams), page: String(page) },
+      // Uncached: every mood combination is a distinct query.
+      false,
+    );
+    return data.results ?? [];
   } catch {
     return [];
   }
@@ -121,14 +124,6 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const moodParam = searchParams.get("mood");
   const text = searchParams.get("text");
-
-  const apiKey = process.env.TMDB_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "TMDB API key not configured" },
-      { status: 500 }
-    );
-  }
 
   // Resolve the optional free-form text into mood keys + keywords + era/tempo.
   // Explicit chip values for era/tempo win over anything inferred from text.
@@ -188,7 +183,7 @@ export async function GET(request: NextRequest) {
     // genre intersection (or cross-genre AND), so results genuinely match
     // the *combination* of moods rather than being a shuffled concat.
     const mergedParams = buildMergedTMDBParams(moodKeys);
-    const mergedURL = buildDiscoverURL(apiKey, mergedParams, refinements);
+    const mergedURL = buildDiscoverURL(mergedParams, refinements);
 
     // Fetch pages 1 + random(2..MAX_PAGE) and shuffle so repeat searches
     // return different films instead of the same top 20.
@@ -202,7 +197,7 @@ export async function GET(request: NextRequest) {
 
       const fallbackPools = await Promise.all(
         moodKeys.map((key) => {
-          const url = buildDiscoverURL(apiKey, buildTMDBParams(key), refinements);
+          const url = buildDiscoverURL(buildTMDBParams(key), refinements);
           return fetchDiscoverPool(url);
         }),
       );
@@ -235,6 +230,6 @@ export async function GET(request: NextRequest) {
         : null,
     });
   } catch (error) {
-    return internalError(error, "Failed to fetch films");
+    return tmdbError(error, "Failed to fetch films");
   }
 }

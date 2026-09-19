@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { internalError, badRequest } from "@/lib/api-errors";
-import { parseTMDBId } from "@/lib/tmdb";
+import { tmdbError, badRequest } from "@/lib/api-errors";
+import { parseTMDBId, tmdbJson } from "@/lib/tmdb";
 import type { CrewMember } from "@/lib/types";
 import { getAuthUser, getSupabaseAdmin } from "@/lib/supabase-server";
 import { recordFilmView } from "@/lib/film-views";
@@ -24,6 +24,34 @@ type RawCrewMember = {
   profile_path: string | null;
 };
 
+type RawCastMember = {
+  id: number;
+  name: string;
+  character: string;
+  profile_path: string | null;
+};
+
+/** The subset of TMDB's /movie/{id}?append_to_response=credits,external_ids
+ *  this route projects. Everything else in the payload is dropped. */
+type RawMovieDetail = {
+  id: number;
+  title: string;
+  overview: string;
+  poster_path: string | null;
+  backdrop_path: string | null;
+  release_date: string;
+  runtime: number | null;
+  vote_average: number;
+  genres: { id: number; name: string }[];
+  credits?: { cast?: RawCastMember[]; crew?: RawCrewMember[] };
+  external_ids?: {
+    imdb_id?: string | null;
+    facebook_id?: string | null;
+    instagram_id?: string | null;
+    twitter_id?: string | null;
+  };
+};
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -32,35 +60,15 @@ export async function GET(
   const movieId = parseTMDBId(id);
   if (movieId === null) return badRequest("Invalid movie id");
 
-  const apiKey = process.env.TMDB_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "TMDB API key not configured" },
-      { status: 500 },
-    );
-  }
-
   try {
-    const url = new URL(`https://api.themoviedb.org/3/movie/${movieId}`);
-    url.searchParams.set("api_key", apiKey);
-    url.searchParams.set("append_to_response", "credits,external_ids");
-    const response = await fetch(url.toString(), {
-      next: { revalidate: 86400 },
+    const data = await tmdbJson<RawMovieDetail>(`/movie/${movieId}`, {
+      append_to_response: "credits,external_ids",
     });
-
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: "Failed to fetch movie details" },
-        { status: response.status },
-      );
-    }
-
-    const data = await response.json();
 
     // TMDB lists the same person under multiple credit_ids for the same job
     // — dedupe by id+job after filtering.
     const crewSeen = new Set<string>();
-    const crew: CrewMember[] = ((data.credits?.crew ?? []) as RawCrewMember[])
+    const crew: CrewMember[] = (data.credits?.crew ?? [])
       .filter((m) => RELEVANT_CREW_JOBS.has(m.job))
       .filter((m) => {
         const key = `${m.id}:${m.job}`;
@@ -109,25 +117,16 @@ export async function GET(
       genres: data.genres,
       external_ids: externalIds,
       credits: {
-        cast: data.credits.cast
-          .slice(0, 10)
-          .map(
-            (member: {
-              id: number;
-              name: string;
-              character: string;
-              profile_path: string | null;
-            }) => ({
-              id: member.id,
-              name: member.name,
-              character: member.character,
-              profile_path: member.profile_path,
-            }),
-          ),
+        cast: (data.credits?.cast ?? []).slice(0, 10).map((member) => ({
+          id: member.id,
+          name: member.name,
+          character: member.character,
+          profile_path: member.profile_path,
+        })),
         crew,
       },
     });
   } catch (error) {
-    return internalError(error, "Internal server error");
+    return tmdbError(error, "Failed to fetch movie details");
   }
 }
