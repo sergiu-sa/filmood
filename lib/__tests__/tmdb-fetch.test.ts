@@ -1,11 +1,15 @@
 import { tmdbJson, tmdbJsonOptional, TMDBError } from "@/lib/tmdb";
 
 function mockFetch(status: number, body: unknown = {}) {
-  const spy = vi.fn(async () => ({
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => body,
-  }));
+  // The generic carries fetch's signature so `calls[0][1]` (the init object)
+  // is reachable, while the implementation ignores both arguments.
+  const spy = vi.fn<(url: string, init?: RequestInit) => Promise<unknown>>(
+    async () => ({
+      ok: status >= 200 && status < 300,
+      status,
+      json: async () => body,
+    }),
+  );
   vi.stubGlobal("fetch", spy);
   return spy;
 }
@@ -20,7 +24,7 @@ describe("tmdbJson", () => {
     const spy = mockFetch(200, { ok: true });
     await tmdbJson("/movie/42/images", { include_image_language: "en,null" });
 
-    const [url, init] = spy.mock.calls[0] as unknown as [string, RequestInit];
+    const [url, init] = spy.mock.calls[0];
     const parsed = new URL(url);
     expect(parsed.origin + parsed.pathname).toBe(
       "https://api.themoviedb.org/3/movie/42/images",

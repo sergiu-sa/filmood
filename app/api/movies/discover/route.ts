@@ -4,7 +4,7 @@ import { resolveMoodText } from "@/lib/moodResolver";
 import {
   applyEra,
   applyTempo,
-  appendExtraKeywords,
+  mergeExtraKeywords,
   isEraKey,
   isTempoKey,
 } from "@/lib/moodRefinements";
@@ -30,58 +30,51 @@ const MAX_PAGE = 3;
 // Final deck size returned to the client.
 const RESULT_LIMIT = 20;
 
-// Shared helper: build a TMDB discover URL from param object + refinements.
-// Page is set by fetchDiscoverPage so the same base URL can be reused.
-function buildDiscoverURL(
+// Shared helper: build a TMDB discover query from param object + refinements.
+// Page is set by fetchDiscoverPage so the same base query can be reused.
+function buildDiscoverParams(
   moodParams: Record<string, string>,
   refinements: Refinements,
-): URL {
-  // A URL purely for its searchParams ergonomics — the refinement helpers in
-  // lib/moodRefinements.ts mutate `url.searchParams`, and lib/deck.ts shares
-  // them. Only the query string is read back out; the origin is discarded.
-  const url = new URL("https://api.themoviedb.org/3/discover/movie");
-  url.searchParams.set("language", "en-US");
-
-  for (const [k, v] of Object.entries(moodParams)) {
-    url.searchParams.set(k, v);
-  }
+): Record<string, string> {
+  const params: Record<string, string> = { language: "en-US", ...moodParams };
 
   if (refinements.runtime === "short") {
-    url.searchParams.set("with_runtime.lte", "100");
+    params["with_runtime.lte"] = "100";
   } else if (refinements.runtime === "long") {
-    url.searchParams.set("with_runtime.gte", "150");
+    params["with_runtime.gte"] = "150";
   }
 
   if (refinements.language === "en") {
-    url.searchParams.set("with_original_language", "en");
+    params["with_original_language"] = "en";
   } else if (refinements.language === "scand") {
-    url.searchParams.set("with_original_language", "en|no|sv|da|fi|is");
+    params["with_original_language"] = "en|no|sv|da|fi|is";
   }
 
   if (refinements.exclude) {
-    const existing = url.searchParams.get("without_genres");
-    const merged = existing ? `${existing},${refinements.exclude}` : refinements.exclude;
-    url.searchParams.set("without_genres", merged);
+    const existing = params["without_genres"];
+    params["without_genres"] = existing
+      ? `${existing},${refinements.exclude}`
+      : refinements.exclude;
   }
 
   // Tempo overrides runtime when both are set (more intentional axis).
-  applyTempo(url, refinements.tempo);
-  applyEra(url, refinements.era);
-  appendExtraKeywords(url, refinements.extraKeywords);
+  applyTempo(params, refinements.tempo);
+  applyEra(params, refinements.era);
+  mergeExtraKeywords(params, refinements.extraKeywords);
 
-  return url;
+  return params;
 }
 
 // Fetch a specific TMDB discover page. Returns [] on any network/HTTP error so
 // one bad page doesn't blow up the whole search.
 async function fetchDiscoverPage(
-  baseURL: URL,
+  baseParams: Record<string, string>,
   page: number,
 ): Promise<{ id: number }[]> {
   try {
     const data = await tmdbJson<{ results?: { id: number }[] }>(
       "/discover/movie",
-      { ...Object.fromEntries(baseURL.searchParams), page: String(page) },
+      { ...baseParams, page: String(page) },
       // Uncached: every mood combination is a distinct query.
       false,
     );
@@ -95,11 +88,13 @@ async function fetchDiscoverPage(
 // deduped pool. Pooling widens the candidate set so a Fisher-Yates shuffle
 // produces genuine variety across repeat searches, while page 1 keeps
 // quality anchored.
-async function fetchDiscoverPool(baseURL: URL): Promise<{ id: number }[]> {
+async function fetchDiscoverPool(
+  baseParams: Record<string, string>,
+): Promise<{ id: number }[]> {
   const secondPage = 2 + Math.floor(Math.random() * (MAX_PAGE - 1));
   const [first, second] = await Promise.all([
-    fetchDiscoverPage(baseURL, 1),
-    fetchDiscoverPage(baseURL, secondPage),
+    fetchDiscoverPage(baseParams, 1),
+    fetchDiscoverPage(baseParams, secondPage),
   ]);
   const seen = new Set<number>();
   const pool: { id: number }[] = [];
@@ -183,11 +178,11 @@ export async function GET(request: NextRequest) {
     // genre intersection (or cross-genre AND), so results genuinely match
     // the *combination* of moods rather than being a shuffled concat.
     const mergedParams = buildMergedTMDBParams(moodKeys);
-    const mergedURL = buildDiscoverURL(mergedParams, refinements);
+    const mergedQuery = buildDiscoverParams(mergedParams, refinements);
 
     // Fetch pages 1 + random(2..MAX_PAGE) and shuffle so repeat searches
     // return different films instead of the same top 20.
-    let films: { id: number }[] = shuffle(await fetchDiscoverPool(mergedURL));
+    let films: { id: number }[] = shuffle(await fetchDiscoverPool(mergedQuery));
 
     // ── Fallback: if the merged pool returned < 5 films and we have
     //    multiple moods, supplement with per-mood pools so the page
@@ -197,8 +192,8 @@ export async function GET(request: NextRequest) {
 
       const fallbackPools = await Promise.all(
         moodKeys.map((key) => {
-          const url = buildDiscoverURL(buildTMDBParams(key), refinements);
-          return fetchDiscoverPool(url);
+          const query = buildDiscoverParams(buildTMDBParams(key), refinements);
+          return fetchDiscoverPool(query);
         }),
       );
       const extras = shuffle(fallbackPools.flat()).filter((f) => {

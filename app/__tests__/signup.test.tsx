@@ -91,7 +91,7 @@ beforeEach(() => {
   });
   (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
     ok: true,
-    json: async () => ({ results: [] }),
+    json: async () => ({ films: [] }),
   } as unknown as Response);
 });
 

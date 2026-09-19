@@ -73,7 +73,7 @@ export function mockRequest(
     init.body = JSON.stringify(body);
   }
 
-  return new NextRequest(new URL(url, "http://localhost"), init as RequestInit);
+  return new NextRequest(new URL(url, "http://localhost"), init as ConstructorParameters<typeof NextRequest>[1]);
 }
 
 /**

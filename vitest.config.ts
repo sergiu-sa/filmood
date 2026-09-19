@@ -4,6 +4,12 @@ import path from "path";
 export default defineConfig({
   test: {
     globals: true,
+    // Deliberately NOT UTC. CI and Vercel both run UTC, which is exactly where
+    // a timezone bug hides: lib/formatDate.ts's guard passes under UTC even
+    // with the bug reintroduced. Pinning an offset zone makes the suite fail
+    // where real viewers would. Fixed (not the machine's zone) so runs are
+    // reproducible across machines.
+    env: { TZ: "America/New_York" },
     // Default node; opt into jsdom per-file via /** @vitest-environment jsdom */.
     environment: "node",
     setupFiles: ["./tests/setup.ts"],

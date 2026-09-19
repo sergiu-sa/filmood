@@ -125,6 +125,29 @@ describe("buildSharedDeck", () => {
     expect(result).toEqual([]);
   });
 
+  // The deck tests otherwise only inspect the films that come back, so the
+  // query that produced them — the part the URLSearchParams -> Record refactor
+  // actually moved — had no coverage at all.
+  it("sends the mood params, page 1, and group refinements to TMDB", async () => {
+    const spy = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(fakeTMDBResponse(20)),
+    });
+    global.fetch = spy;
+
+    await buildSharedDeck([
+      { mood_selections: ["laugh"], era: "classic", tempo: "slowburn" },
+    ]);
+
+    const sent = new URL(spy.mock.calls[0][0] as string).searchParams;
+    expect(sent.get("page")).toBe("1");
+    expect(sent.get("language")).toBe("en-US");
+    expect(sent.get("api_key")).toBe("test-key");
+    // Era and tempo are independent axes; both must survive.
+    expect(sent.get("primary_release_date.lte")).toBe("1989-12-31");
+    expect(sent.get("with_runtime.gte")).toBe("120");
+  });
+
   it("each film in the deck has the correct shape", async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,

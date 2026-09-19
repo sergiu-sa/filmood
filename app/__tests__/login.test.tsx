@@ -71,7 +71,7 @@ beforeEach(() => {
   // Reset fetch stub for backdrop carousel (setup.ts sets a default)
   (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
     ok: true,
-    json: async () => ({ results: [] }),
+    json: async () => ({ films: [] }),
   } as unknown as Response);
 });
 

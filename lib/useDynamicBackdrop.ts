@@ -24,7 +24,9 @@ export function useDynamicBackdrop() {
     fetch("/api/movies/trending")
       .then((r) => r.json())
       .then((data) => {
-        const urls: string[] = (data.results ?? data.films ?? data ?? [])
+        // Cap kept despite /trending returning 4 today: that limit lives in
+        // another file, and these are `original`-size preloads.
+        const urls: string[] = (data.films ?? [])
           .filter((m: { backdrop_path?: string }) => m.backdrop_path)
           .slice(0, 10)
           .map((m: { backdrop_path: string }) =>

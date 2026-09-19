@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { RegionalAvailabilityResponse } from "@/lib/types";
 import { tmdbImageUrl } from "@/lib/tmdb";
+import { formatCalendarDate } from "@/lib/formatDate";
 
 interface RegionalAvailabilityProps {
   data: RegionalAvailabilityResponse;
@@ -16,35 +17,6 @@ interface RegionalAvailabilityProps {
 }
 
 const STORAGE_KEY = "filmood:regionalAvailability:lastRegion";
-
-const MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
-
-/**
- * Deterministic date formatter. `toLocaleDateString` produces different output
- * on Node vs browser ICU ("Jul 21, 2010" vs "21 Jul 2010"), causing hydration
- * mismatches — so we format manually with a fixed English month table.
- * Input format: ISO date string (YYYY-MM-DD or full ISO).
- */
-function formatReleaseDate(iso: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
-  if (!m) return iso;
-  const [, year, month, day] = m;
-  const monthName = MONTHS[Number(month) - 1] ?? "";
-  return `${monthName} ${Number(day)}, ${year}`;
-}
 
 export default function RegionalAvailability({
   data,
@@ -173,7 +145,9 @@ export default function RegionalAvailability({
                 color: "var(--t2)",
               }}
             >
-              Released {formatReleaseDate(current.release_date)}
+              Released{" "}
+              {formatCalendarDate(current.release_date) ??
+                current.release_date}
             </span>
           )}
         </div>

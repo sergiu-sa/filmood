@@ -3,7 +3,7 @@ import { tmdbJsonOptional } from "@/lib/tmdb";
 import {
   applyEra,
   applyTempo,
-  appendExtraKeywords,
+  mergeExtraKeywords,
 } from "@/lib/moodRefinements";
 import type { DeckFilm, EraKey, TempoKey } from "@/lib/types";
 
@@ -122,30 +122,23 @@ export async function buildSharedDeck(
 
   // Fetch TMDB results for each unique mood in parallel
   const fetchResults = allocations.map(async ({ mood, count }) => {
-    const moodParams = buildTMDBParams(mood);
-    // A URL purely for its searchParams ergonomics, the refinement helpers below mutate `url.searchParams`.
-    // Only the query string is read back out;
-    //  the origin is discarded and tmdbJson owns the real base URL.
-    const url = new URL("https://api.themoviedb.org/3/discover/movie");
-    url.searchParams.set("language", "en-US");
-    url.searchParams.set("page", "1");
-
-    for (const [k, v] of Object.entries(moodParams)) {
-      url.searchParams.set(k, v);
-    }
+    const params: Record<string, string> = {
+      language: "en-US",
+      page: "1",
+      ...buildTMDBParams(mood),
+    };
 
     // Apply group-level refinements on top of the per-mood TMDB params.
-    // Tempo goes before era so tempo's runtime filter sticks.
-    applyTempo(url, sharedTempo);
-    applyEra(url, sharedEra);
-    appendExtraKeywords(url, sharedKeywords);
+    applyTempo(params, sharedTempo);
+    applyEra(params, sharedEra);
+    mergeExtraKeywords(params, sharedKeywords);
 
     // One mood failing upstream shouldn't sink the whole session;
     //  that mood just contributes no films and the allocation below redistributes.
     // A missing API key still throws, so a misconfigured deploy is loud.
     const data = await tmdbJsonOptional<{ results?: TMDBDiscoverResult[] }>(
       "/discover/movie",
-      Object.fromEntries(url.searchParams),
+      params,
       // Uncached: every mood + refinement combination is a distinct query.
       false,
     );
