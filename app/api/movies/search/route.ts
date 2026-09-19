@@ -1,19 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { mapTMDBFilm } from "@/lib/tmdb";
-import { internalError } from "@/lib/api-errors";
+import { mapTMDBFilm, tmdbJson } from "@/lib/tmdb";
+import { tmdbError, badRequest } from "@/lib/api-errors";
+
+type RawCredit = Parameters<typeof mapTMDBFilm>[0] & {
+  popularity: number;
+  job?: string;
+};
+
+// Search results are query-driven, so every TMDB call here stays uncached.
+const UNCACHED = false;
 
 // Search by film title using TMDB /search/movie
-async function searchByTitle(query: string, apiKey: string) {
-  const url = new URL("https://api.themoviedb.org/3/search/movie");
-  url.searchParams.set("api_key", apiKey);
-  url.searchParams.set("language", "en-US");
-  url.searchParams.set("query", query);
-  url.searchParams.set("page", "1");
-  url.searchParams.set("include_adult", "false");
-
-  const res = await fetch(url.toString());
-  if (!res.ok) throw new Error("Failed to fetch from TMDB");
-  const data = await res.json();
+async function searchByTitle(query: string) {
+  const data = await tmdbJson<{ results?: RawCredit[] }>(
+    "/search/movie",
+    { language: "en-US", query, page: "1", include_adult: "false" },
+    UNCACHED,
+  );
   return (data.results ?? []).slice(0, 20).map(mapTMDBFilm);
 }
 
@@ -21,55 +24,29 @@ async function searchByTitle(query: string, apiKey: string) {
 // 1. Find the person via /search/person
 // 2. Fetch their movie credits
 // 3. Return cast credits for actor, crew credits (directed) for director
-async function searchByPerson(
-  query: string,
-  apiKey: string,
-  role: "actor" | "director",
-) {
-  // Step 1: find the person
-  const personUrl = new URL("https://api.themoviedb.org/3/search/person");
-  personUrl.searchParams.set("api_key", apiKey);
-  personUrl.searchParams.set("language", "en-US");
-  personUrl.searchParams.set("query", query);
-  personUrl.searchParams.set("page", "1");
-  personUrl.searchParams.set("include_adult", "false");
-
-  const personRes = await fetch(personUrl.toString());
-  if (!personRes.ok) throw new Error("Failed to fetch person from TMDB");
-  const personData = await personRes.json();
+async function searchByPerson(query: string, role: "actor" | "director") {
+  const personData = await tmdbJson<{ results?: { id: number }[] }>(
+    "/search/person",
+    { language: "en-US", query, page: "1", include_adult: "false" },
+    UNCACHED,
+  );
 
   const person = personData.results?.[0];
   if (!person) return [];
 
-  // Step 2: fetch their movie credits
-  const creditsUrl = new URL(
-    `https://api.themoviedb.org/3/person/${person.id}/movie_credits`,
+  const credits = await tmdbJson<{ cast?: RawCredit[]; crew?: RawCredit[] }>(
+    `/person/${person.id}/movie_credits`,
+    { language: "en-US" },
+    UNCACHED,
   );
-  creditsUrl.searchParams.set("api_key", apiKey);
-  creditsUrl.searchParams.set("language", "en-US");
 
-  const creditsRes = await fetch(creditsUrl.toString());
-  if (!creditsRes.ok) throw new Error("Failed to fetch credits from TMDB");
-  const creditsData = await creditsRes.json();
+  const relevant =
+    role === "actor"
+      ? (credits.cast ?? [])
+      : (credits.crew ?? []).filter((c) => c.job === "Director");
 
-  // Step 3: return relevant credits
-  if (role === "actor") {
-    return (creditsData.cast ?? [])
-      .sort(
-        (a: { popularity: number }, b: { popularity: number }) =>
-          b.popularity - a.popularity,
-      )
-      .slice(0, 20)
-      .map(mapTMDBFilm);
-  }
-
-  // director — filter crew by job
-  return (creditsData.crew ?? [])
-    .filter((c: { job: string }) => c.job === "Director")
-    .sort(
-      (a: { popularity: number }, b: { popularity: number }) =>
-        b.popularity - a.popularity,
-    )
+  return [...relevant]
+    .sort((a, b) => b.popularity - a.popularity)
     .slice(0, 20)
     .map(mapTMDBFilm);
 }
@@ -80,32 +57,23 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get("type") ?? "title"; // "title" | "actor" | "director"
 
   if (!query || query.trim() === "") {
-    return NextResponse.json(
-      { error: "Missing 'query' query parameter" },
-      { status: 400 },
-    );
+    return badRequest("Missing 'query' query parameter");
   }
 
-  const apiKey = process.env.TMDB_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "TMDB API key not configured" },
-      { status: 500 },
-    );
-  }
+  const trimmed = query.trim();
 
   try {
     let films;
 
     if (type === "actor") {
-      films = await searchByPerson(query.trim(), apiKey, "actor");
+      films = await searchByPerson(trimmed, "actor");
     } else if (type === "director") {
-      films = await searchByPerson(query.trim(), apiKey, "director");
+      films = await searchByPerson(trimmed, "director");
     } else if (type === "all") {
       const [titleFilms, actorFilms, directorFilms] = await Promise.all([
-        searchByTitle(query.trim(), apiKey),
-        searchByPerson(query.trim(), apiKey, "actor"),
-        searchByPerson(query.trim(), apiKey, "director"),
+        searchByTitle(trimmed),
+        searchByPerson(trimmed, "actor"),
+        searchByPerson(trimmed, "director"),
       ]);
       const seen = new Set<number>();
       films = [...titleFilms, ...actorFilms, ...directorFilms]
@@ -116,11 +84,11 @@ export async function GET(request: NextRequest) {
         })
         .slice(0, 20);
     } else {
-      films = await searchByTitle(query.trim(), apiKey);
+      films = await searchByTitle(trimmed);
     }
 
     return NextResponse.json({ films });
   } catch (error) {
-    return internalError(error, "Internal server error");
+    return tmdbError(error, "Failed to search films");
   }
 }

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { internalError, badRequest } from "@/lib/api-errors";
+import { tmdbError, badRequest } from "@/lib/api-errors";
 import {
   parseTMDBId,
   mapTMDBProvider,
+  tmdbJsonOptional,
   type TMDBProviderRaw,
 } from "@/lib/tmdb";
 import type {
@@ -77,34 +78,16 @@ export async function GET(
   const movieId = parseTMDBId(id);
   if (movieId === null) return badRequest("Invalid movie id");
 
-  const apiKey = process.env.TMDB_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "TMDB API key not configured" },
-      { status: 500 },
-    );
-  }
-
   try {
-    const provUrl = new URL(
-      `https://api.themoviedb.org/3/movie/${movieId}/watch/providers`,
-    );
-    provUrl.searchParams.set("api_key", apiKey);
-    const releaseUrl = new URL(
-      `https://api.themoviedb.org/3/movie/${movieId}/release_dates`,
-    );
-    releaseUrl.searchParams.set("api_key", apiKey);
-    const [provRes, releaseRes] = await Promise.all([
-      fetch(provUrl.toString(), { next: { revalidate: 86400 } }),
-      fetch(releaseUrl.toString(), { next: { revalidate: 86400 } }),
+    // A film may have providers but no release-date data (or vice versa);
+    // each half degrades independently rather than failing the response.
+    const [provData, releaseData] = await Promise.all([
+      tmdbJsonOptional(`/movie/${movieId}/watch/providers`),
+      tmdbJsonOptional(`/movie/${movieId}/release_dates`),
     ]);
 
-    const providersByCountry: ProvidersByCountry = provRes.ok
-      ? ((await provRes.json()).results ?? {})
-      : {};
-    const releaseByCountry: ReleaseByCountry = releaseRes.ok
-      ? ((await releaseRes.json()).results ?? [])
-      : [];
+    const providersByCountry = (provData.results ?? {}) as ProvidersByCountry;
+    const releaseByCountry = (releaseData.results ?? []) as ReleaseByCountry;
 
     const regions: Record<string, RegionAvailability> = {};
 
@@ -149,6 +132,6 @@ export async function GET(
     const body: RegionalAvailabilityResponse = { regions, defaultRegion };
     return NextResponse.json(body);
   } catch (error) {
-    return internalError(error, "Failed to fetch regional availability");
+    return tmdbError(error, "Failed to fetch regional availability");
   }
 }
