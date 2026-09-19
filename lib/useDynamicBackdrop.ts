@@ -24,7 +24,11 @@ export function useDynamicBackdrop() {
     fetch("/api/movies/trending")
       .then((r) => r.json())
       .then((data) => {
-        const urls: string[] = (data.results ?? data.films ?? data ?? [])
+        // /api/movies/trending returns { films }, so there is no other shape
+        // to guess at. The cap stays even though that route currently returns
+        // only 4: it lives in another file, and these are `original`-size
+        // backdrops being preloaded behind the auth screens.
+        const urls: string[] = (data.films ?? [])
           .filter((m: { backdrop_path?: string }) => m.backdrop_path)
           .slice(0, 10)
           .map((m: { backdrop_path: string }) =>

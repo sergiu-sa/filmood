@@ -2,42 +2,13 @@
 
 import { useState } from "react";
 import type { Review } from "@/lib/types";
+import { formatUTCDate } from "@/lib/formatDate";
 
 interface FilmReviewsProps {
   reviews: Review[];
 }
 
 const COLLAPSED_CHARS = 480;
-
-const MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
-
-/**
- * Deterministic date formatter — `toLocaleDateString` produces different
- * output on Node vs browser ICU ("Feb 8, 2026" vs "8 Feb 2026"), causing
- * hydration mismatches.
- */
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  // Use UTC getters so server (UTC) and client (any zone) agree on the day.
-  const year = d.getUTCFullYear();
-  const month = MONTHS[d.getUTCMonth()] ?? "";
-  const day = d.getUTCDate();
-  return `${month} ${day}, ${year}`;
-}
 
 function ReviewItem({ review }: { review: Review }) {
   const [expanded, setExpanded] = useState(false);
@@ -110,7 +81,7 @@ function ReviewItem({ review }: { review: Review }) {
             {review.author}
           </div>
           <div style={{ fontSize: "11px", color: "var(--t3)" }}>
-            {formatDate(review.created_at)}
+            {formatUTCDate(review.created_at) ?? ""}
           </div>
         </div>
         {review.rating !== null && (
