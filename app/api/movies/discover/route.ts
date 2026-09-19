@@ -4,7 +4,7 @@ import { resolveMoodText } from "@/lib/moodResolver";
 import {
   applyEra,
   applyTempo,
-  appendExtraKeywords,
+  mergeExtraKeywords,
   isEraKey,
   isTempoKey,
 } from "@/lib/moodRefinements";
@@ -35,31 +35,32 @@ const RESULT_LIMIT = 20;
 function buildDiscoverParams(
   moodParams: Record<string, string>,
   refinements: Refinements,
-): URLSearchParams {
-  const params = new URLSearchParams({ language: "en-US", ...moodParams });
+): Record<string, string> {
+  const params: Record<string, string> = { language: "en-US", ...moodParams };
 
   if (refinements.runtime === "short") {
-    params.set("with_runtime.lte", "100");
+    params["with_runtime.lte"] = "100";
   } else if (refinements.runtime === "long") {
-    params.set("with_runtime.gte", "150");
+    params["with_runtime.gte"] = "150";
   }
 
   if (refinements.language === "en") {
-    params.set("with_original_language", "en");
+    params["with_original_language"] = "en";
   } else if (refinements.language === "scand") {
-    params.set("with_original_language", "en|no|sv|da|fi|is");
+    params["with_original_language"] = "en|no|sv|da|fi|is";
   }
 
   if (refinements.exclude) {
-    const existing = params.get("without_genres");
-    const merged = existing ? `${existing},${refinements.exclude}` : refinements.exclude;
-    params.set("without_genres", merged);
+    const existing = params["without_genres"];
+    params["without_genres"] = existing
+      ? `${existing},${refinements.exclude}`
+      : refinements.exclude;
   }
 
   // Tempo overrides runtime when both are set (more intentional axis).
   applyTempo(params, refinements.tempo);
   applyEra(params, refinements.era);
-  appendExtraKeywords(params, refinements.extraKeywords);
+  mergeExtraKeywords(params, refinements.extraKeywords);
 
   return params;
 }
@@ -67,13 +68,13 @@ function buildDiscoverParams(
 // Fetch a specific TMDB discover page. Returns [] on any network/HTTP error so
 // one bad page doesn't blow up the whole search.
 async function fetchDiscoverPage(
-  baseParams: URLSearchParams,
+  baseParams: Record<string, string>,
   page: number,
 ): Promise<{ id: number }[]> {
   try {
     const data = await tmdbJson<{ results?: { id: number }[] }>(
       "/discover/movie",
-      { ...Object.fromEntries(baseParams), page: String(page) },
+      { ...baseParams, page: String(page) },
       // Uncached: every mood combination is a distinct query.
       false,
     );
@@ -88,7 +89,7 @@ async function fetchDiscoverPage(
 // produces genuine variety across repeat searches, while page 1 keeps
 // quality anchored.
 async function fetchDiscoverPool(
-  baseParams: URLSearchParams,
+  baseParams: Record<string, string>,
 ): Promise<{ id: number }[]> {
   const secondPage = 2 + Math.floor(Math.random() * (MAX_PAGE - 1));
   const [first, second] = await Promise.all([

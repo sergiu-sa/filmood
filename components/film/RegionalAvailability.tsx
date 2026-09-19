@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { RegionalAvailabilityResponse } from "@/lib/types";
 import { tmdbImageUrl } from "@/lib/tmdb";
-import { formatUTCDate } from "@/lib/formatDate";
+import { formatCalendarDate } from "@/lib/formatDate";
 
 interface RegionalAvailabilityProps {
   data: RegionalAvailabilityResponse;
@@ -146,7 +146,7 @@ export default function RegionalAvailability({
               }}
             >
               Released{" "}
-              {formatUTCDate(current.release_date) ??
+              {formatCalendarDate(current.release_date) ??
                 current.release_date}
             </span>
           )}
