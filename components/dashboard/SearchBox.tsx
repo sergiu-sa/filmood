@@ -90,6 +90,7 @@ export default function SearchBox({
           `/api/movies/search?query=${encodeURIComponent(q.trim())}&type=all`,
           { signal: controller.signal },
         );
+        if (!res.ok) throw new Error(`Search failed: ${res.status}`);
         const data = await res.json();
         const films = data.films ?? [];
         onResults?.(films);

@@ -44,12 +44,16 @@ describe("tmdbJson", () => {
 
   // `new URL` normalises dot segments, so an unguarded `..` would climb out of
   // /3 and reach another endpoint with the real key attached.
-  it("rejects a path that could escape the API version prefix", async () => {
+  // Checked against the normalised pathname, because `%2e%2e` folds to the
+  // same place as `..` while passing any substring test on the input.
+  it.each([
+    "/person/1/../../authentication/token/new",
+    "/person/1/%2e%2e/%2e%2e/authentication/token/new",
+    "/person/1/%2E%2E/%2E%2E/authentication/token/new",
+    "movie/1",
+  ])("rejects %s, which escapes the API version prefix", async (path) => {
     mockFetch(200);
-    await expect(
-      tmdbJson("/person/1/../../authentication/token/new"),
-    ).rejects.toThrow(/Invalid TMDB path/);
-    await expect(tmdbJson("movie/1")).rejects.toThrow(/Invalid TMDB path/);
+    await expect(tmdbJson(path)).rejects.toThrow(/Invalid TMDB path/);
   });
 
   it("throws TMDBError carrying the upstream status", async () => {

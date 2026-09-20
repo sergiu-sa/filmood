@@ -149,7 +149,20 @@ export async function POST(
     }
 
     // All done — build the shared deck using mood_selections plus refinements.
-    const deck = await buildSharedDeck(allParticipants);
+    let deck;
+    try {
+      deck = await buildSharedDeck(allParticipants);
+    } catch (deckError) {
+      // The moods above are already committed, and the "already submitted"
+      // guard would reject every retry — so a TMDB outage here would wedge the
+      // session permanently. Undo this participant's submission instead: they
+      // get the form back and the group can try again.
+      await supabase
+        .from("session_participants")
+        .update({ mood_selections: null })
+        .eq("id", participant.id);
+      return internalError(deckError, "Failed to build the movie deck");
+    }
 
     // Atomic compare-and-set on session.status so simultaneous last-submitters
     // don't both write a deck. Whichever request wins flips status to "swiping";

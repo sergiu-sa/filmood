@@ -127,7 +127,26 @@ describe("buildSharedDeck", () => {
   // An outage or a rotated key must NOT look like "no films matched": the
   // caller would write movie_deck: [] and flip the session to swiping, landing
   // the whole group on a zero-card deck with nothing reported.
-  it.each([401, 429, 503])("propagates %i instead of yielding an empty deck", async (status) => {
+  // Partial failure is survivable: the surviving mood still fills the deck.
+  it("builds a deck when one mood fails and another succeeds", async () => {
+    let call = 0;
+    global.fetch = vi.fn().mockImplementation(() => {
+      call++;
+      return Promise.resolve(
+        call === 1
+          ? { ok: false, status: 429, json: () => Promise.reject(new Error("x")) }
+          : { ok: true, json: () => Promise.resolve(fakeTMDBResponse(20)) },
+      );
+    });
+
+    const result = await buildSharedDeck([
+      { mood_selections: ["laugh"] },
+      { mood_selections: ["cry"] },
+    ]);
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it.each([401, 429, 503])("propagates %i when every mood fails", async (status) => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: false,
       status,

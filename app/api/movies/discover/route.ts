@@ -65,8 +65,8 @@ function buildDiscoverParams(
   return params;
 }
 
-// Fetch a specific TMDB discover page. Returns [] on any network/HTTP error so
-// one bad page doesn't blow up the whole search.
+// Fetch a specific TMDB discover page. A 404 yields []; anything worse rejects
+// so the caller decides whether that page was optional.
 async function fetchDiscoverPage(
   baseParams: Record<string, string>,
   page: number,
@@ -96,10 +96,16 @@ async function fetchDiscoverPool(
   baseParams: Record<string, string>,
 ): Promise<{ id: number }[]> {
   const secondPage = 2 + Math.floor(Math.random() * (MAX_PAGE - 1));
-  const [first, second] = await Promise.all([
+  // Page 1 is the result; the random page only widens variety. Doubling the
+  // request rate is also what provokes a rate limiter, so losing the optional
+  // page must not throw away the page we actually need.
+  const [firstResult, secondResult] = await Promise.allSettled([
     fetchDiscoverPage(baseParams, 1),
     fetchDiscoverPage(baseParams, secondPage),
   ]);
+  if (firstResult.status === "rejected") throw firstResult.reason;
+  const first = firstResult.value;
+  const second = secondResult.status === "fulfilled" ? secondResult.value : [];
   const seen = new Set<number>();
   const pool: { id: number }[] = [];
   for (const film of [...first, ...second]) {
@@ -194,11 +200,16 @@ export async function GET(request: NextRequest) {
     if (films.length < 5 && moodKeys.length > 1) {
       const seen = new Set(films.map((f) => f.id));
 
-      const fallbackPools = await Promise.all(
+      // Supplementary pools only top up an already-thin result, so one
+      // failing mood must not discard the films we already have.
+      const settledPools = await Promise.allSettled(
         moodKeys.map((key) => {
           const query = buildDiscoverParams(buildTMDBParams(key), refinements);
           return fetchDiscoverPool(query);
         }),
+      );
+      const fallbackPools = settledPools.map((r) =>
+        r.status === "fulfilled" ? r.value : [],
       );
       const extras = shuffle(fallbackPools.flat()).filter((f) => {
         if (seen.has(f.id)) return false;

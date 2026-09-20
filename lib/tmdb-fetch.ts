@@ -8,8 +8,10 @@
 
 const TMDB_BASE = "https://api.themoviedb.org/3";
 
-/** Default ISR window for movie metadata — effectively static day to day. */
-export const TMDB_REVALIDATE = 86400;
+// Not exported: Next's `export const revalidate` segment config only accepts a
+// literal, so each route repeats 86400 regardless. A shared constant here would
+// imply a single source of truth that cannot exist.
+const TMDB_REVALIDATE = 86400;
 
 /**
  * A non-OK response from TMDB, carrying the upstream status.
@@ -42,17 +44,19 @@ export async function tmdbJson<T = Record<string, unknown>>(
   params: Record<string, string> = {},
   revalidate: number | false = TMDB_REVALIDATE,
 ): Promise<T> {
-  // `new URL` normalises dot segments, so an unvalidated `..` in a caller's
-  // path could climb out of `/3` and reach a different endpoint with our real
-  // key attached. Callers validate their own ids too; this is the backstop.
-  if (!path.startsWith("/") || path.includes("..")) {
-    throw new Error(`Invalid TMDB path: ${path}`);
-  }
-
   const apiKey = process.env.TMDB_API_KEY;
   if (!apiKey) throw new Error("TMDB API key not configured");
 
   const url = new URL(`${TMDB_BASE}${path}`);
+
+  // Require that the parser changed nothing. `new URL` folds dot segments, and
+  // `%2e%2e` reaches the same endpoint as `..` while passing any substring
+  // check on the input — but either way the pathname stops matching what was
+  // asked for. A path that moved would carry the real key somewhere else.
+  if (!path.startsWith("/") || url.pathname !== `/3${path}`) {
+    throw new Error(`Invalid TMDB path: ${path}`);
+  }
+
   url.searchParams.set("api_key", apiKey);
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value);

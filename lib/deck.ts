@@ -133,9 +133,8 @@ export async function buildSharedDeck(
     applyEra(params, sharedEra);
     mergeExtraKeywords(params, sharedKeywords);
 
-    // One mood failing upstream shouldn't sink the whole session;
-    //  that mood just contributes no films and the allocation below redistributes.
-    // A missing API key still throws, so a misconfigured deploy is loud.
+    // A 404 means no films for this mood; worse statuses reject and are
+    // gathered by the allSettled below.
     const data = await tmdbJsonOptional<{ results?: TMDBDiscoverResult[] }>(
       "/discover/movie",
       params,
@@ -158,7 +157,22 @@ export async function buildSharedDeck(
     return { mood, count, results };
   });
 
-  const moodResults = await Promise.all(fetchResults);
+  const settled = await Promise.allSettled(fetchResults);
+  const moodResults = settled
+    .filter((r): r is PromiseFulfilledResult<Awaited<(typeof fetchResults)[number]>> =>
+      r.status === "fulfilled",
+    )
+    .map((r) => r.value);
+
+  // Partial failure is survivable — the allocation below redistributes. Total
+  // failure is an outage, and must not be written as an empty deck that flips
+  // the session to swiping with nothing to swipe.
+  if (moodResults.length === 0) {
+    const reason = settled.find((r) => r.status === "rejected");
+    throw reason && reason.status === "rejected"
+      ? reason.reason
+      : new Error("Failed to fetch any films for this session");
+  }
 
   // Build deck: pick films per mood allocation, dedup across moods.
   // If a film appears under multiple moods, merge the mood_keys.

@@ -75,15 +75,27 @@ export async function GET(
   if (movieId === null) return badRequest("Invalid movie id");
 
   try {
-    // A film may have providers but no release-date data (or vice versa);
-    // each half degrades independently rather than failing the response.
-    const [provData, releaseData] = await Promise.all([
-      tmdbJsonOptional(`/movie/${movieId}/watch/providers`),
-      tmdbJsonOptional(`/movie/${movieId}/release_dates`),
+    // Providers and release dates degrade independently — a film may have one
+    // and not the other — so only a total failure is reported.
+    const settled = await Promise.allSettled([
+      tmdbJsonOptional<{ results?: ProvidersByCountry }>(
+        `/movie/${movieId}/watch/providers`,
+      ),
+      tmdbJsonOptional<{ results?: ReleaseByCountry }>(
+        `/movie/${movieId}/release_dates`,
+      ),
     ]);
+    if (settled.every((r) => r.status === "rejected")) {
+      throw settled[0].status === "rejected"
+        ? settled[0].reason
+        : new Error("Failed to fetch regional availability");
+    }
 
-    const providersByCountry = (provData.results ?? {}) as ProvidersByCountry;
-    const releaseByCountry = (releaseData.results ?? []) as ReleaseByCountry;
+    const [provRes, releaseRes] = settled;
+    const providersByCountry =
+      provRes.status === "fulfilled" ? (provRes.value.results ?? {}) : {};
+    const releaseByCountry =
+      releaseRes.status === "fulfilled" ? (releaseRes.value.results ?? []) : [];
 
     const regions: Record<string, RegionAvailability> = {};
 

@@ -21,10 +21,6 @@ async function searchByTitle(query: string) {
   return (data.results ?? []).slice(0, 20).map(mapTMDBFilm);
 }
 
-// Search by actor or director:
-// 1. Find the person via /search/person
-// 2. Fetch their movie credits
-// 3. Return cast credits for actor, crew credits (directed) for director
 function topByPopularity(credits: RawCredit[]) {
   return [...credits]
     .sort((a, b) => b.popularity - a.popularity)

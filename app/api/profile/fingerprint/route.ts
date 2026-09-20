@@ -59,14 +59,19 @@ export async function GET(request: NextRequest) {
 
     const genreCounts = new Map<number, number>();
     if (movieIds.length > 0) {
-      const results = await Promise.all(
+      // Up to 30 concurrent lookups — the most rate-limit-prone call site in
+      // the app. A throttled few must not discard the rest, nor the mood data
+      // above, which never touched TMDB.
+      const settled = await Promise.allSettled(
         movieIds.map(async (id) => {
-          // One unknown film shouldn't sink the whole fingerprint.
           const data = await tmdbJsonOptional<{ genres?: { id: number }[] }>(
             `/movie/${id}`,
           );
           return data.genres ?? [];
         }),
+      );
+      const results = settled.map((r) =>
+        r.status === "fulfilled" ? r.value : [],
       );
       for (const filmGenres of results) {
         for (const g of filmGenres) {

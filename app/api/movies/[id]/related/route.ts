@@ -32,19 +32,24 @@ export async function GET(
   if (movieId === null) return badRequest("Invalid movie id");
 
   try {
-    // Either list may 404 for an obscure film; a missing one just means the
-    // other wins the fallback, so an upstream failure is not fatal here.
-    const [recData, simData] = await Promise.all([
-      tmdbJsonOptional(`/movie/${movieId}/recommendations`),
-      tmdbJsonOptional(`/movie/${movieId}/similar`),
+    // The two lists are a fallback pair, so a failure on one leg must not
+    // discard a good payload from the other. Only a total failure is reported.
+    const settled = await Promise.allSettled([
+      tmdbJsonOptional<RawListResponse>(`/movie/${movieId}/recommendations`),
+      tmdbJsonOptional<RawListResponse>(`/movie/${movieId}/similar`),
     ]);
+    if (settled.every((r) => r.status === "rejected")) {
+      throw settled[0].status === "rejected"
+        ? settled[0].reason
+        : new Error("Failed to fetch related films");
+    }
 
-    const rec = ((recData as RawListResponse).results ?? []).filter(
-      (f) => f.poster_path,
-    );
-    const sim = ((simData as RawListResponse).results ?? []).filter(
-      (f) => f.poster_path,
-    );
+    const listOf = (r: (typeof settled)[number]) =>
+      r.status === "fulfilled"
+        ? (r.value.results ?? []).filter((f) => f.poster_path)
+        : [];
+    const rec = listOf(settled[0]);
+    const sim = listOf(settled[1]);
 
     const useRecommendations = rec.length > 0;
     const source: "recommendations" | "similar" = useRecommendations

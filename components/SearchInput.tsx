@@ -40,6 +40,7 @@ export default function SearchInput({ onResults, onLoading }: SearchInputProps) 
         const res = await fetch(
           `/api/movies/search?query=${encodeURIComponent(trimmed)}&type=${filter}`,
         );
+        if (!res.ok) throw new Error(`Search failed: ${res.status}`);
         const data = await res.json();
         if (!cancelled) onResults(data.films ?? []);
       } catch {

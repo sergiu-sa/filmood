@@ -29,13 +29,13 @@ export function badRequest(message: string) {
  * Build an error response for a failed TMDB call.
  *
  * Only a 404 is forwarded: "no such film" is the one upstream status that
- * describes the client's request rather than our server. Everything else —
- * 401 from a rotated key, 429 from our own rate limit, a TMDB outage never masquerades as this app's "not signed in" 401.
+ * describes the client's request rather than our server. Every other status —
+ * a 401 from a rotated key, a 429 from our own rate limit, a TMDB outage —
+ * routes to `internalError` and surfaces as a 500, so it keeps showing up in
+ * 5xx alerting and never masquerades as this app's "not signed in" 401.
  *
- * 
- * 
  * Forwarding the raw status would also hand `NextResponse.json` values it
- * rejects: a 204/304 from an intermediary throws inside the caller's catch
+ * rejects: a 204 or 304 from an intermediary throws inside the caller's catch
  * block, turning a handled failure into an unhandled one.
  */
 export function tmdbError(error: unknown, fallback: string) {
