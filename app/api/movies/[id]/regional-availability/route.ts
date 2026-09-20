@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { tmdbError, badRequest } from "@/lib/api-errors";
 import { parseTMDBId, mapTMDBProvider, type TMDBProviderRaw } from "@/lib/tmdb";
-import { tmdbJsonOptional } from "@/lib/tmdb-fetch";
+import { tmdbJsonOptional, settleTMDB } from "@/lib/tmdb-fetch";
 import type {
   RegionAvailability,
   RegionalAvailabilityResponse,
@@ -76,8 +76,10 @@ export async function GET(
 
   try {
     // Providers and release dates degrade independently — a film may have one
-    // and not the other — so only a total failure is reported.
-    const settled = await Promise.allSettled([
+    // and not the other.
+    const { values, firstRejection } = await settleTMDB<{
+      results?: ProvidersByCountry | ReleaseByCountry;
+    }>([
       tmdbJsonOptional<{ results?: ProvidersByCountry }>(
         `/movie/${movieId}/watch/providers`,
       ),
@@ -85,17 +87,8 @@ export async function GET(
         `/movie/${movieId}/release_dates`,
       ),
     ]);
-    if (settled.every((r) => r.status === "rejected")) {
-      throw settled[0].status === "rejected"
-        ? settled[0].reason
-        : new Error("Failed to fetch regional availability");
-    }
-
-    const [provRes, releaseRes] = settled;
-    const providersByCountry =
-      provRes.status === "fulfilled" ? (provRes.value.results ?? {}) : {};
-    const releaseByCountry =
-      releaseRes.status === "fulfilled" ? (releaseRes.value.results ?? []) : [];
+    const providersByCountry = (values[0]?.results ?? {}) as ProvidersByCountry;
+    const releaseByCountry = (values[1]?.results ?? []) as ReleaseByCountry;
 
     const regions: Record<string, RegionAvailability> = {};
 
@@ -136,6 +129,12 @@ export async function GET(
       candidates.find((c) => regions[c]) ??
       Object.keys(regions)[0] ??
       null;
+
+    // A 404 on one leg resolves to {}, so "every promise rejected" would miss
+    // the case where the other genuinely failed and nothing usable remains.
+    if (Object.keys(regions).length === 0 && firstRejection) {
+      throw firstRejection;
+    }
 
     const body: RegionalAvailabilityResponse = { regions, defaultRegion };
     return NextResponse.json(body);

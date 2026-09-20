@@ -111,17 +111,31 @@ describe("buildSharedDeck", () => {
     expect(film1Entries.length).toBe(1);
   });
 
-  // A mood with genuinely no results contributes nothing and the deck still
-  // builds from the others.
-  it("treats a 404 for one mood as no films for that mood", async () => {
+  // An empty deck is unusable: the caller writes it to the session and flips
+  // to swiping, where no vote can ever complete it. Refuse rather than wedge.
+  it("refuses to return an empty deck when the only mood has no films", async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 404,
       json: () => Promise.reject(new Error("not JSON")),
     });
 
-    const result = await buildSharedDeck([{ mood_selections: ["laugh"] }]);
-    expect(result).toEqual([]);
+    await expect(
+      buildSharedDeck([{ mood_selections: ["laugh"] }]),
+    ).rejects.toThrow();
+  });
+
+  // The 200-with-no-results case: nothing rejects, so a rejection-counting
+  // guard would sail straight past it.
+  it("refuses an empty deck when TMDB returns no results at all", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ results: [] }),
+    });
+
+    await expect(
+      buildSharedDeck([{ mood_selections: ["laugh"] }]),
+    ).rejects.toThrow(/No films matched/);
   });
 
   // An outage or a rotated key must NOT look like "no films matched": the
@@ -143,7 +157,9 @@ describe("buildSharedDeck", () => {
       { mood_selections: ["laugh"] },
       { mood_selections: ["cry"] },
     ]);
-    expect(result.length).toBeGreaterThan(0);
+    // Full length, not merely non-empty: the surviving mood's allocation is
+    // topped up by the backfill, and `> 0` would pass with that deleted.
+    expect(result).toHaveLength(15);
   });
 
   it.each([401, 429, 503])("propagates %i when every mood fails", async (status) => {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { tmdbError, badRequest } from "@/lib/api-errors";
 import { parseTMDBId, mapTMDBFilm } from "@/lib/tmdb";
-import { tmdbJsonOptional } from "@/lib/tmdb-fetch";
+import { tmdbJsonOptional, settleTMDB } from "@/lib/tmdb-fetch";
 import type { Film } from "@/lib/types";
 
 export const revalidate = 86400;
@@ -32,24 +32,19 @@ export async function GET(
   if (movieId === null) return badRequest("Invalid movie id");
 
   try {
-    // The two lists are a fallback pair, so a failure on one leg must not
-    // discard a good payload from the other. Only a total failure is reported.
-    const settled = await Promise.allSettled([
+    // A fallback pair: one leg failing must not discard the other.
+    const { values, firstRejection } = await settleTMDB([
       tmdbJsonOptional<RawListResponse>(`/movie/${movieId}/recommendations`),
       tmdbJsonOptional<RawListResponse>(`/movie/${movieId}/similar`),
     ]);
-    if (settled.every((r) => r.status === "rejected")) {
-      throw settled[0].status === "rejected"
-        ? settled[0].reason
-        : new Error("Failed to fetch related films");
-    }
+    const [rec, sim] = [0, 1].map((i) =>
+      (values[i]?.results ?? []).filter((f) => f.poster_path),
+    );
 
-    const listOf = (r: (typeof settled)[number]) =>
-      r.status === "fulfilled"
-        ? (r.value.results ?? []).filter((f) => f.poster_path)
-        : [];
-    const rec = listOf(settled[0]);
-    const sim = listOf(settled[1]);
+    // Nothing usable plus a real failure is an outage, not "no related films".
+    if (rec.length === 0 && sim.length === 0 && firstRejection) {
+      throw firstRejection;
+    }
 
     const useRecommendations = rec.length > 0;
     const source: "recommendations" | "similar" = useRecommendations

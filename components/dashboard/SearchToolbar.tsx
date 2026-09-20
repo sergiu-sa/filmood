@@ -65,7 +65,6 @@ export default function SearchToolbar({
           `/api/movies/search?query=${encodeURIComponent(q.trim())}&type=all`,
           { signal: ctrl.signal },
         );
-        if (!res.ok) throw new Error(`Search failed: ${res.status}`);
         const data = await res.json();
         onResults(data.films ?? []);
         onExpand();

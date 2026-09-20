@@ -50,10 +50,12 @@ describe("tmdbJson", () => {
     "/person/1/../../authentication/token/new",
     "/person/1/%2e%2e/%2e%2e/authentication/token/new",
     "/person/1/%2E%2E/%2E%2E/authentication/token/new",
-    "movie/1",
-  ])("rejects %s, which escapes the API version prefix", async (path) => {
-    mockFetch(200);
+  ])("rejects %s without sending the key anywhere", async (path) => {
+    const spy = mockFetch(200);
     await expect(tmdbJson(path)).rejects.toThrow(/Invalid TMDB path/);
+    // The point of the guard: nothing reaches the network, so the real
+    // api_key is never attached to a path we did not intend.
+    expect(spy).not.toHaveBeenCalled();
   });
 
   it("throws TMDBError carrying the upstream status", async () => {
@@ -90,5 +92,11 @@ describe("tmdbJsonOptional", () => {
     mockFetch(200);
     delete process.env.TMDB_API_KEY;
     await expect(tmdbJsonOptional("/movie/1/similar")).rejects.toThrow();
+  });
+  // Filed separately: this one never escapes /3, it is simply not a path.
+  it("rejects a path with no leading slash", async () => {
+    const spy = mockFetch(200);
+    await expect(tmdbJson("movie/1")).rejects.toThrow(/Invalid TMDB path/);
+    expect(spy).not.toHaveBeenCalled();
   });
 });

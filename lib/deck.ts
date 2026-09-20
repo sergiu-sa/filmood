@@ -1,5 +1,5 @@
 import { buildTMDBParams } from "@/lib/moodMap";
-import { tmdbJsonOptional } from "@/lib/tmdb-fetch";
+import { tmdbJsonOptional, settleTMDB } from "@/lib/tmdb-fetch";
 import {
   applyEra,
   applyTempo,
@@ -157,22 +157,8 @@ export async function buildSharedDeck(
     return { mood, count, results };
   });
 
-  const settled = await Promise.allSettled(fetchResults);
-  const moodResults = settled
-    .filter((r): r is PromiseFulfilledResult<Awaited<(typeof fetchResults)[number]>> =>
-      r.status === "fulfilled",
-    )
-    .map((r) => r.value);
-
-  // Partial failure is survivable — the allocation below redistributes. Total
-  // failure is an outage, and must not be written as an empty deck that flips
-  // the session to swiping with nothing to swipe.
-  if (moodResults.length === 0) {
-    const reason = settled.find((r) => r.status === "rejected");
-    throw reason && reason.status === "rejected"
-      ? reason.reason
-      : new Error("Failed to fetch any films for this session");
-  }
+  // Partial failure is survivable — the allocation below redistributes.
+  const { values: moodResults, firstRejection } = await settleTMDB(fetchResults);
 
   // Build deck: pick films per mood allocation, dedup across moods.
   // If a film appears under multiple moods, merge the mood_keys.
@@ -226,6 +212,18 @@ export async function buildSharedDeck(
         deck.push(deckFilm);
       }
     }
+  }
+
+  // The guard that matters is emptiness, not rejection count. An over-
+  // constrained query answers 200 {results: []} for every mood, so nothing
+  // rejects and an empty deck would still be written to the session — which
+  // flips it to "swiping" with nothing to swipe, rejects every vote, and 400s
+  // any retry because the status has already moved on. Unrecoverable.
+  if (deck.length === 0) {
+    throw (
+      firstRejection ??
+      new Error("No films matched this session's combined moods")
+    );
   }
 
   return deck;

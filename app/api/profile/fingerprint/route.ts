@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
 import { internalError } from "@/lib/api-errors";
-import { tmdbJsonOptional } from "@/lib/tmdb-fetch";
+import { tmdbJsonOptional, settleTMDB } from "@/lib/tmdb-fetch";
 import { genreMap } from "@/lib/genres";
 
 const TOP_MOODS = 3;
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
       // Up to 30 concurrent lookups — the most rate-limit-prone call site in
       // the app. A throttled few must not discard the rest, nor the mood data
       // above, which never touched TMDB.
-      const settled = await Promise.allSettled(
+      const { values: results, firstRejection } = await settleTMDB(
         movieIds.map(async (id) => {
           const data = await tmdbJsonOptional<{ genres?: { id: number }[] }>(
             `/movie/${id}`,
@@ -70,9 +70,11 @@ export async function GET(request: NextRequest) {
           return data.genres ?? [];
         }),
       );
-      const results = settled.map((r) =>
-        r.status === "fulfilled" ? r.value : [],
-      );
+
+      // Every lookup failing is an outage, not a user with no genres.
+      if (results.every((g) => g.length === 0) && firstRejection) {
+        throw firstRejection;
+      }
       for (const filmGenres of results) {
         for (const g of filmGenres) {
           genreCounts.set(g.id, (genreCounts.get(g.id) ?? 0) + 1);

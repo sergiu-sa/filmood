@@ -95,3 +95,30 @@ export async function tmdbJsonOptional<T = Record<string, unknown>>(
     throw error;
   }
 }
+
+/**
+ * Run several TMDB calls and keep whatever succeeded, alongside the first
+ * failure if there was one.
+ *
+ * Routes that combine calls should degrade on a partial failure and report a
+ * total one — but "total" is not "every promise rejected". A 404 resolves to
+ * `{}` through `tmdbJsonOptional`, so one leg 404ing while the other times out
+ * leaves nothing usable and no rejection to trip an all-rejected check. Hence
+ * the caller states its own emptiness condition in one line:
+ *
+ *     const { values, firstRejection } = await settleTMDB([a, b]);
+ *     ...derive the result from values...
+ *     if (result.length === 0 && firstRejection) throw firstRejection;
+ */
+export async function settleTMDB<T>(
+  calls: Promise<T>[],
+): Promise<{ values: T[]; firstRejection: unknown | null }> {
+  const settled = await Promise.allSettled(calls);
+  const rejected = settled.find(
+    (r): r is PromiseRejectedResult => r.status === "rejected",
+  );
+  return {
+    values: settled.flatMap((r) => (r.status === "fulfilled" ? [r.value] : [])),
+    firstRejection: rejected ? rejected.reason : null,
+  };
+}

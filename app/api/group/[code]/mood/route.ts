@@ -153,14 +153,30 @@ export async function POST(
     try {
       deck = await buildSharedDeck(allParticipants);
     } catch (deckError) {
-      // The moods above are already committed, and the "already submitted"
-      // guard would reject every retry — so a TMDB outage here would wedge the
-      // session permanently. Undo this participant's submission instead: they
-      // get the form back and the group can try again.
-      await supabase
-        .from("session_participants")
-        .update({ mood_selections: null })
-        .eq("id", participant.id);
+      // The moods above are already committed and the "already submitted"
+      // guard would reject every retry, so a TMDB outage here would wedge the
+      // session. Undo this participant's submission so the form comes back.
+      //
+      // Re-read the status first: a simultaneous submitter may have built the
+      // deck and moved the session on, in which case rolling back would show
+      // them as "hasn't submitted" for a session already swiping.
+      const { data: current } = await supabase
+        .from("sessions")
+        .select("status")
+        .eq("id", session.id)
+        .single();
+
+      if (current?.status === "mood") {
+        const { error: rollbackError } = await supabase
+          .from("session_participants")
+          .update({ mood_selections: null })
+          .eq("id", participant.id);
+        // A failed rollback is the wedge this block exists to prevent, so it
+        // must be visible in the logs rather than swallowed.
+        if (rollbackError) {
+          console.error("Mood rollback failed — session may be stuck", rollbackError);
+        }
+      }
       return internalError(deckError, "Failed to build the movie deck");
     }
 

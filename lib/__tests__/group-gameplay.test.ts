@@ -131,7 +131,11 @@ describe("POST /api/group/[code]/mood", () => {
       { data: { id: "p-1", mood_selections: null }, error: null },
       { data: null, error: null },
       { data: [{ mood_selections: ["laugh"] }, { mood_selections: ["cry"] }], error: null },
+      // recordMoodPicks fires here (authenticated caller) and consumes a slot.
       { data: null, error: null },
+      // The rollback re-reads the session first, so it only fires while the
+      // session is still in "mood" and a concurrent submitter hasn't moved on.
+      { data: { status: "mood" }, error: null },
       { data: null, error: null },
     ]);
     mockGetSupabaseAdmin.mockReturnValue(supabase);
@@ -140,8 +144,13 @@ describe("POST /api/group/[code]/mood", () => {
     const { status } = await readResponse(await submitMood(req, routeParams("ABC123")));
 
     expect(status).toBe(500);
-    // The rollback writes mood_selections back to null so the form returns.
-    expect(supabase.from).toHaveBeenCalledWith("session_participants");
+    // Call count, not "was it ever called": the handler already touches
+    // session_participants three times before the deck build, so a
+    // toHaveBeenCalledWith check stays green with the rollback deleted.
+    const participantWrites = supabase.from.mock.calls.filter(
+      (c: unknown[]) => c[0] === "session_participants",
+    );
+    expect(participantWrites).toHaveLength(4);
   });
 });
 

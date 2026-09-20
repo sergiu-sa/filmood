@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { mapTMDBFilm } from "@/lib/tmdb";
-import { tmdbJson } from "@/lib/tmdb-fetch";
+import type { Film } from "@/lib/types";
+import { tmdbJson, settleTMDB } from "@/lib/tmdb-fetch";
 import { tmdbError, badRequest } from "@/lib/api-errors";
 
 type RawCredit = Parameters<typeof mapTMDBFilm>[0] & {
@@ -77,10 +78,17 @@ export async function GET(request: NextRequest) {
     } else if (type === "director") {
       films = (await searchPersonCredits(trimmed)).director;
     } else if (type === "all") {
-      const [titleFilms, person] = await Promise.all([
-        searchByTitle(trimmed),
-        searchPersonCredits(trimmed),
-      ]);
+      // One leg failing must not discard the other's completed lookups.
+      const { values, firstRejection } = await settleTMDB<
+        Film[] | { actor: Film[]; director: Film[] }
+      >([searchByTitle(trimmed), searchPersonCredits(trimmed)]);
+
+      const titleFilms = Array.isArray(values[0]) ? values[0] : [];
+      const person =
+        values.find((v): v is { actor: Film[]; director: Film[] } =>
+          !Array.isArray(v),
+        ) ?? { actor: [], director: [] };
+
       const seen = new Set<number>();
       films = [...titleFilms, ...person.actor, ...person.director]
         .filter((f: { id: number }) => {
@@ -89,6 +97,9 @@ export async function GET(request: NextRequest) {
           return true;
         })
         .slice(0, 20);
+
+      // Nothing from either leg plus a real failure is an outage, not "no hits".
+      if (films.length === 0 && firstRejection) throw firstRejection;
     } else {
       films = await searchByTitle(trimmed);
     }
