@@ -73,9 +73,12 @@ export async function GET(request: NextRequest) {
 
       const results = values.map((g) => g ?? []);
 
-      // Every lookup failing is an outage, not a user with no genres.
-      if (results.every((g) => g.length === 0) && firstRejection) {
-        throw firstRejection;
+      // Deliberately does not throw. topMoods above came from Postgres and is
+      // the more valuable half of this response, so a TMDB wobble degrades to
+      // "moods, no genres" rather than costing a small-watchlist user the
+      // whole panel. The rejection is logged so the outage is still visible.
+      if (firstRejection) {
+        console.error("Fingerprint genre lookup partially failed", firstRejection);
       }
       for (const filmGenres of results) {
         for (const g of filmGenres) {

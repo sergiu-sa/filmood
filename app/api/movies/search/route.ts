@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { mapTMDBFilm } from "@/lib/tmdb";
 import type { Film } from "@/lib/types";
-import { tmdbJson, settleTMDB } from "@/lib/tmdb-fetch";
+import { tmdbJson } from "@/lib/tmdb-fetch";
 import { tmdbError, badRequest } from "@/lib/api-errors";
 
 type RawCredit = Parameters<typeof mapTMDBFilm>[0] & {
@@ -79,15 +79,25 @@ export async function GET(request: NextRequest) {
       films = (await searchPersonCredits(trimmed)).director;
     } else if (type === "all") {
       // One leg failing must not discard the other's completed lookups.
-      const { values, firstRejection } = await settleTMDB<
-        Film[] | { actor: Film[]; director: Film[] }
-      >([searchByTitle(trimmed), searchPersonCredits(trimmed)]);
+      const [titleResult, personResult] = await Promise.allSettled([
+        searchByTitle(trimmed),
+        searchPersonCredits(trimmed),
+      ]);
+      const values: [Film[] | undefined, { actor: Film[]; director: Film[] } | undefined] = [
+        titleResult.status === "fulfilled" ? titleResult.value : undefined,
+        personResult.status === "fulfilled" ? personResult.value : undefined,
+      ];
+      const firstRejection =
+        titleResult.status === "rejected"
+          ? titleResult.reason
+          : personResult.status === "rejected"
+            ? personResult.reason
+            : null;
 
-      const titleFilms = Array.isArray(values[0]) ? values[0] : [];
-      const person =
-        values.find((v): v is { actor: Film[]; director: Film[] } =>
-          !Array.isArray(v),
-        ) ?? { actor: [], director: [] };
+      // Positional, not searched: a rejected leg leaves `undefined` here, and
+      // a shape predicate would match that hole before the leg that succeeded.
+      const titleFilms = values[0] ?? [];
+      const person = values[1] ?? { actor: [], director: [] };
 
       const seen = new Set<number>();
       films = [...titleFilms, ...person.actor, ...person.director]
