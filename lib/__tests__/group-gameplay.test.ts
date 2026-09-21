@@ -14,12 +14,16 @@ vi.mock("@/lib/supabase-server", () => ({
   getSupabaseAdmin: () => mockGetSupabaseAdmin(),
 }));
 
+const mockBuildSharedDeck = vi.fn();
+
 vi.mock("@/lib/deck", () => ({
-  buildSharedDeck: vi.fn().mockResolvedValue([
-    { id: 1, title: "Film 1", poster_path: "/p1.jpg", release_date: "2025-01-01", vote_average: 7.5, overview: "Overview", genre_ids: [35], mood_keys: ["laugh"] },
-    { id: 2, title: "Film 2", poster_path: "/p2.jpg", release_date: "2025-01-01", vote_average: 8.0, overview: "Overview", genre_ids: [18], mood_keys: ["cry"] },
-  ]),
+  buildSharedDeck: (...args: unknown[]) => mockBuildSharedDeck(...args),
 }));
+
+const defaultDeck = [
+  { id: 1, title: "Film 1", poster_path: "/p1.jpg", release_date: "2025-01-01", vote_average: 7.5, overview: "Overview", genre_ids: [35], mood_keys: ["laugh"] },
+  { id: 2, title: "Film 2", poster_path: "/p2.jpg", release_date: "2025-01-01", vote_average: 8.0, overview: "Overview", genre_ids: [18], mood_keys: ["cry"] },
+];
 
 import { POST as submitMood } from "@/app/api/group/[code]/mood/route";
 import { GET as getSwipeState, POST as submitSwipe } from "@/app/api/group/[code]/swipe/route";
@@ -37,7 +41,10 @@ const fakeDeck = [
 // ─── POST /api/group/[code]/mood ────────────────────
 
 describe("POST /api/group/[code]/mood", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockBuildSharedDeck.mockResolvedValue(defaultDeck);
+  });
 
   it("returns 400 when moods array is empty", async () => {
     mockGetAuthUser.mockResolvedValue(mockUser);
@@ -111,6 +118,39 @@ describe("POST /api/group/[code]/mood", () => {
     expect(status).toBe(200);
     expect(json.allDone).toBe(true);
     expect(json.deckSize).toBeGreaterThan(0);
+  });
+
+  // A TMDB outage during the final submit used to commit the participant's
+  // moods and then 500, leaving them behind the "already submitted" guard with
+  // no deck and no way to retry — the session was wedged for everyone.
+  it("rolls the submission back when the deck build fails", async () => {
+    mockGetAuthUser.mockResolvedValue(mockUser);
+    mockBuildSharedDeck.mockRejectedValue(new Error("TMDB responded 429"));
+    const supabase = createMockSupabase([
+      { data: { id: "s-1", status: "mood", created_at: new Date().toISOString() }, error: null },
+      { data: { id: "p-1", mood_selections: null }, error: null },
+      { data: null, error: null },
+      { data: [{ mood_selections: ["laugh"] }, { mood_selections: ["cry"] }], error: null },
+      // recordMoodPicks fires here (authenticated caller) and consumes a slot.
+      { data: null, error: null },
+      // The rollback re-reads the session first, so it only fires while the
+      // session is still in "mood" and a concurrent submitter hasn't moved on.
+      { data: { status: "mood" }, error: null },
+      { data: null, error: null },
+    ]);
+    mockGetSupabaseAdmin.mockReturnValue(supabase);
+
+    const req = mockRequest("POST", "/api/group/ABC123/mood", { moods: ["laugh"] });
+    const { status } = await readResponse(await submitMood(req, routeParams("ABC123")));
+
+    expect(status).toBe(500);
+    // Call count, not "was it ever called": the handler already touches
+    // session_participants three times before the deck build, so a
+    // toHaveBeenCalledWith check stays green with the rollback deleted.
+    const participantWrites = supabase.from.mock.calls.filter(
+      (c: unknown[]) => c[0] === "session_participants",
+    );
+    expect(participantWrites).toHaveLength(4);
   });
 });
 

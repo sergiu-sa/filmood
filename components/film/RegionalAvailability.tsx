@@ -25,7 +25,9 @@ export default function RegionalAvailability({
   const labelFor = (code: string) => regionLabels[code] ?? code;
 
   const codes = useMemo(() => {
-    const list = Object.keys(data.regions);
+    // `data` comes straight from a route response that can be an error body,
+    // so regions may be absent — an unguarded Object.keys would take the page down.
+    const list = Object.keys(data?.regions ?? {});
     list.sort((a, b) => labelFor(a).localeCompare(labelFor(b)));
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- regionLabels is stable per page render; we want re-sort only when regions change

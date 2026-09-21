@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { mapTMDBFilm, tmdbJson } from "@/lib/tmdb";
+import { mapTMDBFilm } from "@/lib/tmdb";
+import { tmdbJson } from "@/lib/tmdb-fetch";
 import { tmdbError, badRequest } from "@/lib/api-errors";
 
 type Endpoint = { path: string; params: Record<string, string> };
@@ -75,6 +76,12 @@ export async function GET(request: NextRequest) {
   const category = searchParams.get("category");
   const genreId = searchParams.get("genre");
   const page = searchParams.get("page") ?? "1";
+
+  // TMDB 400s outside 1..500; without this its client-input error would reach
+  // tmdbError, fall through to internalError, and fill 5xx alerting.
+  if (!/^\d+$/.test(page) || Number(page) < 1 || Number(page) > 500) {
+    return badRequest("Invalid page");
+  }
 
   if (!category) return badRequest("Missing 'category' query parameter");
 

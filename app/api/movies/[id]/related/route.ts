@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { tmdbError, badRequest } from "@/lib/api-errors";
-import { parseTMDBId, mapTMDBFilm, tmdbJsonOptional } from "@/lib/tmdb";
+import { parseTMDBId, mapTMDBFilm } from "@/lib/tmdb";
+import { tmdbJsonOptional, settleTMDB } from "@/lib/tmdb-fetch";
 import type { Film } from "@/lib/types";
 
 export const revalidate = 86400;
@@ -31,19 +32,19 @@ export async function GET(
   if (movieId === null) return badRequest("Invalid movie id");
 
   try {
-    // Either list may 404 for an obscure film; a missing one just means the
-    // other wins the fallback, so an upstream failure is not fatal here.
-    const [recData, simData] = await Promise.all([
-      tmdbJsonOptional(`/movie/${movieId}/recommendations`),
-      tmdbJsonOptional(`/movie/${movieId}/similar`),
+    // A fallback pair: one leg failing must not discard the other.
+    const { values, firstRejection } = await settleTMDB([
+      tmdbJsonOptional<RawListResponse>(`/movie/${movieId}/recommendations`),
+      tmdbJsonOptional<RawListResponse>(`/movie/${movieId}/similar`),
     ]);
+    const [rec, sim] = [0, 1].map((i) =>
+      (values[i]?.results ?? []).filter((f) => f.poster_path),
+    );
 
-    const rec = ((recData as RawListResponse).results ?? []).filter(
-      (f) => f.poster_path,
-    );
-    const sim = ((simData as RawListResponse).results ?? []).filter(
-      (f) => f.poster_path,
-    );
+    // Nothing usable plus a real failure is an outage, not "no related films".
+    if (rec.length === 0 && sim.length === 0 && firstRejection) {
+      throw firstRejection;
+    }
 
     const useRecommendations = rec.length > 0;
     const source: "recommendations" | "similar" = useRecommendations

@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { tmdbError, badRequest } from "@/lib/api-errors";
-import {
-  parseTMDBId,
-  mapTMDBProvider,
-  tmdbJsonOptional,
-  type TMDBProviderRaw,
-} from "@/lib/tmdb";
+import { parseTMDBId, mapTMDBProvider, type TMDBProviderRaw } from "@/lib/tmdb";
+import { tmdbJsonOptional, settleTMDB } from "@/lib/tmdb-fetch";
 import type {
   RegionAvailability,
   RegionalAvailabilityResponse,
@@ -79,15 +75,20 @@ export async function GET(
   if (movieId === null) return badRequest("Invalid movie id");
 
   try {
-    // A film may have providers but no release-date data (or vice versa);
-    // each half degrades independently rather than failing the response.
-    const [provData, releaseData] = await Promise.all([
-      tmdbJsonOptional(`/movie/${movieId}/watch/providers`),
-      tmdbJsonOptional(`/movie/${movieId}/release_dates`),
+    // Providers and release dates degrade independently — a film may have one
+    // and not the other.
+    const { values, firstRejection } = await settleTMDB<{
+      results?: ProvidersByCountry | ReleaseByCountry;
+    }>([
+      tmdbJsonOptional<{ results?: ProvidersByCountry }>(
+        `/movie/${movieId}/watch/providers`,
+      ),
+      tmdbJsonOptional<{ results?: ReleaseByCountry }>(
+        `/movie/${movieId}/release_dates`,
+      ),
     ]);
-
-    const providersByCountry = (provData.results ?? {}) as ProvidersByCountry;
-    const releaseByCountry = (releaseData.results ?? []) as ReleaseByCountry;
+    const providersByCountry = (values[0]?.results ?? {}) as ProvidersByCountry;
+    const releaseByCountry = (values[1]?.results ?? []) as ReleaseByCountry;
 
     const regions: Record<string, RegionAvailability> = {};
 
@@ -115,19 +116,25 @@ export async function GET(
       regions[country] = { ...existing, certification, release_date };
     }
 
-    // Vercel geo header → ?country= override → fallback. Skips any step
-    // that doesn't have data for this film.
+    // Explicit ?country= wins, then the Vercel geo header, then the fallback.
+    // Skips any step that has no data for this film.
     const headerRegion = request.headers.get("x-vercel-ip-country")?.toUpperCase();
     const queryRegion = request.nextUrl.searchParams
       .get("country")
       ?.toUpperCase();
-    const candidates = [headerRegion, queryRegion, FALLBACK_DEFAULT].filter(
+    const candidates = [queryRegion, headerRegion, FALLBACK_DEFAULT].filter(
       (c): c is string => !!c,
     );
     const defaultRegion =
       candidates.find((c) => regions[c]) ??
       Object.keys(regions)[0] ??
       null;
+
+    // A 404 on one leg resolves to {}, so "every promise rejected" would miss
+    // the case where the other genuinely failed and nothing usable remains.
+    if (Object.keys(regions).length === 0 && firstRejection) {
+      throw firstRejection;
+    }
 
     const body: RegionalAvailabilityResponse = { regions, defaultRegion };
     return NextResponse.json(body);

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { tmdbError } from "@/lib/api-errors";
-import { tmdbJson } from "@/lib/tmdb";
+import { tmdbJson } from "@/lib/tmdb-fetch";
 
 type RawTrendingFilm = {
   id: number;

@@ -149,7 +149,36 @@ export async function POST(
     }
 
     // All done — build the shared deck using mood_selections plus refinements.
-    const deck = await buildSharedDeck(allParticipants);
+    let deck;
+    try {
+      deck = await buildSharedDeck(allParticipants);
+    } catch (deckError) {
+      // The moods above are already committed and the "already submitted"
+      // guard would reject every retry, so a TMDB outage here would wedge the
+      // session. Undo this participant's submission so the form comes back.
+      //
+      // Re-read the status first: a simultaneous submitter may have built the
+      // deck and moved the session on, in which case rolling back would show
+      // them as "hasn't submitted" for a session already swiping.
+      const { data: current } = await supabase
+        .from("sessions")
+        .select("status")
+        .eq("id", session.id)
+        .single();
+
+      if (current?.status === "mood") {
+        const { error: rollbackError } = await supabase
+          .from("session_participants")
+          .update({ mood_selections: null })
+          .eq("id", participant.id);
+        // A failed rollback is the wedge this block exists to prevent, so it
+        // must be visible in the logs rather than swallowed.
+        if (rollbackError) {
+          console.error("Mood rollback failed — session may be stuck", rollbackError);
+        }
+      }
+      return internalError(deckError, "Failed to build the movie deck");
+    }
 
     // Atomic compare-and-set on session.status so simultaneous last-submitters
     // don't both write a deck. Whichever request wins flips status to "swiping";

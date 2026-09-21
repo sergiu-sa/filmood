@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { tmdbError, badRequest } from "@/lib/api-errors";
-import { parseTMDBId, mapTMDBProvider, tmdbJson } from "@/lib/tmdb";
+import { parseTMDBId, mapTMDBProvider } from "@/lib/tmdb";
+import { tmdbJson } from "@/lib/tmdb-fetch";
 import type { TMDBProviderRaw } from "@/lib/tmdb";
 
 export const revalidate = 86400;

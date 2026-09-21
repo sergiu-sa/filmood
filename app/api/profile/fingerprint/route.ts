@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
 import { internalError } from "@/lib/api-errors";
-import { tmdbJsonOptional } from "@/lib/tmdb";
+import { tmdbJsonOptional, settleTMDB } from "@/lib/tmdb-fetch";
 import { genreMap } from "@/lib/genres";
 
 const TOP_MOODS = 3;
@@ -22,7 +22,6 @@ export async function GET(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
 
   try {
     const supabase = getSupabaseAdmin();
@@ -60,15 +59,27 @@ export async function GET(request: NextRequest) {
 
     const genreCounts = new Map<number, number>();
     if (movieIds.length > 0) {
-      const results = await Promise.all(
+      // Up to 30 concurrent lookups — the most rate-limit-prone call site in
+      // the app. A throttled few must not discard the rest, nor the mood data
+      // above, which never touched TMDB.
+      const { values, firstRejection } = await settleTMDB(
         movieIds.map(async (id) => {
-          // One unknown film shouldn't sink the whole fingerprint.
           const data = await tmdbJsonOptional<{ genres?: { id: number }[] }>(
             `/movie/${id}`,
           );
           return data.genres ?? [];
         }),
       );
+
+      const results = values.map((g) => g ?? []);
+
+      // Deliberately does not throw. topMoods above came from Postgres and is
+      // the more valuable half of this response, so a TMDB wobble degrades to
+      // "moods, no genres" rather than costing a small-watchlist user the
+      // whole panel. The rejection is logged so the outage is still visible.
+      if (firstRejection) {
+        console.error("Fingerprint genre lookup partially failed", firstRejection);
+      }
       for (const filmGenres of results) {
         for (const g of filmGenres) {
           genreCounts.set(g.id, (genreCounts.get(g.id) ?? 0) + 1);

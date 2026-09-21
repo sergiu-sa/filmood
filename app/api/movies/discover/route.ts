@@ -9,7 +9,7 @@ import {
   isTempoKey,
 } from "@/lib/moodRefinements";
 import { tmdbError } from "@/lib/api-errors";
-import { tmdbJson } from "@/lib/tmdb";
+import { tmdbJson, TMDBError, settleTMDB } from "@/lib/tmdb-fetch";
 import { getAuthUser, getSupabaseAdmin } from "@/lib/supabase-server";
 import { recordMoodPicks } from "@/lib/mood-history";
 import type { EraKey, TempoKey } from "@/lib/types";
@@ -65,8 +65,8 @@ function buildDiscoverParams(
   return params;
 }
 
-// Fetch a specific TMDB discover page. Returns [] on any network/HTTP error so
-// one bad page doesn't blow up the whole search.
+// Fetch a specific TMDB discover page. A 404 yields []; anything worse rejects
+// so the caller decides whether that page was optional.
 async function fetchDiscoverPage(
   baseParams: Record<string, string>,
   page: number,
@@ -79,8 +79,12 @@ async function fetchDiscoverPage(
       false,
     );
     return data.results ?? [];
-  } catch {
-    return [];
+  } catch (error) {
+    // One page genuinely missing shouldn't sink the search. Anything else —
+    // a missing key, a rotated key, a rate limit — must reach the handler's
+    // catch, or a broken deploy renders as "no films match your mood".
+    if (error instanceof TMDBError && error.status === 404) return [];
+    throw error;
   }
 }
 
@@ -92,10 +96,16 @@ async function fetchDiscoverPool(
   baseParams: Record<string, string>,
 ): Promise<{ id: number }[]> {
   const secondPage = 2 + Math.floor(Math.random() * (MAX_PAGE - 1));
-  const [first, second] = await Promise.all([
+  // Page 1 is the result; the random page only widens variety. Doubling the
+  // request rate is also what provokes a rate limiter, so losing the optional
+  // page must not throw away the page we actually need.
+  const [firstResult, secondResult] = await Promise.allSettled([
     fetchDiscoverPage(baseParams, 1),
     fetchDiscoverPage(baseParams, secondPage),
   ]);
+  if (firstResult.status === "rejected") throw firstResult.reason;
+  const first = firstResult.value;
+  const second = secondResult.status === "fulfilled" ? secondResult.value : [];
   const seen = new Set<number>();
   const pool: { id: number }[] = [];
   for (const film of [...first, ...second]) {
@@ -165,7 +175,12 @@ export async function GET(request: NextRequest) {
   const refinements: Refinements = {
     runtime: searchParams.get("runtime"),
     language: searchParams.get("language"),
-    exclude: searchParams.get("exclude"),
+    // TMDB's without_genres takes a comma-separated id list; anything else
+    // earns a 400 upstream, which would reach tmdbError and surface as our
+    // 500 for what is purely client input.
+    exclude: /^\d+(,\d+)*$/.test(searchParams.get("exclude") ?? "")
+      ? searchParams.get("exclude")
+      : null,
     era: isEraKey(eraParam) ? eraParam : resolved?.era ?? null,
     tempo: isTempoKey(tempoParam) ? tempoParam : resolved?.tempo ?? null,
     extraKeywords: resolved?.keywords ?? [],
@@ -190,12 +205,24 @@ export async function GET(request: NextRequest) {
     if (films.length < 5 && moodKeys.length > 1) {
       const seen = new Set(films.map((f) => f.id));
 
-      const fallbackPools = await Promise.all(
+      // Supplementary pools only top up an already-thin result, so one
+      // failing mood must not discard the films we already have.
+      const { values, firstRejection } = await settleTMDB(
         moodKeys.map((key) => {
           const query = buildDiscoverParams(buildTMDBParams(key), refinements);
           return fetchDiscoverPool(query);
         }),
       );
+      const fallbackPools = values.map((pool) => pool ?? []);
+
+      // Nothing anywhere plus a real failure is an outage, not "no matches".
+      if (
+        films.length === 0 &&
+        fallbackPools.every((pool) => pool.length === 0) &&
+        firstRejection
+      ) {
+        throw firstRejection;
+      }
       const extras = shuffle(fallbackPools.flat()).filter((f) => {
         if (seen.has(f.id)) return false;
         seen.add(f.id);

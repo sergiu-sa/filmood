@@ -1,4 +1,9 @@
-import { tmdbJson, tmdbJsonOptional, TMDBError } from "@/lib/tmdb";
+import {
+  tmdbJson,
+  tmdbJsonOptional,
+  TMDBError,
+  settleTMDB,
+} from "@/lib/tmdb-fetch";
 
 function mockFetch(status: number, body: unknown = {}) {
   // The generic carries fetch's signature so `calls[0][1]` (the init object)
@@ -34,10 +39,28 @@ describe("tmdbJson", () => {
     expect(init).toEqual({ next: { revalidate: 86400 } });
   });
 
-  it("sends no cache options when revalidate is false", async () => {
+  // Explicit no-store, not an omitted option: "uncached" must not depend on a
+  // route happening to lack an `export const revalidate`.
+  it("asks for no-store when revalidate is false", async () => {
     const spy = mockFetch(200);
     await tmdbJson("/search/movie", { query: "dune" }, false);
-    expect(spy.mock.calls[0][1]).toBeUndefined();
+    expect(spy.mock.calls[0][1]).toEqual({ cache: "no-store" });
+  });
+
+  // `new URL` normalises dot segments, so an unguarded `..` would climb out of
+  // /3 and reach another endpoint with the real key attached.
+  // Checked against the normalised pathname, because `%2e%2e` folds to the
+  // same place as `..` while passing any substring test on the input.
+  it.each([
+    "/person/1/../../authentication/token/new",
+    "/person/1/%2e%2e/%2e%2e/authentication/token/new",
+    "/person/1/%2E%2E/%2E%2E/authentication/token/new",
+  ])("rejects %s without sending the key anywhere", async (path) => {
+    const spy = mockFetch(200);
+    await expect(tmdbJson(path)).rejects.toThrow(/Invalid TMDB path/);
+    // The point of the guard: nothing reaches the network, so the real
+    // api_key is never attached to a path we did not intend.
+    expect(spy).not.toHaveBeenCalled();
   });
 
   it("throws TMDBError carrying the upstream status", async () => {
@@ -56,9 +79,16 @@ describe("tmdbJson", () => {
 });
 
 describe("tmdbJsonOptional", () => {
-  it("absorbs an upstream failure into an empty object", async () => {
+  it("absorbs a 404 into an empty object", async () => {
     mockFetch(404);
     await expect(tmdbJsonOptional("/movie/999/similar")).resolves.toEqual({});
+  });
+
+  // The distinction the docstring promises: a wrong key or a rate limit is our
+  // problem and must not degrade into a silent 200 with empty results.
+  it.each([401, 429, 500, 503])("rethrows %i rather than absorbing it", async (status) => {
+    mockFetch(status);
+    await expect(tmdbJsonOptional("/movie/1/similar")).rejects.toBeInstanceOf(TMDBError);
   });
 
   // The distinction that matters: a misconfigured deployment must still 500
@@ -67,5 +97,48 @@ describe("tmdbJsonOptional", () => {
     mockFetch(200);
     delete process.env.TMDB_API_KEY;
     await expect(tmdbJsonOptional("/movie/1/similar")).rejects.toThrow();
+  });
+  // Filed separately: this one never escapes /3, it is simply not a path.
+  it("rejects a path with no leading slash", async () => {
+    const spy = mockFetch(200);
+    await expect(tmdbJson("movie/1")).rejects.toThrow(/Invalid TMDB path/);
+    expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe("settleTMDB", () => {
+  // The bug this guards: compacting the array shifts every later result down a
+  // slot, so a caller reading values[0] after call 0 failed silently gets call
+  // 1's payload under call 0's meaning — with no type error to catch it.
+  it("keeps results at their original index when an earlier call fails", async () => {
+    const { values } = await settleTMDB<{ tag: string }>([
+      Promise.reject(new Error("first fails")),
+      Promise.resolve({ tag: "second" }),
+    ]);
+
+    expect(values).toHaveLength(2);
+    expect(values[0]).toBeUndefined();
+    expect(values[1]).toEqual({ tag: "second" });
+  });
+
+  it("reports the first rejection and keeps every success", async () => {
+    const { values, firstRejection } = await settleTMDB<number>([
+      Promise.resolve(1),
+      Promise.reject(new Error("boom")),
+      Promise.resolve(3),
+    ]);
+
+    expect(values).toEqual([1, undefined, 3]);
+    expect(firstRejection).toBeInstanceOf(Error);
+  });
+
+  it("reports no rejection when everything succeeds", async () => {
+    const { values, firstRejection } = await settleTMDB([
+      Promise.resolve("a"),
+      Promise.resolve("b"),
+    ]);
+
+    expect(values).toEqual(["a", "b"]);
+    expect(firstRejection).toBeNull();
   });
 });
