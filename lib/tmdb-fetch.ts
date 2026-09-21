@@ -112,13 +112,17 @@ export async function tmdbJsonOptional<T = Record<string, unknown>>(
  */
 export async function settleTMDB<T>(
   calls: Promise<T>[],
-): Promise<{ values: T[]; firstRejection: unknown | null }> {
+): Promise<{ values: (T | undefined)[]; firstRejection: unknown | null }> {
   const settled = await Promise.allSettled(calls);
   const rejected = settled.find(
     (r): r is PromiseRejectedResult => r.status === "rejected",
   );
   return {
-    values: settled.flatMap((r) => (r.status === "fulfilled" ? [r.value] : [])),
+    // Positional, with `undefined` for a rejected call. Compacting the array
+    // would silently shift every later result down a slot, so a caller reading
+    // `values[1]` after call 0 failed would get call 1's data under call 0's
+    // meaning — and no type error to catch it.
+    values: settled.map((r) => (r.status === "fulfilled" ? r.value : undefined)),
     firstRejection: rejected ? rejected.reason : null,
   };
 }

@@ -158,7 +158,8 @@ export async function buildSharedDeck(
   });
 
   // Partial failure is survivable — the allocation below redistributes.
-  const { values: moodResults, firstRejection } = await settleTMDB(fetchResults);
+  const { values, firstRejection } = await settleTMDB(fetchResults);
+  const moodResults = values.filter((v) => v !== undefined);
 
   // Build deck: pick films per mood allocation, dedup across moods.
   // If a film appears under multiple moods, merge the mood_keys.

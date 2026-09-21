@@ -207,15 +207,20 @@ export async function GET(request: NextRequest) {
 
       // Supplementary pools only top up an already-thin result, so one
       // failing mood must not discard the films we already have.
-      const { values: fallbackPools, firstRejection } = await settleTMDB(
+      const { values, firstRejection } = await settleTMDB(
         moodKeys.map((key) => {
           const query = buildDiscoverParams(buildTMDBParams(key), refinements);
           return fetchDiscoverPool(query);
         }),
       );
+      const fallbackPools = values.map((pool) => pool ?? []);
 
       // Nothing anywhere plus a real failure is an outage, not "no matches".
-      if (films.length === 0 && fallbackPools.every((p) => p.length === 0) && firstRejection) {
+      if (
+        films.length === 0 &&
+        fallbackPools.every((pool) => pool.length === 0) &&
+        firstRejection
+      ) {
         throw firstRejection;
       }
       const extras = shuffle(fallbackPools.flat()).filter((f) => {

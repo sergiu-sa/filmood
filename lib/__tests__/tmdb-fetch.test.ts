@@ -1,4 +1,9 @@
-import { tmdbJson, tmdbJsonOptional, TMDBError } from "@/lib/tmdb-fetch";
+import {
+  tmdbJson,
+  tmdbJsonOptional,
+  TMDBError,
+  settleTMDB,
+} from "@/lib/tmdb-fetch";
 
 function mockFetch(status: number, body: unknown = {}) {
   // The generic carries fetch's signature so `calls[0][1]` (the init object)
@@ -98,5 +103,42 @@ describe("tmdbJsonOptional", () => {
     const spy = mockFetch(200);
     await expect(tmdbJson("movie/1")).rejects.toThrow(/Invalid TMDB path/);
     expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe("settleTMDB", () => {
+  // The bug this guards: compacting the array shifts every later result down a
+  // slot, so a caller reading values[0] after call 0 failed silently gets call
+  // 1's payload under call 0's meaning — with no type error to catch it.
+  it("keeps results at their original index when an earlier call fails", async () => {
+    const { values } = await settleTMDB<{ tag: string }>([
+      Promise.reject(new Error("first fails")),
+      Promise.resolve({ tag: "second" }),
+    ]);
+
+    expect(values).toHaveLength(2);
+    expect(values[0]).toBeUndefined();
+    expect(values[1]).toEqual({ tag: "second" });
+  });
+
+  it("reports the first rejection and keeps every success", async () => {
+    const { values, firstRejection } = await settleTMDB<number>([
+      Promise.resolve(1),
+      Promise.reject(new Error("boom")),
+      Promise.resolve(3),
+    ]);
+
+    expect(values).toEqual([1, undefined, 3]);
+    expect(firstRejection).toBeInstanceOf(Error);
+  });
+
+  it("reports no rejection when everything succeeds", async () => {
+    const { values, firstRejection } = await settleTMDB([
+      Promise.resolve("a"),
+      Promise.resolve("b"),
+    ]);
+
+    expect(values).toEqual(["a", "b"]);
+    expect(firstRejection).toBeNull();
   });
 });

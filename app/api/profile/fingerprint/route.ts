@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
       // Up to 30 concurrent lookups — the most rate-limit-prone call site in
       // the app. A throttled few must not discard the rest, nor the mood data
       // above, which never touched TMDB.
-      const { values: results, firstRejection } = await settleTMDB(
+      const { values, firstRejection } = await settleTMDB(
         movieIds.map(async (id) => {
           const data = await tmdbJsonOptional<{ genres?: { id: number }[] }>(
             `/movie/${id}`,
@@ -70,6 +70,8 @@ export async function GET(request: NextRequest) {
           return data.genres ?? [];
         }),
       );
+
+      const results = values.map((g) => g ?? []);
 
       // Every lookup failing is an outage, not a user with no genres.
       if (results.every((g) => g.length === 0) && firstRejection) {
