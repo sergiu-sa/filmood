@@ -52,7 +52,7 @@ export const moodMap: Record<string, MoodConfig> = {
     certification: { country: "US", lte: "PG" },
     sortBy: "popularity.desc",
     voteCountGte: 300,
-    signatureFilm: { tmdbId: 569094, title: "Spider-Man: Across the Spider-Verse", year: 2023, posterPath: "/8Vt6mWEReuy4Of61Lnj5Xj704m8.jpg" },
+    signatureFilm: { tmdbId: 1184918, title: "The Wild Robot", year: 2024, posterPath: "/wTnV3PCVW5O92JMrFvvrRcV39RU.jpg" },
   },
   datenight: {
     key: "datenight",
@@ -76,8 +76,9 @@ export const moodMap: Record<string, MoodConfig> = {
     description: "Moving, cathartic, beautiful",
     accentColor: "blue",
     genres: [18],
-    // Crime let grief-tagged gangster films (The Godfather) lead the list.
-    excludeGenres: [35, 28, 27, 80],
+    // Crime let grief-tagged gangster films (The Godfather) lead the list, and
+    // animation (both Lion Kings) lives in `family`.
+    excludeGenres: [35, 28, 27, 80, 16],
     keywords: [TMDB_KEYWORDS.tearjerker.id, TMDB_KEYWORDS.grief.id, TMDB_KEYWORDS.lossOfLovedOne.id],
     essential: "genres",
     relatedMoods: ["nostalgic", "inspiring", "datenight"],

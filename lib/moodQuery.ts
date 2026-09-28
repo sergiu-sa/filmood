@@ -6,6 +6,17 @@ import type { MoodConfig } from "@/lib/types";
 /** Shorts and TV specials never belong in a mood result. */
 export const RUNTIME_FLOOR = 60;
 
+/** TMDB params for a mood's certification cap; none when it has no cap. */
+export function certificationParams(cap: MoodConfig["certification"]): Record<string, string> {
+  if (!cap) return {};
+  return {
+    certification_country: cap.country,
+    // TMDB ranks US "NR" below G, so an upper bound alone lets unrated films through.
+    "certification.gte": "G",
+    "certification.lte": cap.lte,
+  };
+}
+
 export function paramsForConfig(mood: MoodConfig): Record<string, string> {
   const params: Record<string, string> = {
     sort_by: mood.sortBy,
@@ -21,11 +32,7 @@ export function paramsForConfig(mood: MoodConfig): Record<string, string> {
   if (mood.excludeGenres?.length) params.without_genres = mood.excludeGenres.join(",");
   if (mood.voteAverageGte) params["vote_average.gte"] = String(mood.voteAverageGte);
   if (mood.keywords?.length) params.with_keywords = mood.keywords.join("|");
-  if (mood.certification) {
-    params.certification_country = mood.certification.country;
-    params["certification.lte"] = mood.certification.lte;
-  }
-  return params;
+  return { ...params, ...certificationParams(mood.certification) };
 }
 
 function moodFor(key: string): MoodConfig {
@@ -91,12 +98,7 @@ export function buildMergedMoodParams(moodKeys: string[]): Record<string, string
   if (allKeywords.size > 0) params.with_keywords = [...allKeywords].join("|");
 
   // One query serves every merged mood, so a mood's safety cap covers them all.
-  // ponytail: first cap wins; only `family` has one. Take the strictest if a second appears.
+  // Only `family` has a cap today; take the strictest if a second one appears.
   const cap = configs.find((c) => c.certification)?.certification;
-  if (cap) {
-    params.certification_country = cap.country;
-    params["certification.lte"] = cap.lte;
-  }
-
-  return params;
+  return { ...params, ...certificationParams(cap) };
 }

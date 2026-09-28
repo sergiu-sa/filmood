@@ -43,13 +43,18 @@ describe("buildMoodParams", () => {
     expect(params.with_keywords).toBeDefined();
   });
 
-  it("caps family at US PG, and only family", () => {
-    const family = buildMoodParams("family");
-    expect(family.certification_country).toBe("US");
-    expect(family["certification.lte"]).toBe("PG");
+  // The lower bound matters: TMDB ranks US "NR" below G, so lte=PG alone
+  // admits every unrated film.
+  it("caps family at US G–PG, and only family", () => {
+    expect(buildMoodParams("family")).toMatchObject({
+      certification_country: "US",
+      "certification.gte": "G",
+      "certification.lte": "PG",
+    });
     for (const mood of allMoods.filter((m) => m.key !== "family")) {
       const params = buildMoodParams(mood.key);
       expect(params.certification_country, mood.key).toBeUndefined();
+      expect(params["certification.gte"], mood.key).toBeUndefined();
       expect(params["certification.lte"], mood.key).toBeUndefined();
     }
   });
@@ -149,9 +154,11 @@ describe("buildMergedMoodParams", () => {
   });
 
   it("keeps the family cap on any merge that includes family", () => {
-    const params = buildMergedMoodParams(["laugh", "family"]);
-    expect(params.certification_country).toBe("US");
-    expect(params["certification.lte"]).toBe("PG");
+    expect(buildMergedMoodParams(["laugh", "family"])).toMatchObject({
+      certification_country: "US",
+      "certification.gte": "G",
+      "certification.lte": "PG",
+    });
     expect(buildMergedMoodParams(["laugh", "dark"]).certification_country).toBeUndefined();
   });
 

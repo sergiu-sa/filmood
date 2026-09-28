@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { moodMap, normalizeMoodKeys } from "@/lib/moodMap";
-import { buildMoodParams, buildMergedMoodParams } from "@/lib/moodQuery";
+import {
+  buildMoodParams,
+  buildMergedMoodParams,
+  certificationParams,
+} from "@/lib/moodQuery";
 import { resolveMoodText } from "@/lib/moodResolver";
 import { applyRefinements, parseRefinements } from "@/lib/moodFilters";
 import { tmdbError } from "@/lib/api-errors";
@@ -135,11 +139,16 @@ export async function GET(request: NextRequest) {
     if (films.length < 5 && moodKeys.length > 1) {
       const seen = new Set(films.map((f) => f.id));
 
+      // A family pick caps the whole search, not just family's own pool.
+      const cap = certificationParams(
+        moodKeys.map((k) => moodMap[k].certification).find(Boolean),
+      );
+
       // Supplementary pools only top up an already-thin result, so one
       // failing mood must not discard the films we already have.
       const { values, firstRejection } = await settleTMDB(
         moodKeys.map((key) => {
-          const query = { language: "en-US", ...buildMoodParams(key) };
+          const query = { language: "en-US", ...buildMoodParams(key), ...cap };
           applyRefinements(query, refinements);
           return fetchDiscoverPool(query);
         }),
