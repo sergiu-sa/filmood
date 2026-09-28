@@ -163,7 +163,7 @@ export default function Footer() {
               Project
             </p>
             <nav style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              <FooterLink href="https://github.com/Tubhaahmad/filmood" external>
+              <FooterLink href="https://github.com/sergiu-sa/filmood" external>
                 GitHub
               </FooterLink>
               <FooterLink href="https://www.noroff.no" external>
