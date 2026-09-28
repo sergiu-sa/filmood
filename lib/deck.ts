@@ -1,3 +1,4 @@
+import { normalizeMoodKeys } from "@/lib/moodMap";
 import { buildMoodParams } from "@/lib/moodQuery";
 import { tmdbJsonOptional, settleTMDB } from "@/lib/tmdb-fetch";
 import {
@@ -74,7 +75,8 @@ export async function buildSharedDeck(
   const moodCounts: Record<string, number> = {};
   for (const p of participants) {
     if (!p.mood_selections) continue;
-    for (const mood of p.mood_selections) {
+    // Sessions that locked in before a mood was retired still carry its key.
+    for (const mood of normalizeMoodKeys(p.mood_selections)) {
       moodCounts[mood] = (moodCounts[mood] || 0) + 1;
     }
   }

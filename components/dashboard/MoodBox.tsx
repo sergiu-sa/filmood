@@ -8,7 +8,7 @@ import CollapsedBoxRail from "./CollapsedBoxRail";
 const MOOD_COUNT = allMoods.length;
 
 // Editorial reel: cycles one featured mood at a time. Order curated by emotional variety.
-const FEATURED_KEYS = ["unsettled", "laugh", "beautiful", "cry", "easy", "thrilling", "inspiring", "mindbending"];
+const FEATURED_KEYS = ["unsettled", "laugh", "escape", "cry", "easy", "thrilling", "inspiring", "mindbending"];
 const featuredMoods = FEATURED_KEYS
   .map((k) => allMoods.find((m) => m.key === k))
   .filter((m): m is (typeof allMoods)[number] => !!m);

@@ -71,6 +71,7 @@ async function coverage(): Promise<boolean> {
   console.log(`| mood | ${COLUMNS.map(([name]) => name).join(" | ")} |`);
   console.log(`|---|${COLUMNS.map(() => "---:").join("|")}|`);
   const tops: string[] = [];
+  const caps: string[] = [];
   let ok = true;
 
   for (const mood of allMoods) {
@@ -81,6 +82,8 @@ async function coverage(): Promise<boolean> {
       cells.push(n < MIN_RESULTS ? `**${n}**` : String(n));
       if (name !== "none") continue;
       if (n < MIN_RESULTS) ok = false;
+      const cap = mood.certification;
+      if (cap) caps.push(`- ${mood.key}: ${n} films at ${cap.country} ≤ ${cap.lte}`);
       const titles = (page.results ?? [])
         .slice(0, 3)
         .map((f) => `${f.title} (${f.release_date?.slice(0, 4) || "?"})`);
@@ -90,6 +93,7 @@ async function coverage(): Promise<boolean> {
   }
 
   console.log(`\nTop 3, no refinements:\n${tops.join("\n")}`);
+  if (caps.length) console.log(`\nCertification caps (in every query):\n${caps.join("\n")}`);
   if (!ok) console.log(`\nFAIL: a mood is below ${MIN_RESULTS} with no refinements.`);
   return ok;
 }
@@ -126,7 +130,8 @@ async function find(name: string | undefined): Promise<boolean> {
     return false;
   }
   for (const hit of (await searchKeyword(name)).slice(0, 10)) {
-    console.log(`${hit.id}  ${hit.name}`);
+    const films = (await discover({ with_keywords: String(hit.id) })).total_results ?? 0;
+    console.log(`${hit.id}  ${hit.name}  (${films} films)`);
   }
   return true;
 }

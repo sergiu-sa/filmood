@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { MatchResult, Provider } from "@/lib/types";
-import { moodMap } from "@/lib/moodMap";
+import { moodMap, normalizeMoodKeys } from "@/lib/moodMap";
 import { genreMap } from "@/lib/genres";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import { ACCENT_VARS } from "@/lib/constants";
@@ -28,13 +28,12 @@ export default function TopPickCard({
   const rating = movie.vote_average?.toFixed(1) || "---";
   const posterUrl = tmdbImageUrl(movie.poster_path, "w500");
 
-  const moodTags = (movie.mood_keys ?? [])
-    .map((k) => {
-      const config = moodMap[k];
-      if (!config) return null;
-      return { label: config.tagLabel, accent: config.accentColor };
-    })
-    .filter(Boolean) as { label: string; accent: string }[];
+  // Normalising also dedupes: a deck built before two moods merged can tag
+  // one film with both keys.
+  const moodTags = normalizeMoodKeys(movie.mood_keys ?? []).map((k) => ({
+    label: moodMap[k].tagLabel,
+    accent: moodMap[k].accentColor,
+  }));
 
   const genres = (movie.genre_ids ?? [])
     .map((id) => genreMap[id])

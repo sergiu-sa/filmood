@@ -4,255 +4,83 @@
 
 🔗 **Live demo:** [filmood-pi.vercel.app](https://filmood-pi.vercel.app/)
 
-Filmood is a film discovery and decision-making web app that starts from the user's emotional state rather than from content catalogs. Users pick a mood, and Filmood returns films that match it. The app supports both solo discovery and a real-time group session where several people swipe on a shared film deck and the app picks a winner based on everyone's votes.
+Filmood starts from how you want to feel rather than from a catalogue. Pick a mood and it returns films that fit, drawn from what's streaming on Norwegian subscription services. With friends, everyone picks a mood in private, the group swipes through a shared deck, and the app picks a winner from everyone's votes.
 
 ## Features
 
-### Solo experience
+**Solo**
+- **12 moods**, from *Need to laugh* to *Bend my mind*. Combine several, narrow by era, tempo, runtime, language or genres to skip, or describe what you want in your own words ("cozy 80s heist").
+- **Search and browse.** Search by title, actor or director. Browse trending, top rated, new releases, in cinemas, by genre, or streaming in Norway.
+- **Film pages.** Cast and crew, trailers and clips, an image gallery, where to stream it in any country (with local age rating and release date), similar films, reviews and external links.
+- **Profile.** Your top moods and genres, films you opened but didn't save, an activity timeline, your saved films, your streaming services, and account settings.
+- **Guests welcome.** Everything except saving films and the profile works without an account.
 
-- **Mood-based discovery.** Pick one or more moods (laugh, escape, cry, thrilling, thoughtful, and six more) and get a curated film list from TMDB. Refine by runtime, language, or excluded genres.
-- **Search and browse.** Search films by title, actor, or director. Browse by category (trending, top rated, new releases, in cinemas, by genre, streaming in Norway).
-- **Film details.** Full cast, Norwegian streaming providers, YouTube trailer, overview, and metadata for every film.
-- **Watchlist.** Save films to a personal watchlist (w.i.p.).
-- **Guest-friendly.** Everything except the watchlist works without an account. A gentle prompt appears when a feature needs one.
+**Group sessions**
+- The host creates a session and shares a 6-character code. Up to 10 people join; guests only need a nickname.
+- Everyone picks moods in private. The app builds one 15-film deck from all the picks.
+- Everyone swipes yes / no / maybe, and progress syncs live.
+- Votes rank the films into *Perfect Match*, *Strong contenders* and *Not tonight*, with one Top Pick.
 
-### Group sessions
+**Design:** dark and light themes, six mood accent colours, Lora and Plus Jakarta Sans, and bottom sheets on mobile.
 
-- **Create a session.** One person (the host) creates a session and shares a 6-character code.
-- **Join with a nickname.** Guests can join without creating an account.
-- **Private mood selection.** Each participant picks their moods in private. The app merges everyone's picks into a balanced 15-film deck.
-- **Swipe deck.** Everyone swipes yes / no / maybe on the shared deck with real-time updates via Supabase Realtime.
-- **Ranked results.** The app aggregates votes into three tiers — Perfect Match, Strong Contenders, and Not Tonight — and picks a Top Pick.
+## Tech stack
 
-### Design
+Next.js 16 (App Router) · React 19 · TypeScript 5 · Tailwind CSS 4 · Supabase (auth, Postgres, Realtime) · TMDB API v3 · Zod 4 · Vitest 4 + React Testing Library · Playwright · Vercel
 
-- **Dual theme.** Full dark and light themes built on CSS custom properties. The theme toggle is accessible and hydration-safe.
-- **Responsive.** Works on desktop, tablet, and mobile with a bottom-sheet pattern on small screens.
-- **v9 design system.** Lora (serif) for headings, Plus Jakarta Sans for body. Six accent color families map to moods and phases of the app.
+## How it works
 
----
+- **The TMDB key never reaches the browser.** All film data goes through the app's own `/api/movies/*` routes, and one helper (`lib/tmdb-fetch.ts`) owns the key, URL building and caching. Upstream failures surface as errors instead of empty results.
+- **Moods are measured, not guessed.** Each mood is pure data turned into a TMDB query. `npm run check:moods` runs every mood against live TMDB, and prints how many films each one returns; `--keywords` verifies every keyword ID by name.
+- **Group sessions work for guests.** Guests carry a participant ID in `localStorage`; signed-in users send a Supabase JWT. One pair of helpers in `lib/group-api.ts` resolves both.
+- **Realtime with a safety net.** Supabase Realtime pushes session and participant changes, and a 2-second poll covers dropped connections and swipe counts.
+- **Optimistic swipes.** A vote leaves the screen immediately. A failed request retries once instead of snapping the card back.
 
-## Tech Stack
+## Run it locally
 
-| Tool | Version | Purpose |
-|------|---------|---------|
-| Next.js | 16.1.6 | App Router, server-side rendering, API routes |
-| React | 19.2.3 | UI library |
-| TypeScript | 5.x | Type safety (strict mode) |
-| Tailwind CSS | 4.x | Utility styling (used alongside CSS custom properties) |
-| Supabase | 2.99.1 | Authentication, PostgreSQL, Realtime |
-| Zod | 4.3.6 | Form validation |
-| TMDB API | v3 | Movie data (discover, search, details, providers, trailers) |
-| Vitest | 4.1.3 | Unit and component tests |
-| React Testing Library | 16.3.2 | Component rendering and interaction tests |
-| Playwright | 1.59.1 | End-to-end tests |
-| Vercel | — | Hosting, auto-deploys from `main` |
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 20 or higher (Next.js 16 dropped Node 18 support)
-- npm
-- A [TMDB API key](https://www.themoviedb.org/settings/api) (free)
-- A [Supabase project](https://supabase.com) (free tier)
-
-### Installation
+You need Node.js 20 (pinned in `.nvmrc`), a free [TMDB API key](https://www.themoviedb.org/settings/api) and a free [Supabase](https://supabase.com) project.
 
 ```bash
-git clone https://github.com/Tubhaahmad/filmood.git
+git clone https://github.com/sergiu-sa/filmood.git
 cd filmood
 npm install
+cp .env.example .env.local   # then fill in the four values
+npm run dev                  # http://localhost:3000
 ```
 
-### Environment variables
+`.env.local` needs `NEXT_PUBLIC_SUPABASE_URL` (the project URL, without `/rest/v1`), `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` and `TMDB_API_KEY`. The last two are server-only.
 
-Copy `.env.example` to `.env.local` and fill in the values. The `.env.local` file is gitignored and must never be committed.
+**Database:** in the Supabase SQL editor, run every file in `supabase/migrations/` in numeric order. They create the watchlist, group session, mood history, streaming preference and film view tables and lock them down with row-level security. `supabase/seed_group_session.sql` adds optional sample data for trying the group flow.
+
+### Scripts
 
 ```bash
-cp .env.example .env.local
+npm run lint                  # ESLint
+npm run typecheck             # tsc (app code; typecheck:tests for test code)
+npm test                      # Vitest unit and component tests
+npm run test:e2e              # Playwright (starts the dev server itself)
+npm run check:moods           # Mood coverage against live TMDB (needs TMDB_API_KEY)
+npm run seed:e2e-user         # Creates the Supabase user the e2e suite logs in as
 ```
 
-The required variables are:
+The e2e suite reads its login from `.env.test.local`; copy `.env.test.example` and run `npm run seed:e2e-user` once.
 
-```env
-# Supabase — get these from your Supabase project settings
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+## Deploying
 
-# TMDB — get this from themoviedb.org/settings/api
-TMDB_API_KEY=your_tmdb_api_key
+It deploys to Vercel as a standard Next.js project.
+- Set the four environment variables for Production, Preview and Development. Env changes only apply to new builds.
+- In Supabase, set **Authentication → URL Configuration → Site URL** to the production domain so sign-up confirmation links work.
+- Apply any new migration in Supabase before deploying code that depends on it.
+
+## Project structure
+
 ```
-
-### Database setup
-
-Run the SQL migrations in `supabase/migrations/` against your Supabase project in order:
-
-1. `000_watchlists.sql` — watchlists table
-2. `001_group_sessions.sql` — sessions, session_participants, swipes tables with RLS and Realtime
-3. `002_add_is_ready.sql` — adds `is_ready` flag to session_participants
-4. `003_mood_refinements.sql` — adds `mood_text`, `era`, `tempo`, `extra_keywords` to session_participants
-
-Run them in the Supabase SQL Editor or via the Supabase CLI. An optional `supabase/seed_group_session.sql` file is included with sample data for testing the group flow locally.
-
-### E2E test user (optional, only if you plan to run Playwright)
-
-The Playwright suite logs in as a dedicated Supabase user. To provision it, copy the template and run the seed script:
-
-```bash
-cp .env.test.example .env.test.local
-# Edit .env.test.local and pick a strong password
-npm run seed:e2e-user
+app/            Pages (home, results, film/[id], browse, group, profile, auth) and api/ route handlers
+components/     UI, grouped by area: dashboard, film, group, profile, results, mood, ui
+lib/            Mood data and queries, TMDB and Supabase helpers, deck builder, hooks
+supabase/       SQL migrations and optional seed data
+scripts/        check-moods, e2e user seeding, signature poster fetch
+tests/e2e/      Playwright specs and TMDB stubs
 ```
-
-The seed script is idempotent — running it again when the user already exists is a no-op. `.env.test.local` is gitignored and must never be committed.
-
-### Run the dev server
-
-```bash
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000).
-
----
-
-## Scripts
-
-```bash
-# Development
-npm run dev              # Start dev server on localhost:3000
-npm run build            # Production build
-npm run start            # Start production server
-npm run lint             # Run ESLint
-npm run lint:fix         # Auto-fix lint issues
-
-# Unit and component tests (Vitest)
-npm test                 # Run all Vitest suites once
-npm run test:watch       # Watch mode
-
-# End-to-end tests (Playwright)
-npm run test:e2e         # Run Playwright suite (boots dev server automatically)
-npm run test:e2e:ui      # Playwright UI mode
-npm run test:e2e:debug   # Debug mode with inspector
-
-# One-off setup
-npm run seed:e2e-user    # Provision the Supabase user used by the E2E suite
-```
-
----
-
-## Deploying to Vercel
-
-The app is a standard Next.js 16 project and deploys to Vercel without custom build steps. Import the repo in the Vercel dashboard, then configure:
-
-### Environment variables (Production + Preview)
-
-Set these under **Settings → Environment Variables**:
-
-| Variable | Notes |
-|----------|-------|
-| `NEXT_PUBLIC_SUPABASE_URL` | Same value as local. Exposed to the client. |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Same value as local. Exposed to the client. |
-| `SUPABASE_SERVICE_ROLE_KEY` | Server-only. Used by admin routes and the E2E seed script. Never expose. |
-| `TMDB_API_KEY` | Server-only. Used by `/api/movies/*` route handlers. |
-
-### Supabase configuration
-
-Set **Supabase → Authentication → URL Configuration → Site URL** to the production Vercel domain so email-confirmation links sent during signup resolve correctly. If you later enable OAuth providers or magic-link auth, also add preview/production domains under **Redirect URLs**.
-
-### Database
-
-Make sure all four migrations in `supabase/migrations/` have been applied to the Supabase project used by production. New migrations must be applied manually in the Supabase SQL Editor before deploying code that depends on them.
-
-### Node version
-
-The repo pins Node 20 via `.nvmrc`, which Vercel reads for both the build and function runtime. `package.json` also declares `engines.node: ">=20"` for npm's benefit.
-
-### Troubleshooting
-
-**Build fails with `Error: supabaseUrl is required.` during prerender of `/_not-found`.** The Supabase env vars aren't set (or weren't set at the time the build started). `lib/supabase.ts` constructs the client at module load, and Next's static prerender imports it via `AuthProvider`. Set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` for **all three** environments (Production, Preview, Development) and redeploy — env changes only apply to new builds.
-
----
-
-## Project Structure
-
-``` bash
-app/                        # Next.js App Router
-├── layout.tsx              # Root layout (AuthProvider, Navbar, Footer, fonts)
-├── page.tsx                # Dashboard homepage
-├── globals.css             # CSS custom properties, keyframes, global styles
-├── results/                # Solo results page
-├── film/[id]/              # Film detail (server component)
-├── browse/                 # Full browse/search page
-├── login/ · signup/        # Auth pages
-├── watchlist/ · profile/   # Protected pages
-├── group/                  # Group session flow
-│   ├── page.tsx            # Create or join
-│   └── [code]/
-│       ├── page.tsx        # Lobby
-│       ├── mood/           # Private mood selection
-│       ├── swipe/          # Swipe deck
-│       └── results/        # Group results
-└── api/                    # Server-side route handlers
-    ├── movies/             # TMDB proxy routes (discover, search, browse, [id], etc.)
-    ├── watchlist/          # Watchlist CRUD
-    └── group/              # Group session lifecycle + gameplay
-
-components/                 # React components
-├── dashboard/              # MoodBox, SearchBox, ExploreBox, panels, HeroSection
-├── group/                  # Session create/join, lobby, swipe deck, results
-├── film/                   # FilmCard, FilmGrid, WatchProviders, TrailerEmbed
-├── __tests__/              # Component tests (React Testing Library)
-├── Navbar.tsx · Footer.tsx · Breadcrumb.tsx
-└── AuthProvider.tsx · AuthGuard.tsx
-
-lib/
-├── types.ts                # TypeScript interfaces
-├── moodMap.ts              # Mood-to-TMDB parameter mapping
-├── group.ts · group-api.ts # Group session helpers
-├── deck.ts                 # Shared deck builder
-├── supabase.ts · supabase-server.ts  # Supabase clients
-├── getAuthToken.ts         # Fresh JWT helper for API calls
-├── useGroupRealtime.ts · useParticipantId.ts · useMediaQuery.ts
-└── __tests__/              # Unit tests for lib modules and API routes
-
-supabase/
-├── migrations/             # Version-controlled SQL migrations
-└── seed_group_session.sql  # Optional sample data for local group-flow testing
-
-scripts/
-└── seed-e2e-user.ts        # Provisions the Playwright test user via Supabase admin API
-
-tests/
-├── setup.ts                # Vitest global setup
-└── e2e/                    # Playwright end-to-end tests
-    ├── fixtures/           # TMDB mocks, auth helpers
-    └── *.test.ts           # E2E specs
-
-public/                     # Static assets
-```
-
----
-
-## Architecture Notes
-
-**Authentication runs through Supabase directly.** `AuthProvider` wraps the app in React Context and listens to `supabase.auth.onAuthStateChange`. For API requests, components use `getAuthHeaders()` from `lib/getAuthToken.ts` which calls `supabase.auth.getSession()` at request time to get a fresh JWT — never reading the token from React state, which can hold stale values after Supabase auto-refreshes.
-
-**Group sessions support guest participants.** Most `/api/group/[code]/*` routes are auth-optional. Guests identify themselves with a `participantId` stored in `localStorage`. Authenticated users identify themselves with a Supabase JWT in the `Authorization` header. The shared helpers `resolveSession()` and `resolveParticipant()` in `lib/group-api.ts` handle both paths.
-
-**Realtime with a polling fallback.** The `useGroupRealtime` hook subscribes to Supabase `postgres_changes` on sessions, participants, and swipes. It also polls every 2 seconds as a safety net for unreliable connections. Callbacks are stored in refs so subscriptions don't thrash on every render.
-
-**Optimistic voting.** When a user swipes on a card, the vote is applied to local state immediately. If the POST fails, the vote is retried once after 800ms rather than rolled back — the card is already visually gone and reverting would be jarring. A `Math.max` guard on the card index prevents polling from snapping the deck backwards.
-
-**TMDB API key never reaches the client.** All TMDB calls go through `/api/movies/*` route handlers on the server. The client only ever talks to our own API.
-
-**Tailwind v4 layer workaround.** Custom CSS classes for layout are unreliable in Tailwind v4 production builds because of how layer specificity works. Layout-critical styles use inline `style={}` props, and `useMediaQuery` (hydration-safe) handles responsive breakpoints. CSS classes are reserved for animations and hide/show toggles.
-
----
 
 ## License
 

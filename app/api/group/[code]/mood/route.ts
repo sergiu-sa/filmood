@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
-import { moodMap } from "@/lib/moodMap";
+import { normalizeMoodKeys } from "@/lib/moodMap";
 import { resolveMoodText } from "@/lib/moodResolver";
 import { isEraKey, isTempoKey } from "@/lib/moodRefinements";
 import { resolveSession, resolveParticipant } from "@/lib/group-api";
@@ -38,7 +38,7 @@ export async function POST(
 
   // Validate + coerce
   const tileMoods = Array.isArray(moods)
-    ? moods.filter((m): m is string => typeof m === "string" && Object.hasOwn(moodMap, m))
+    ? normalizeMoodKeys(moods.filter((m): m is string => typeof m === "string"))
     : [];
   const trimmedText = typeof text === "string" ? text.trim() : "";
 

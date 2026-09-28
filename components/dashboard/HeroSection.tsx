@@ -16,7 +16,7 @@ import HeroPersonalized from "./HeroPersonalized";
 /** Cycling mood reel — uses real mood keys from moodMap so clicks wire up cleanly. */
 const MOOD_REEL: { key: string; word: string }[] = [
   { key: "laugh",       word: "Laugh" },
-  { key: "beautiful",   word: "Beautiful" },
+  { key: "escape",      word: "Transported" },
   { key: "thrilling",   word: "Thrilling" },
   { key: "cry",         word: "Melancholy" },
   { key: "mindbending", word: "Curious" },

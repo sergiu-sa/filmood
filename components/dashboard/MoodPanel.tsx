@@ -95,7 +95,7 @@ export default function MoodPanel({
       </div>
 
       {/* Full mood grid */}
-      <div className="grid grid-cols-2 gap-2 mb-4 sm:grid-cols-3 min-[900px]:grid-cols-4 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 mb-4 sm:grid-cols-3 min-[900px]:grid-cols-4">
         {allMoods.map((mood) => (
           <MoodCard
             key={mood.key}

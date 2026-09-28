@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
 import { internalError } from "@/lib/api-errors";
+import { countMoodPicks } from "@/lib/mood-history";
 
 // GET /api/profile/stats
 // Aggregates the four header stats: watchlist count, total mood picks,
@@ -37,12 +38,7 @@ export async function GET(request: NextRequest) {
       return internalError(sessionsRes.error, "Failed to load stats");
     }
 
-    const counts = new Map<string, number>();
-    for (const row of moodRes.data ?? []) {
-      counts.set(row.mood, (counts.get(row.mood) ?? 0) + 1);
-    }
-    const topMood =
-      [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+    const topMood = countMoodPicks(moodRes.data ?? [])[0]?.[0] ?? null;
 
     return NextResponse.json({
       watchlistCount: watchlistRes.count ?? 0,

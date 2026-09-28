@@ -1,12 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { moodMap } from "@/lib/moodMap";
+import { normalizeMoodKey, normalizeMoodKeys } from "@/lib/moodMap";
 
 /**
  * Record one or more mood picks for an authenticated user. Keys are
- * re-validated against `moodMap` before insert — defense in depth against
- * upstream validation drift. Duplicate keys within the same call are
- * deduplicated so spamming the same mood via tile-plus-text doesn't bloat
- * the table.
+ * normalised against `moodMap` before insert (retired keys become the mood
+ * that absorbed them, unknown ones are dropped) — defense in depth against
+ * upstream validation drift. Duplicates within the same call collapse to one
+ * row so spamming the same mood via tile-plus-text doesn't bloat the table.
  *
  * Intended to be called fire-and-forget from route handlers:
  *
@@ -21,18 +21,24 @@ export async function recordMoodPicks(
   userId: string,
   moodKeys: string[],
 ): Promise<number> {
-  const seen = new Set<string>();
-  const rows: { user_id: string; mood: string }[] = [];
-  for (const key of moodKeys) {
-    if (!key || seen.has(key)) continue;
-    if (!Object.hasOwn(moodMap, key)) continue;
-    seen.add(key);
-    rows.push({ user_id: userId, mood: key });
-  }
+  const rows = normalizeMoodKeys(moodKeys).map((mood) => ({ user_id: userId, mood }));
 
   if (rows.length === 0) return 0;
 
   const { error } = await supabase.from("mood_history").insert(rows);
   if (error) throw error;
   return rows.length;
+}
+
+/**
+ * Pick counts per current mood key, most-picked first. Rows with a retired
+ * key count towards the mood that absorbed it; unknown keys are skipped.
+ */
+export function countMoodPicks(rows: { mood: string }[]): [string, number][] {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const key = normalizeMoodKey(row.mood);
+    if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]);
 }

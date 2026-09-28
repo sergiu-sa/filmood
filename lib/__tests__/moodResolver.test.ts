@@ -1,4 +1,5 @@
-import { resolveMoodText } from "@/lib/moodResolver";
+import { moodMap } from "@/lib/moodMap";
+import { resolveMoodText, SYNONYMS } from "@/lib/moodResolver";
 import { TMDB_KEYWORDS } from "@/lib/tmdbKeywords";
 
 describe("resolveMoodText", () => {
@@ -57,5 +58,15 @@ describe("resolveMoodText", () => {
   it("empty input returns no matches", () => {
     const r = resolveMoodText("   ");
     expect(r.matched).toBe(false);
+  });
+
+  // resolveMoodText silently drops a mood that no longer exists, so a stale
+  // synonym would just stop matching instead of failing.
+  it("only maps synonyms to moods that exist", () => {
+    for (const [word, entry] of Object.entries(SYNONYMS)) {
+      for (const mood of entry.moods ?? []) {
+        expect(Object.hasOwn(moodMap, mood), `${word} → ${mood}`).toBe(true);
+      }
+    }
   });
 });

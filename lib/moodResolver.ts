@@ -15,7 +15,7 @@ interface SynonymEntry {
 
 // Keyed by lowercase unigram or bigram. Kept compact and curated — for long-tail
 // phrases the UI falls back to a nudge to pick a tile.
-const SYNONYMS: Record<string, SynonymEntry> = {
+export const SYNONYMS: Record<string, SynonymEntry> = {
   // Mood synonyms
   funny: { moods: ["laugh"] },
   hilarious: { moods: ["laugh"] },
@@ -36,12 +36,12 @@ const SYNONYMS: Record<string, SynonymEntry> = {
   nostalgic: { moods: ["nostalgic"] },
   nostalgia: { moods: ["nostalgic"] },
   "coming of age": { moods: ["nostalgic"], keywords: [TMDB_KEYWORDS.comingOfAge.id] },
-  tender: { moods: ["nostalgic", "beautiful"] },
+  tender: { moods: ["nostalgic", "cry"] },
 
   tearjerker: { moods: ["cry"] },
   sad: { moods: ["cry"] },
   cry: { moods: ["cry"] },
-  emotional: { moods: ["cry", "beautiful"] },
+  emotional: { moods: ["cry"] },
   heartfelt: { moods: ["cry", "inspiring"] },
 
   scary: { moods: ["unsettled"] },
@@ -55,9 +55,9 @@ const SYNONYMS: Record<string, SynonymEntry> = {
   intense: { moods: ["thrilling"] },
   heist: { moods: ["thrilling"], keywords: [TMDB_KEYWORDS.heist.id] },
 
-  thoughtful: { moods: ["thoughtful"] },
-  cerebral: { moods: ["thoughtful", "mindbending"] },
-  smart: { moods: ["thoughtful"] },
+  thoughtful: { moods: ["mindbending"] },
+  cerebral: { moods: ["mindbending"] },
+  smart: { moods: ["mindbending"] },
 
   "mind bending": { moods: ["mindbending"], keywords: [TMDB_KEYWORDS.mindBending.id] },
   mindbending: { moods: ["mindbending"], keywords: [TMDB_KEYWORDS.mindBending.id] },
@@ -66,11 +66,11 @@ const SYNONYMS: Record<string, SynonymEntry> = {
   dystopia: { moods: ["mindbending"], keywords: [TMDB_KEYWORDS.dystopia.id] },
   dystopian: { moods: ["mindbending"], keywords: [TMDB_KEYWORDS.dystopia.id] },
 
-  weird: { moods: ["weird"] },
-  surreal: { moods: ["weird"] },
-  quirky: { moods: ["weird"] },
-  strange: { moods: ["weird"] },
-  cult: { moods: ["weird"], keywords: [TMDB_KEYWORDS.cultFilm.id] },
+  weird: { moods: ["mindbending"] },
+  surreal: { moods: ["mindbending"] },
+  quirky: { moods: ["mindbending"] },
+  strange: { moods: ["mindbending"] },
+  cult: { moods: ["mindbending"], keywords: [TMDB_KEYWORDS.cultFilm.id] },
 
   dark: { moods: ["dark"] },
   gritty: { moods: ["dark"] },
@@ -86,9 +86,9 @@ const SYNONYMS: Record<string, SynonymEntry> = {
   uplifting: { moods: ["inspiring"] },
   motivational: { moods: ["inspiring"] },
 
-  beautiful: { moods: ["beautiful"] },
-  gorgeous: { moods: ["beautiful"] },
-  visual: { moods: ["beautiful", "escape"] },
+  beautiful: { moods: ["cry"] },
+  gorgeous: { moods: ["cry"] },
+  visual: { moods: ["escape"] },
 
   escape: { moods: ["escape"] },
   epic: { moods: ["escape", "thrilling"] },
@@ -114,7 +114,7 @@ const SYNONYMS: Record<string, SynonymEntry> = {
   slow: { tempo: "slowburn" },
   slowburn: { tempo: "slowburn" },
   "slow burn": { tempo: "slowburn" },
-  meditative: { tempo: "slowburn", moods: ["thoughtful"] },
+  meditative: { tempo: "slowburn", moods: ["mindbending"] },
 
   fast: { tempo: "fastpaced" },
   "fast paced": { tempo: "fastpaced" },

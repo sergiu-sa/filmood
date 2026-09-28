@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
 import { internalError } from "@/lib/api-errors";
+import { countMoodPicks } from "@/lib/mood-history";
 
 const TOP_N = 5;
 
@@ -22,13 +23,7 @@ export async function GET(request: NextRequest) {
 
     if (error) return internalError(error, "Failed to load mood history");
 
-    const counts = new Map<string, number>();
-    for (const row of data ?? []) {
-      counts.set(row.mood, (counts.get(row.mood) ?? 0) + 1);
-    }
-
-    const top = [...counts.entries()]
-      .sort((a, b) => b[1] - a[1])
+    const top = countMoodPicks(data ?? [])
       .slice(0, TOP_N)
       .map(([mood, count]) => ({ mood, count }));
 
