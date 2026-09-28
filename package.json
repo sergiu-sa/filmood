@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": "20.x"
+    "node": "24.x"
   },
   "scripts": {
     "dev": "mkdir -p .next && xattr -w com.apple.fileprovider.ignore 1 .next 2>/dev/null; next dev",

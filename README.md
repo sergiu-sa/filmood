@@ -37,7 +37,7 @@ Next.js 16 (App Router) · React 19 · TypeScript 5 · Tailwind CSS 4 · Supabas
 
 ## Run it locally
 
-You need Node.js 20 (pinned in `.nvmrc`), a free [TMDB API key](https://www.themoviedb.org/settings/api) and a free [Supabase](https://supabase.com) project.
+You need Node.js 24 (pinned in `.nvmrc`), a free [TMDB API key](https://www.themoviedb.org/settings/api) and a free [Supabase](https://supabase.com) project.
 
 ```bash
 git clone https://github.com/sergiu-sa/filmood.git
