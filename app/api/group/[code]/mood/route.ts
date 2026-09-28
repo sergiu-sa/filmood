@@ -38,7 +38,7 @@ export async function POST(
 
   // Validate + coerce
   const tileMoods = Array.isArray(moods)
-    ? moods.filter((m): m is string => typeof m === "string" && m in moodMap)
+    ? moods.filter((m): m is string => typeof m === "string" && Object.hasOwn(moodMap, m))
     : [];
   const trimmedText = typeof text === "string" ? text.trim() : "";
 

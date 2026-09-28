@@ -28,8 +28,8 @@ describe("buildMoodParams", () => {
   });
 
   it("ORs a mood's keywords with a pipe", () => {
-    expect(buildMoodParams("datenight").with_keywords).toBe(
-      `${TMDB_KEYWORDS.friendship.id}|${TMDB_KEYWORDS.romanticComedy.id}`,
+    expect(buildMoodParams("mindbending").with_keywords).toBe(
+      `${TMDB_KEYWORDS.mindBending.id}|${TMDB_KEYWORDS.dystopia.id}`,
     );
   });
 
@@ -50,6 +50,14 @@ describe("buildMoodParams", () => {
   it("throws on unknown mood key", () => {
     expect(() => buildMoodParams("nonexistent")).toThrow("Unknown mood: nonexistent");
   });
+
+  // `in` and bracket lookup both see Object.prototype, so these pass a naive guard.
+  it.each(["constructor", "__proto__", "toString"])(
+    "rejects the inherited key %s as unknown",
+    (key) => {
+      expect(() => buildMoodParams(key)).toThrow(`Unknown mood: ${key}`);
+    },
+  );
 
   it("always sets the runtime floor, watch region and monetization type", () => {
     for (const mood of allMoods) {
@@ -98,11 +106,7 @@ describe("buildMergedMoodParams", () => {
   it("unions keywords across merged moods with pipes", () => {
     const params = buildMergedMoodParams(["datenight", "nostalgic"]);
     expect(params.with_keywords).toBe(
-      [
-        TMDB_KEYWORDS.friendship.id,
-        TMDB_KEYWORDS.romanticComedy.id,
-        TMDB_KEYWORDS.comingOfAge.id,
-      ].join("|"),
+      [TMDB_KEYWORDS.romanticComedy.id, TMDB_KEYWORDS.comingOfAge.id].join("|"),
     );
   });
 

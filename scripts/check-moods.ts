@@ -186,12 +186,12 @@ async function probe(): Promise<boolean> {
   const { comma, pipe } = await probePair("without_genres", "27", "16", {
     with_genres: "35",
   });
+  // lib/moodQuery.ts comma-joins exclusions, so the comma is the one that must hold.
   const commaAny = comma === "narrows";
-  const pipeAny = pipe === "narrows";
   console.log(
-    `  excludes a film with any listed genre: comma ${mark(commaAny)} · pipe ${mark(pipeAny)}`,
+    `  excludes a film with any listed genre: comma ${mark(commaAny)} · pipe ${mark(pipe === "narrows")}`,
   );
-  return ok && (commaAny || pipeAny);
+  return ok && commaAny;
 }
 
 async function main() {

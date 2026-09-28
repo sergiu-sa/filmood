@@ -8,8 +8,8 @@ import {
 import type { DeckFilm, EraKey, TempoKey } from "@/lib/types";
 
 const DECK_SIZE = 15;
-// Cap how many text-derived keyword IDs we union across the group, to avoid
-// over-constraining TMDB and producing empty results for large groups.
+// Cap how many text-derived keyword IDs we union across the group: they're ORed
+// with each mood's own keywords, so a large group's would dilute every mood.
 const MAX_SHARED_EXTRA_KEYWORDS = 3;
 
 interface TMDBDiscoverResult {
