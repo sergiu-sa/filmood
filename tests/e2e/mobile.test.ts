@@ -9,14 +9,14 @@ test.describe("Mobile — BottomSheet dashboard panel", () => {
     await mockTmdb(page);
   });
 
-  test("tapping See all moods opens the bottom sheet and Close dismisses it", async ({
+  test("tapping Open the mood board opens the bottom sheet and Close dismisses it", async ({
     page,
   }) => {
     await page.goto("/");
 
-    // MoodCards inside MoodBox stopPropagation, so use "See all moods"
-    // (calls onExpand directly) to reliably open the panel on mobile.
-    await page.getByRole("button", { name: /see all moods/i }).tap();
+    // MoodBox's featured-mood reel stops propagation and can swallow a tap on
+    // the box, so use the CTA, which calls onExpand directly.
+    await page.getByRole("button", { name: /open the mood board/i }).tap();
 
     const sheet = page.getByRole("dialog", { name: /panel/i });
     await expect(sheet).toBeVisible();
