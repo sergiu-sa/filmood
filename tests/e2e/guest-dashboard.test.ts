@@ -27,7 +27,7 @@ test.describe("Guest dashboard", () => {
       page.getByRole("button", { name: /discover together/i }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: /find anything/i }),
+      page.getByRole("button", { name: /trending today/i }),
     ).toBeVisible();
 
     expect(pageErrors).toEqual([]);

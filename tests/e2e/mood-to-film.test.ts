@@ -13,9 +13,9 @@ test.describe("Mood → results → film detail", () => {
   }) => {
     await page.goto("/");
 
-    // Expand full MoodPanel — picking from the 2x2 preview would cause
-    // strict-mode duplicate matches with the expanded panel.
-    await page.getByRole("button", { name: /see all moods/i }).click();
+    // Desktop keeps MoodPanel mounted but collapsed (maxHeight 0), so its mood
+    // buttons can't be clicked until the board is opened.
+    await page.getByRole("button", { name: /open the mood board/i }).click();
 
     // "A good cry" is only in the expanded panel, so no duplicate match.
     await page.getByRole("button", { name: /a good cry/i }).click();

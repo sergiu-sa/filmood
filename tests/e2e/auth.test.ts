@@ -15,7 +15,7 @@ test.describe("Auth forms", () => {
     ).toBeVisible();
     await expect(page.getByText(/email is required/i)).toBeVisible();
     await expect(
-      page.getByText(/password must be at least 6 characters/i),
+      page.getByText(/password must be at least 8 characters/i),
     ).toBeVisible();
   });
 
@@ -39,12 +39,13 @@ test.describe("Auth forms", () => {
     await expect(page.getByText(/please enter a valid email/i)).toBeVisible();
   });
 
-  test("login form shows Supabase error on bad credentials", async ({
+  test("login form shows the mapped error on bad credentials", async ({
     page,
   }) => {
     await page.goto("/login");
 
-    // Fake account — Supabase returns 400 "Invalid login credentials".
+    // Fake account: Supabase returns invalid_credentials, which
+    // authErrorMessage() in lib/auth-errors.ts rewrites for the user.
     await page
       .getByLabel(/email address/i)
       .fill("nobody-e2e-fake@filmood.test");
@@ -53,7 +54,7 @@ test.describe("Auth forms", () => {
     await page.getByRole("button", { name: /^log in$/i }).click();
 
     await expect(
-      page.getByText(/invalid login credentials/i),
+      page.getByText(/don't match an account/i),
     ).toBeVisible();
   });
 });
