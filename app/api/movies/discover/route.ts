@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
   const tileKeys = (moodParam ?? "")
     .split(",")
     .map((k) => k.trim())
-    .filter((k) => k && k in moodMap);
+    .filter((k) => k && Object.hasOwn(moodMap, k));
   const textKeys = resolved?.moodKeys ?? [];
   const moodKeys = [...new Set([...tileKeys, ...textKeys])];
 

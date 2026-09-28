@@ -22,10 +22,14 @@ export function paramsForConfig(mood: MoodConfig): Record<string, string> {
   return params;
 }
 
+function moodFor(key: string): MoodConfig {
+  // hasOwn, not `in` or a bare lookup: both also find Object.prototype keys.
+  if (!Object.hasOwn(moodMap, key)) throw new Error(`Unknown mood: ${key}`);
+  return moodMap[key];
+}
+
 export function buildMoodParams(moodKey: string): Record<string, string> {
-  const mood = moodMap[moodKey];
-  if (!mood) throw new Error(`Unknown mood: ${moodKey}`);
-  return paramsForConfig(mood);
+  return paramsForConfig(moodFor(moodKey));
 }
 
 /**
@@ -39,11 +43,7 @@ export function buildMoodParams(moodKey: string): Record<string, string> {
 export function buildMergedMoodParams(moodKeys: string[]): Record<string, string> {
   if (moodKeys.length === 1) return buildMoodParams(moodKeys[0]);
 
-  const configs = moodKeys.map((k) => {
-    const mood = moodMap[k];
-    if (!mood) throw new Error(`Unknown mood: ${k}`);
-    return mood;
-  });
+  const configs = moodKeys.map(moodFor);
 
   const genreCounts = new Map<number, number>();
   for (const cfg of configs) {

@@ -137,7 +137,7 @@ export const moodMap: Record<string, MoodConfig> = {
     excludeGenres: [27, 10752],
     sortBy: "popularity.desc",
     voteCountGte: 400,
-    keywords: [TMDB_KEYWORDS.friendship.id, TMDB_KEYWORDS.romanticComedy.id],
+    keywords: [TMDB_KEYWORDS.romanticComedy.id],
     signatureFilm: { tmdbId: 1072790, title: "Anyone But You", year: 2023, posterPath: "/5qHoazZiaLe7oFBok7XlUhg96f2.jpg" },
   },
   nostalgic: {

@@ -25,7 +25,7 @@ export async function recordMoodPicks(
   const rows: { user_id: string; mood: string }[] = [];
   for (const key of moodKeys) {
     if (!key || seen.has(key)) continue;
-    if (!(key in moodMap)) continue;
+    if (!Object.hasOwn(moodMap, key)) continue;
     seen.add(key);
     rows.push({ user_id: userId, mood: key });
   }
