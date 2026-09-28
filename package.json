@@ -18,7 +18,8 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
-    "seed:e2e-user": "tsx scripts/seed-e2e-user.ts"
+    "seed:e2e-user": "tsx scripts/seed-e2e-user.ts",
+    "check:moods": "tsx scripts/check-moods.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.99.1",

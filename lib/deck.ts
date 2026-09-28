@@ -1,4 +1,4 @@
-import { buildTMDBParams } from "@/lib/moodMap";
+import { buildMoodParams } from "@/lib/moodQuery";
 import { tmdbJsonOptional, settleTMDB } from "@/lib/tmdb-fetch";
 import {
   applyEra,
@@ -125,7 +125,7 @@ export async function buildSharedDeck(
     const params: Record<string, string> = {
       language: "en-US",
       page: "1",
-      ...buildTMDBParams(mood),
+      ...buildMoodParams(mood),
     };
 
     // Apply group-level refinements on top of the per-mood TMDB params.

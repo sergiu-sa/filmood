@@ -1,4 +1,5 @@
 import { resolveMoodText } from "@/lib/moodResolver";
+import { TMDB_KEYWORDS } from "@/lib/tmdbKeywords";
 
 describe("resolveMoodText", () => {
   it("resolves a simple unigram to its mood", () => {
@@ -18,13 +19,13 @@ describe("resolveMoodText", () => {
     expect(r.moodKeys).toContain("dark");
     expect(r.era).toBe("classic");
     expect(r.tempo).toBe("slowburn");
-    expect(r.keywords).toContain(1701);
+    expect(r.keywords).toContain(TMDB_KEYWORDS.neoNoir.id);
   });
 
   it("extracts a heist keyword from the word 'heist'", () => {
     const r = resolveMoodText("heist");
     expect(r.moodKeys).toContain("thrilling");
-    expect(r.keywords).toContain(10160);
+    expect(r.keywords).toContain(TMDB_KEYWORDS.heist.id);
   });
 
   it("returns matched=false when nothing in the input is known", () => {
@@ -41,7 +42,7 @@ describe("resolveMoodText", () => {
     expect(r.moodKeys).toContain("easy");
     expect(r.moodKeys).toContain("datenight");
     expect(r.era).toBe("modern");
-    expect(r.keywords).toContain(9799);
+    expect(r.keywords).toContain(TMDB_KEYWORDS.romanticComedy.id);
   });
 
   it("ignores mood keys that don't exist in moodMap", () => {

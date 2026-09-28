@@ -3,6 +3,7 @@
 // matches unigrams and bigrams against mood keys, TMDB keyword IDs, era, and tempo.
 
 import { moodMap } from "@/lib/moodMap";
+import { TMDB_KEYWORDS } from "@/lib/tmdbKeywords";
 import type { EraKey, TempoKey } from "@/lib/types";
 
 interface SynonymEntry {
@@ -23,18 +24,18 @@ const SYNONYMS: Record<string, SynonymEntry> = {
 
   cozy: { moods: ["easy"] },
   comfort: { moods: ["easy"] },
-  "feel good": { moods: ["easy"], keywords: [6054] },
+  "feel good": { moods: ["easy"], keywords: [TMDB_KEYWORDS.friendship.id] },
   wholesome: { moods: ["easy"] },
 
   romantic: { moods: ["datenight"] },
   date: { moods: ["datenight"] },
   "date night": { moods: ["datenight"] },
-  "rom com": { moods: ["datenight"], keywords: [9799] },
-  romcom: { moods: ["datenight"], keywords: [9799] },
+  "rom com": { moods: ["datenight"], keywords: [TMDB_KEYWORDS.romanticComedy.id] },
+  romcom: { moods: ["datenight"], keywords: [TMDB_KEYWORDS.romanticComedy.id] },
 
   nostalgic: { moods: ["nostalgic"] },
   nostalgia: { moods: ["nostalgic"] },
-  "coming of age": { moods: ["nostalgic"], keywords: [180547] },
+  "coming of age": { moods: ["nostalgic"], keywords: [TMDB_KEYWORDS.comingOfAge.id] },
   tender: { moods: ["nostalgic", "beautiful"] },
 
   tearjerker: { moods: ["cry"] },
@@ -52,28 +53,28 @@ const SYNONYMS: Record<string, SynonymEntry> = {
   action: { moods: ["thrilling"] },
   adrenaline: { moods: ["thrilling"] },
   intense: { moods: ["thrilling"] },
-  heist: { moods: ["thrilling"], keywords: [10160] },
+  heist: { moods: ["thrilling"], keywords: [TMDB_KEYWORDS.heist.id] },
 
   thoughtful: { moods: ["thoughtful"] },
   cerebral: { moods: ["thoughtful", "mindbending"] },
   smart: { moods: ["thoughtful"] },
 
-  "mind bending": { moods: ["mindbending"], keywords: [10714] },
-  mindbending: { moods: ["mindbending"], keywords: [10714] },
+  "mind bending": { moods: ["mindbending"], keywords: [TMDB_KEYWORDS.mindBending.id] },
+  mindbending: { moods: ["mindbending"], keywords: [TMDB_KEYWORDS.mindBending.id] },
   puzzle: { moods: ["mindbending"] },
   twist: { moods: ["mindbending"] },
-  dystopia: { moods: ["mindbending"], keywords: [4565] },
-  dystopian: { moods: ["mindbending"], keywords: [4565] },
+  dystopia: { moods: ["mindbending"], keywords: [TMDB_KEYWORDS.dystopia.id] },
+  dystopian: { moods: ["mindbending"], keywords: [TMDB_KEYWORDS.dystopia.id] },
 
   weird: { moods: ["weird"] },
   surreal: { moods: ["weird"] },
   quirky: { moods: ["weird"] },
   strange: { moods: ["weird"] },
-  cult: { moods: ["weird"], keywords: [9840] },
+  cult: { moods: ["weird"], keywords: [TMDB_KEYWORDS.cultFilm.id] },
 
   dark: { moods: ["dark"] },
   gritty: { moods: ["dark"] },
-  noir: { moods: ["dark"], keywords: [1701] },
+  noir: { moods: ["dark"], keywords: [TMDB_KEYWORDS.neoNoir.id] },
   crime: { moods: ["dark"] },
   bleak: { moods: ["dark"] },
 
