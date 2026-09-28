@@ -1,27 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buildTMDBParams, buildMergedTMDBParams, moodMap } from "@/lib/moodMap";
+import { moodMap } from "@/lib/moodMap";
+import { buildMoodParams, buildMergedMoodParams } from "@/lib/moodQuery";
 import { resolveMoodText } from "@/lib/moodResolver";
-import {
-  applyEra,
-  applyTempo,
-  mergeExtraKeywords,
-  isEraKey,
-  isTempoKey,
-} from "@/lib/moodRefinements";
+import { applyRefinements, parseRefinements } from "@/lib/moodFilters";
 import { tmdbError } from "@/lib/api-errors";
 import { tmdbJson, TMDBError, settleTMDB } from "@/lib/tmdb-fetch";
 import { getAuthUser, getSupabaseAdmin } from "@/lib/supabase-server";
 import { recordMoodPicks } from "@/lib/mood-history";
-import type { EraKey, TempoKey } from "@/lib/types";
-
-interface Refinements {
-  runtime: string | null;
-  language: string | null;
-  exclude: string | null;
-  era: EraKey | null;
-  tempo: TempoKey | null;
-  extraKeywords: number[];
-}
 
 // How many TMDB result pages to pool per search. Page 1 is always fetched
 // (quality anchor); one more page is picked from [2..MAX_PAGE] to widen the
@@ -29,41 +14,6 @@ interface Refinements {
 const MAX_PAGE = 3;
 // Final deck size returned to the client.
 const RESULT_LIMIT = 20;
-
-// Shared helper: build a TMDB discover query from param object + refinements.
-// Page is set by fetchDiscoverPage so the same base query can be reused.
-function buildDiscoverParams(
-  moodParams: Record<string, string>,
-  refinements: Refinements,
-): Record<string, string> {
-  const params: Record<string, string> = { language: "en-US", ...moodParams };
-
-  if (refinements.runtime === "short") {
-    params["with_runtime.lte"] = "100";
-  } else if (refinements.runtime === "long") {
-    params["with_runtime.gte"] = "150";
-  }
-
-  if (refinements.language === "en") {
-    params["with_original_language"] = "en";
-  } else if (refinements.language === "scand") {
-    params["with_original_language"] = "en|no|sv|da|fi|is";
-  }
-
-  if (refinements.exclude) {
-    const existing = params["without_genres"];
-    params["without_genres"] = existing
-      ? `${existing},${refinements.exclude}`
-      : refinements.exclude;
-  }
-
-  // Tempo overrides runtime when both are set (more intentional axis).
-  applyTempo(params, refinements.tempo);
-  applyEra(params, refinements.era);
-  mergeExtraKeywords(params, refinements.extraKeywords);
-
-  return params;
-}
 
 // Fetch a specific TMDB discover page. A 404 yields []; anything worse rejects
 // so the caller decides whether that page was optional.
@@ -169,31 +119,14 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Optional refinement params
-  const eraParam = searchParams.get("era");
-  const tempoParam = searchParams.get("tempo");
-  const refinements: Refinements = {
-    runtime: searchParams.get("runtime"),
-    language: searchParams.get("language"),
-    // TMDB's without_genres takes a comma-separated id list; anything else
-    // earns a 400 upstream, which would reach tmdbError and surface as our
-    // 500 for what is purely client input.
-    exclude: /^\d+(,\d+)*$/.test(searchParams.get("exclude") ?? "")
-      ? searchParams.get("exclude")
-      : null,
-    era: isEraKey(eraParam) ? eraParam : resolved?.era ?? null,
-    tempo: isTempoKey(tempoParam) ? tempoParam : resolved?.tempo ?? null,
-    extraKeywords: resolved?.keywords ?? [],
-  };
+  const refinements = parseRefinements(searchParams, resolved);
 
   try {
     // ── Primary: merged mood query ──
-    // For a single mood this behaves identically to the old per-mood fetch.
-    // For multiple moods it builds a single TMDB query that targets the
-    // genre intersection (or cross-genre AND), so results genuinely match
-    // the *combination* of moods rather than being a shuffled concat.
-    const mergedParams = buildMergedTMDBParams(moodKeys);
-    const mergedQuery = buildDiscoverParams(mergedParams, refinements);
+    // For a single mood this is just that mood's query. For several it builds
+    // one TMDB query from their shared genres (or each mood's primary genre).
+    const mergedQuery = { language: "en-US", ...buildMergedMoodParams(moodKeys) };
+    applyRefinements(mergedQuery, refinements);
 
     // Fetch pages 1 + random(2..MAX_PAGE) and shuffle so repeat searches
     // return different films instead of the same top 20.
@@ -209,7 +142,8 @@ export async function GET(request: NextRequest) {
       // failing mood must not discard the films we already have.
       const { values, firstRejection } = await settleTMDB(
         moodKeys.map((key) => {
-          const query = buildDiscoverParams(buildTMDBParams(key), refinements);
+          const query = { language: "en-US", ...buildMoodParams(key) };
+          applyRefinements(query, refinements);
           return fetchDiscoverPool(query);
         }),
       );

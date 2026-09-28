@@ -2,9 +2,10 @@
 // TMDB discover query. Used by both the single-session route and lib/deck.ts
 // so the mapping stays in one place.
 //
-// They mutate a plain param record — the same shape buildTMDBParams returns
+// They mutate a plain param record — the same shape buildMoodParams returns
 // and tmdbJson accepts — so nothing has to be converted on the way through.
 
+import { RUNTIME_FLOOR } from "@/lib/moodQuery";
 import type { EraKey, TempoKey } from "@/lib/types";
 
 export const ERA_OPTIONS: { value: EraKey; label: string }[] = [
@@ -46,7 +47,8 @@ export function applyTempo(params: Record<string, string>, tempo: TempoKey | nul
     delete params["with_runtime.lte"];
     params["with_runtime.gte"] = "120";
   } else if (tempo === "fastpaced") {
-    delete params["with_runtime.gte"];
+    // Back to the floor rather than deleted, or shorts come back in.
+    params["with_runtime.gte"] = String(RUNTIME_FLOOR);
     params["with_runtime.lte"] = "110";
   }
 }
@@ -59,10 +61,10 @@ export function mergeExtraKeywords(
   // Dedupe: the mood's own with_keywords and the resolver's text-derived
   // keywords can legitimately overlap (e.g. "feel good" resolves to both
   // the `easy` mood and keyword 6054). Duplicates don't break TMDB but
-  // pollute the query string.
+  // pollute the query string. Pipe-joined: TMDB reads "," as AND.
   const existing = params["with_keywords"];
   const merged = new Set<string>();
-  if (existing) existing.split(",").forEach((k) => merged.add(k));
+  if (existing) existing.split("|").forEach((k) => merged.add(k));
   extra.forEach((k) => merged.add(String(k)));
-  params["with_keywords"] = [...merged].join(",");
+  params["with_keywords"] = [...merged].join("|");
 }

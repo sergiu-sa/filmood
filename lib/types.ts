@@ -16,11 +16,13 @@ export interface MoodConfig {
   description: string;
   accentColor: AccentColor;
   genres: number[];
+  /** "any" (default) ORs the genres; "all" requires every one. */
+  genreMatch?: "any" | "all";
   excludeGenres?: number[];
   sortBy: "popularity.desc" | "vote_average.desc";
   voteCountGte: number;
   voteAverageGte?: number;
-  /** TMDB keyword IDs joined with OR into with_keywords for sharper targeting. */
+  /** TMDB keyword IDs; a film needs any one of them (pipe-joined in with_keywords). */
   keywords?: number[];
   /**
    * Hand-curated "signature" film used by the home hero to represent this mood.

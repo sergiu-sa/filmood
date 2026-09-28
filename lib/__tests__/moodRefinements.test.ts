@@ -3,6 +3,7 @@ import {
   applyTempo,
   mergeExtraKeywords,
 } from '@/lib/moodRefinements';
+import { RUNTIME_FLOOR } from '@/lib/moodQuery';
 
 describe('applyEra', () => {
   it('bounds each era window', () => {
@@ -45,24 +46,30 @@ describe('applyTempo', () => {
     expect(p).toEqual({ 'with_runtime.gte': '120' });
   });
 
-  it('fast-paced clears an opposing lower bound', () => {
+  // Lowered to the floor, not deleted: deleting it lets shorts back in.
+  it('fast-paced replaces an opposing lower bound with the runtime floor', () => {
     const p: Record<string, string> = { 'with_runtime.gte': '150' };
     applyTempo(p, 'fastpaced');
-    expect(p).toEqual({ 'with_runtime.lte': '110' });
+    expect(p).toEqual({
+      'with_runtime.gte': String(RUNTIME_FLOOR),
+      'with_runtime.lte': '110',
+    });
   });
 });
 
 describe('mergeExtraKeywords', () => {
-  it('merges with existing keywords and dedupes', () => {
-    const p: Record<string, string> = { with_keywords: '6054,180' };
+  // TMDB reads "," as AND: a comma here would demand the text's keywords
+  // *and* the mood's, instead of widening to either.
+  it('ORs extra keywords with the existing ones and dedupes', () => {
+    const p: Record<string, string> = { with_keywords: '6054|180' };
     mergeExtraKeywords(p, [180, 9999]);
-    expect(p.with_keywords).toBe('6054,180,9999');
+    expect(p.with_keywords).toBe('6054|180|9999');
   });
 
   it('sets keywords when none are present', () => {
     const p: Record<string, string> = {};
     mergeExtraKeywords(p, [1, 2]);
-    expect(p.with_keywords).toBe('1,2');
+    expect(p.with_keywords).toBe('1|2');
   });
 
   it('is a no-op for an empty list', () => {
