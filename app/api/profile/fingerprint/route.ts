@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
 import { internalError } from "@/lib/api-errors";
+import { countMoodPicks } from "@/lib/mood-history";
 import { tmdbJsonOptional, settleTMDB } from "@/lib/tmdb-fetch";
 import { genreMap } from "@/lib/genres";
 
@@ -39,12 +40,7 @@ export async function GET(request: NextRequest) {
     }
 
     // ── Top moods ───────────────────────────────────────
-    const moodCounts = new Map<string, number>();
-    for (const row of moodRes.data ?? []) {
-      moodCounts.set(row.mood, (moodCounts.get(row.mood) ?? 0) + 1);
-    }
-    const topMoods = [...moodCounts.entries()]
-      .sort((a, b) => b[1] - a[1])
+    const topMoods = countMoodPicks(moodRes.data ?? [])
       .slice(0, TOP_MOODS)
       .map(([mood, count]) => ({ mood, count }));
 

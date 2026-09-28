@@ -15,9 +15,16 @@ export interface MoodConfig {
   label: string;
   description: string;
   accentColor: AccentColor;
+  /** Empty when the keywords alone define the mood (`essential: "keywords"`). */
   genres: number[];
   /** "any" (default) ORs the genres; "all" requires every one. */
   genreMatch?: "any" | "all";
+  /** The side that defines the mood; the other one only sharpens it. */
+  essential: "genres" | "keywords";
+  /** Exactly three neighbouring mood keys, offered when a search comes back empty. */
+  relatedMoods: string[];
+  /** A safety cap, not a taste filter: it applies to every query for the mood. */
+  certification?: { country: "US"; lte: "G" | "PG" | "PG-13" };
   excludeGenres?: number[];
   sortBy: "popularity.desc" | "vote_average.desc";
   voteCountGte: number;

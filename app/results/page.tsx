@@ -8,7 +8,7 @@ import FilmCard from "@/components/film/FilmCard";
 import TopPick from "@/components/results/TopPick";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import type { Film, AccentColor, Provider } from "@/lib/types";
-import { moodMap } from "@/lib/moodMap";
+import { moodMap, normalizeMoodKeys } from "@/lib/moodMap";
 import { ACCENT_VARS } from "@/lib/constants";
 
 function getMeta(moods: string[]) {
@@ -69,10 +69,8 @@ function ResultsContent() {
       return;
     }
 
-    const parsedMoods = (mood ?? "")
-      .split(",")
-      .map((m) => m.trim().toLowerCase())
-      .filter(Boolean);
+    // Shared links can still carry a retired mood key.
+    const parsedMoods = normalizeMoodKeys((mood ?? "").split(","));
 
     const fetchFilms = async () => {
       try {

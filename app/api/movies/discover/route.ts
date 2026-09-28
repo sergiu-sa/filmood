@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { moodMap } from "@/lib/moodMap";
+import { moodMap, normalizeMoodKeys } from "@/lib/moodMap";
 import { buildMoodParams, buildMergedMoodParams } from "@/lib/moodQuery";
 import { resolveMoodText } from "@/lib/moodResolver";
 import { applyRefinements, parseRefinements } from "@/lib/moodFilters";
@@ -84,10 +84,7 @@ export async function GET(request: NextRequest) {
   // Explicit chip values for era/tempo win over anything inferred from text.
   const resolved = text && text.trim() ? resolveMoodText(text.trim()) : null;
 
-  const tileKeys = (moodParam ?? "")
-    .split(",")
-    .map((k) => k.trim())
-    .filter((k) => k && Object.hasOwn(moodMap, k));
+  const tileKeys = normalizeMoodKeys((moodParam ?? "").split(","));
   const textKeys = resolved?.moodKeys ?? [];
   const moodKeys = [...new Set([...tileKeys, ...textKeys])];
 

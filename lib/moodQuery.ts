@@ -8,17 +8,23 @@ export const RUNTIME_FLOOR = 60;
 
 export function paramsForConfig(mood: MoodConfig): Record<string, string> {
   const params: Record<string, string> = {
-    // TMDB: "," = AND, "|" = OR — `npm run check:moods -- --probe` verifies it.
-    with_genres: mood.genres.join(mood.genreMatch === "all" ? "," : "|"),
     sort_by: mood.sortBy,
     "vote_count.gte": String(mood.voteCountGte),
     "with_runtime.gte": String(RUNTIME_FLOOR),
     watch_region: "NO",
     with_watch_monetization_types: "flatrate",
   };
+  // TMDB: "," = AND, "|" = OR — `npm run check:moods -- --probe` verifies it.
+  if (mood.genres.length) {
+    params.with_genres = mood.genres.join(mood.genreMatch === "all" ? "," : "|");
+  }
   if (mood.excludeGenres?.length) params.without_genres = mood.excludeGenres.join(",");
   if (mood.voteAverageGte) params["vote_average.gte"] = String(mood.voteAverageGte);
   if (mood.keywords?.length) params.with_keywords = mood.keywords.join("|");
+  if (mood.certification) {
+    params.certification_country = mood.certification.country;
+    params["certification.lte"] = mood.certification.lte;
+  }
   return params;
 }
 
@@ -57,7 +63,7 @@ export function buildMergedMoodParams(moodKeys: string[]): Record<string, string
   const targetGenres =
     sharedGenres.length > 0
       ? sharedGenres
-      : [...new Set(configs.map((c) => c.genres[0]))];
+      : [...new Set(configs.flatMap((c) => c.genres.slice(0, 1)))];
 
   const voteCountGte = Math.max(...configs.map((c) => c.voteCountGte));
   const voteAverageGte = Math.max(...configs.map((c) => c.voteAverageGte ?? 0));
@@ -71,18 +77,26 @@ export function buildMergedMoodParams(moodKeys: string[]): Record<string, string
   }
 
   const params: Record<string, string> = {
-    with_genres: targetGenres.join("|"),
     sort_by: "vote_average.desc",
     "vote_count.gte": String(voteCountGte),
     "with_runtime.gte": String(RUNTIME_FLOOR),
     watch_region: "NO",
     with_watch_monetization_types: "flatrate",
   };
+  if (targetGenres.length > 0) params.with_genres = targetGenres.join("|");
   if (allExcludes.size > 0) params.without_genres = [...allExcludes].join(",");
   if (voteAverageGte > 0) params["vote_average.gte"] = String(voteAverageGte);
 
   const allKeywords = new Set(configs.flatMap((c) => c.keywords ?? []));
   if (allKeywords.size > 0) params.with_keywords = [...allKeywords].join("|");
+
+  // One query serves every merged mood, so a mood's safety cap covers them all.
+  // ponytail: first cap wins; only `family` has one. Take the strictest if a second appears.
+  const cap = configs.find((c) => c.certification)?.certification;
+  if (cap) {
+    params.certification_country = cap.country;
+    params["certification.lte"] = cap.lte;
+  }
 
   return params;
 }

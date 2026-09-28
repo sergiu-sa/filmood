@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
 import { internalError } from "@/lib/api-errors";
+import { normalizeMoodKey } from "@/lib/moodMap";
 
 const EVENT_LIMIT = 12;
 
@@ -91,7 +92,7 @@ export async function GET(request: NextRequest) {
         id: `mh-${r.id}`,
         at: r.picked_at,
         kind: "mood_pick",
-        data: { mood: r.mood },
+        data: { mood: normalizeMoodKey(r.mood) ?? r.mood },
       });
     }
     for (const r of sessionPartsRes.data ?? []) {

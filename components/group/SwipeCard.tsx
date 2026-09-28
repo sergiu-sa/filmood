@@ -1,7 +1,7 @@
 "use client";
 
 import type { DeckFilm } from "@/lib/types";
-import { moodMap } from "@/lib/moodMap";
+import { moodMap, normalizeMoodKeys } from "@/lib/moodMap";
 import { genreMap } from "@/lib/genres";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import { ACCENT_VARS } from "@/lib/constants";
@@ -68,14 +68,12 @@ export default function SwipeCard({
 
   const isExiting = !!exitDirection;
 
-  // Resolve mood tags from mood_keys
-  const moodTags = (film.mood_keys ?? [])
-    .map((key) => {
-      const config = moodMap[key];
-      if (!config) return null;
-      return { label: config.tagLabel, accent: config.accentColor };
-    })
-    .filter(Boolean) as { label: string; accent: string }[];
+  // Normalising also dedupes: a deck built before two moods merged can tag
+  // one film with both keys.
+  const moodTags = normalizeMoodKeys(film.mood_keys ?? []).map((k) => ({
+    label: moodMap[k].tagLabel,
+    accent: moodMap[k].accentColor,
+  }));
 
   // Resolve genre names from genre_ids (max 3 to keep it clean)
   const genres = (film.genre_ids ?? [])

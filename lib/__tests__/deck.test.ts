@@ -62,6 +62,23 @@ describe("buildSharedDeck", () => {
     }
   });
 
+  // A session that locked in before a mood was retired still stores its key.
+  it("folds a retired mood key into the mood that absorbed it", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(fakeTMDBResponse(20)),
+    });
+
+    // Unnormalised, the only mood has no query, so the deck comes back empty and throws.
+    const result = await buildSharedDeck([{ mood_selections: ["beautiful"] }]);
+
+    expect(result.length).toBeGreaterThan(0);
+    expect(String(vi.mocked(global.fetch).mock.calls[0][0])).toContain("with_genres=18");
+    for (const film of result) {
+      expect(film.mood_keys).toEqual(["cry"]);
+    }
+  });
+
   it("allocates slots proportionally across moods", async () => {
     // laugh gets 3 votes, cry gets 1 — so laugh should have more deck slots.
     // Each fetch call returns a non-overlapping ID range so dedup doesn't blur the counts.
