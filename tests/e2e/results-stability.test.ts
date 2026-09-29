@@ -15,13 +15,6 @@ function discoverSeeds(page: Page): string[] {
 
 const urlSeed = (page: Page) => new URL(page.url()).searchParams.get("seed");
 
-// No request may go out without the URL's seed. The request count is pinned in
-// results-empty-state.test.ts.
-function expectAllSeeded(seeds: string[], seed: string | null) {
-  expect(seeds.length).toBeGreaterThan(0);
-  expect(new Set(seeds)).toEqual(new Set([seed]));
-}
-
 test.describe("Results stability", () => {
   test.beforeEach(async ({ page }) => {
     await mockTmdb(page);
@@ -36,7 +29,7 @@ test.describe("Results stability", () => {
     await expect(page.getByRole("heading", { level: 2, name: /midnight harvest/i })).toBeVisible();
 
     expect(seed).toMatch(/^\d+$/);
-    expectAllSeeded(seeds, seed);
+    expect(seeds).toEqual([seed]);
 
     await page.getByRole("link", { name: /view details/i }).click();
     await page.waitForURL(/\/film\/\d+$/);
@@ -48,7 +41,7 @@ test.describe("Results stability", () => {
     expect(urlSeed(page)).toBe(seed);
     expect(new URL((await refetch).url()).searchParams.get("seed")).toBe(seed);
     await expect(page.getByRole("heading", { level: 2, name: /midnight harvest/i })).toBeVisible();
-    expectAllSeeded(seeds, seed);
+    expect(seeds).toEqual([seed, seed]);
   });
 
   test("keeps a seed that is already in the URL", async ({ page }) => {
@@ -58,6 +51,6 @@ test.describe("Results stability", () => {
     await expect(page.getByRole("heading", { level: 2, name: /midnight harvest/i })).toBeVisible();
 
     expect(urlSeed(page)).toBe("4242");
-    expectAllSeeded(seeds, "4242");
+    expect(seeds).toEqual(["4242"]);
   });
 });
