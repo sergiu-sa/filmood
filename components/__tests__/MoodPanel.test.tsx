@@ -61,6 +61,34 @@ describe("MoodPanel", () => {
     expect(defaultProps.onSelectMood).toHaveBeenCalledWith(firstMood.key);
   });
 
+  // ── Two-mood cap ──────────────────────────────────────────────────────────
+  const card = (label: string) => screen.getByText(label).closest("button")!;
+
+  it("says how many moods can be picked", () => {
+    render(<MoodPanel {...defaultProps} />);
+    expect(screen.getByText(/pick up to 2/i)).toBeInTheDocument();
+  });
+
+  it("disables the other moods once two are picked, but not the picked ones", () => {
+    const [a, b, ...rest] = allMoods;
+    render(<MoodPanel {...defaultProps} selectedMoods={new Set([a.key, b.key])} />);
+
+    expect(card(a.label)).toBeEnabled();
+    expect(card(b.label)).toBeEnabled();
+    for (const mood of rest) expect(card(mood.label), mood.key).toBeDisabled();
+
+    fireEvent.click(card(rest[0].label));
+    expect(defaultProps.onSelectMood).not.toHaveBeenCalled();
+    // Deselecting stays possible, so a pick can be swapped.
+    fireEvent.click(card(a.label));
+    expect(defaultProps.onSelectMood).toHaveBeenCalledWith(a.key);
+  });
+
+  it("leaves every mood enabled below the cap", () => {
+    render(<MoodPanel {...defaultProps} selectedMoods={new Set([allMoods[0].key])} />);
+    for (const mood of allMoods) expect(card(mood.label), mood.key).toBeEnabled();
+  });
+
   // ── "Find films" button visibility ───────────────────────────────────────
   it('does NOT render "Find films" button when no moods are selected', () => {
     render(<MoodPanel {...defaultProps} selectedMoods={new Set()} />);

@@ -1,4 +1,4 @@
-import type { Film, Provider } from "@/lib/types";
+import type { DiscoverFilm, Film, Provider } from "@/lib/types";
 
 // Minimal shape we care about from a TMDB discover/search/list response.
 // TMDB returns many extra fields (popularity, adult, video, genre_ids, ...);
@@ -21,6 +21,18 @@ export function mapTMDBFilm(raw: TMDBFilmRaw): Film {
     release_date: raw.release_date,
     vote_average: raw.vote_average,
     overview: raw.overview,
+  };
+}
+
+/** A mood-search film: the Film fields plus what the results page ranks and explains with. */
+export function mapTMDBDiscoverFilm(
+  raw: TMDBFilmRaw & { vote_count?: number; genre_ids?: number[]; moodKeys: string[] },
+): DiscoverFilm {
+  return {
+    ...mapTMDBFilm(raw),
+    vote_count: raw.vote_count ?? 0,
+    genre_ids: raw.genre_ids ?? [],
+    moodKeys: raw.moodKeys,
   };
 }
 

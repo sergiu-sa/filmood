@@ -1,6 +1,5 @@
 import {
   buildMoodParams,
-  buildMergedMoodParams,
   paramsForConfig,
   RUNTIME_FLOOR,
 } from "@/lib/moodQuery";
@@ -134,53 +133,63 @@ describe("buildMoodParams", () => {
   });
 });
 
-describe("buildMergedMoodParams", () => {
-  it("unions keywords across merged moods with pipes", () => {
-    const params = buildMergedMoodParams(["datenight", "dark"]);
-    expect(params.with_keywords).toBe(
-      [
-        TMDB_KEYWORDS.romanticComedy.id,
-        TMDB_KEYWORDS.neoNoir.id,
-        TMDB_KEYWORDS.revenge.id,
-        TMDB_KEYWORDS.corruption.id,
-      ].join("|"),
-    );
+describe("buildMoodParams tiers", () => {
+  // dark is genre-essential: tier 1 drops its keywords.
+  it("steps a genre-essential mood down by dropping keywords, then easing floors", () => {
+    const tier0 = buildMoodParams("dark", 0);
+    const { with_keywords, ...withoutKeywords } = tier0;
+    expect(with_keywords).toBeDefined();
+
+    expect(buildMoodParams("dark", 1)).toEqual(withoutKeywords);
+    expect(buildMoodParams("dark", 2)).toEqual({
+      ...withoutKeywords,
+      "vote_count.gte": "150",
+      "vote_average.gte": "6.3",
+    });
   });
 
-  // nostalgic has no genres; its missing primary genre must not become "undefined".
-  it("takes genres only from moods that have them", () => {
-    expect(buildMergedMoodParams(["laugh", "nostalgic"]).with_genres).toBe("35");
-    expect(buildMergedMoodParams(["nostalgic", "easy"]).with_genres).toBe("35");
+  // mindbending is keyword-essential: tier 1 drops its genres.
+  it("steps a keyword-essential mood down by dropping genres, then easing floors", () => {
+    const tier0 = buildMoodParams("mindbending", 0);
+    const { with_genres, ...withoutGenres } = tier0;
+    expect(with_genres).toBeDefined();
+
+    expect(buildMoodParams("mindbending", 1)).toEqual(withoutGenres);
+    expect(buildMoodParams("mindbending", 2)).toEqual({
+      ...withoutGenres,
+      "vote_count.gte": "150",
+      "vote_average.gte": "6.5",
+    });
   });
 
-  it("keeps the family cap on any merge that includes family", () => {
-    expect(buildMergedMoodParams(["laugh", "family"])).toMatchObject({
+  it("leaves tier 1 equal to tier 0 when the non-essential side is empty", () => {
+    expect(buildMoodParams("laugh", 1)).toEqual(buildMoodParams("laugh", 0));
+    expect(buildMoodParams("nostalgic", 1)).toEqual(buildMoodParams("nostalgic", 0));
+  });
+
+  it("defaults to tier 0", () => {
+    expect(buildMoodParams("cry")).toEqual(buildMoodParams("cry", 0));
+  });
+
+  // A safety cap, not a taste constraint: the ladder never loosens it.
+  it.each([0, 1, 2] as const)("keeps the family cap at tier %i", (tier) => {
+    expect(buildMoodParams("family", tier)).toMatchObject({
       certification_country: "US",
       "certification.gte": "G",
       "certification.lte": "PG",
     });
-    expect(buildMergedMoodParams(["laugh", "dark"]).certification_country).toBeUndefined();
   });
 
-  it("ORs the target genres and keeps the runtime floor", () => {
-    // laugh (35) and thrilling (28) share nothing, so each primary genre.
-    const params = buildMergedMoodParams(["laugh", "thrilling"]);
-    expect(params.with_genres).toBe("35|28");
-    expect(params["with_runtime.gte"]).toBe(String(RUNTIME_FLOOR));
+  it.each([0, 1, 2] as const)("keeps the runtime floor and exclusions at tier %i", (tier) => {
+    for (const mood of allMoods) {
+      const params = buildMoodParams(mood.key, tier);
+      expect(params["with_runtime.gte"], mood.key).toBe(String(RUNTIME_FLOOR));
+      expect(params.without_genres, mood.key).toBe(mood.excludeGenres?.join(","));
+    }
   });
 
-  it("omits with_keywords when none of the merged moods define any", () => {
-    const params = buildMergedMoodParams(["laugh", "thrilling"]);
-    expect(params.with_keywords).toBeUndefined();
-  });
-
-  it("takes strictest quality thresholds across moods", () => {
-    // mindbending voteAverageGte=7.0 vs dark voteAverageGte=6.8 → 7.0 wins
-    const params = buildMergedMoodParams(["mindbending", "dark"]);
-    expect(params["vote_average.gte"]).toBe("7");
-  });
-
-  it("delegates a single mood to buildMoodParams", () => {
-    expect(buildMergedMoodParams(["dark"])).toEqual(buildMoodParams("dark"));
+  it("never eases the vote count below 1", () => {
+    const fixture: MoodConfig = { ...moodMap.laugh, voteCountGte: 1 };
+    expect(paramsForConfig(fixture, 2)["vote_count.gte"]).toBe("1");
   });
 });

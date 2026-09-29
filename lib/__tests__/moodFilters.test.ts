@@ -1,6 +1,9 @@
 import {
+  activeRefinementKeys,
   applyRefinements,
   parseRefinements,
+  removableRefinementKeys,
+  withoutRefinement,
   EMPTY_REFINEMENTS,
 } from "@/lib/moodFilters";
 import { resolveMoodText } from "@/lib/moodResolver";
@@ -16,6 +19,13 @@ describe("parseRefinements", () => {
   it("accepts a comma-separated genre id list for exclude", () => {
     expect(parseRefinements(sp("exclude=27"), null).exclude).toBe("27");
     expect(parseRefinements(sp("exclude=27,99"), null).exclude).toBe("27,99");
+  });
+
+  // A free-form id list would make every request a cache miss on TMDB.
+  it("keeps only the genres the panel offers, deduped in one order", () => {
+    expect(parseRefinements(sp("exclude=27,12345"), null).exclude).toBe("27");
+    expect(parseRefinements(sp("exclude=99,27,27"), null).exclude).toBe("27,99");
+    expect(parseRefinements(sp("exclude=12345,678"), null).exclude).toBeNull();
   });
 
   // Anything else would earn a 400 from TMDB and surface as our 500.
@@ -41,6 +51,18 @@ describe("parseRefinements", () => {
     expect(r.era).toBe("classic");
     expect(r.tempo).toBe("slowburn");
     expect(r.extraKeywords).toEqual(resolved.keywords);
+  });
+
+  // applyRefinements ignores anything else, so a stray value must not count as
+  // an active filter (suggestion probes) or reach search_events as raw text.
+  it("keeps only runtime and language values that apply", () => {
+    expect(parseRefinements(sp("runtime=short&language=scand"), null)).toMatchObject({
+      runtime: "short",
+      language: "scand",
+    });
+    const r = parseRefinements(sp("runtime=forever&language=klingon"), null);
+    expect(r.runtime).toBeNull();
+    expect(r.language).toBeNull();
   });
 
   it("ignores unknown era/tempo values", () => {
@@ -103,5 +125,61 @@ describe("applyRefinements", () => {
     const p: Record<string, string> = { with_genres: "35" };
     applyRefinements(p, EMPTY_REFINEMENTS);
     expect(p).toEqual({ with_genres: "35" });
+  });
+});
+
+describe("activeRefinementKeys", () => {
+  it("lists nothing for empty refinements", () => {
+    expect(activeRefinementKeys(EMPTY_REFINEMENTS)).toEqual([]);
+  });
+
+  // Text keywords aren't a filter the user can remove, so they're never probed.
+  it("lists every set user filter but never extraKeywords", () => {
+    expect(
+      activeRefinementKeys({
+        runtime: "short",
+        language: "en",
+        exclude: "27",
+        era: "classic",
+        tempo: "slowburn",
+        extraKeywords: [1, 2],
+      }),
+    ).toEqual(["era", "tempo", "runtime", "language", "exclude"]);
+    expect(activeRefinementKeys({ ...EMPTY_REFINEMENTS, extraKeywords: [1] })).toEqual([]);
+  });
+});
+
+describe("withoutRefinement", () => {
+  it("clears one filter and leaves the rest", () => {
+    const r = { ...EMPTY_REFINEMENTS, era: "classic" as const, runtime: "short", extraKeywords: [9] };
+    expect(withoutRefinement(r, "era")).toEqual({ ...r, era: null });
+    expect(r.era).toBe("classic");
+  });
+});
+
+// A suggestion's button deletes the URL param, so only filters that deletion
+// actually clears are worth offering.
+describe("removableRefinementKeys", () => {
+  it("offers every filter set in the URL when there is no text", () => {
+    expect(removableRefinementKeys(sp("era=classic&tempo=slowburn&runtime=short"), null)).toEqual([
+      "era",
+      "tempo",
+      "runtime",
+    ]);
+  });
+
+  it("skips an era the text implied, since there's no param to delete", () => {
+    const resolved = resolveMoodText("cozy 80s heist");
+    expect(parseRefinements(sp("runtime=short"), resolved).era).toBe("classic");
+    expect(removableRefinementKeys(sp("runtime=short"), resolved)).toEqual(["runtime"]);
+  });
+
+  it("skips a URL era the text would bring back", () => {
+    const resolved = resolveMoodText("80s noir");
+    expect(removableRefinementKeys(sp("era=fresh"), resolved)).toEqual([]);
+  });
+
+  it("ignores params that don't apply", () => {
+    expect(removableRefinementKeys(sp("runtime=forever&exclude=12345"), null)).toEqual([]);
   });
 });

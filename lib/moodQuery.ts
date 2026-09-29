@@ -6,6 +6,13 @@ import type { MoodConfig } from "@/lib/types";
 /** Shorts and TV specials never belong in a mood result. */
 export const RUNTIME_FLOOR = 60;
 
+/**
+ * How far a mood's own query is loosened. 1 drops the non-essential side
+ * (keywords or genres), 2 also eases the vote floors. Exclusions, the runtime
+ * floor and a certification cap hold at every tier.
+ */
+export type Tier = 0 | 1 | 2;
+
 /** TMDB params for a mood's certification cap; none when it has no cap. */
 export function certificationParams(cap: MoodConfig["certification"]): Record<string, string> {
   if (!cap) return {};
@@ -17,21 +24,28 @@ export function certificationParams(cap: MoodConfig["certification"]): Record<st
   };
 }
 
-export function paramsForConfig(mood: MoodConfig): Record<string, string> {
+export function paramsForConfig(mood: MoodConfig, tier: Tier = 0): Record<string, string> {
+  const eased = tier === 2;
+  const voteCountGte = eased ? Math.max(1, Math.round(mood.voteCountGte * 0.5)) : mood.voteCountGte;
+  const voteAverageGte =
+    eased && mood.voteAverageGte ? Math.max(0, mood.voteAverageGte - 0.5) : mood.voteAverageGte;
+  const genres = tier > 0 && mood.essential === "keywords" ? [] : mood.genres;
+  const keywords = tier > 0 && mood.essential === "genres" ? [] : mood.keywords;
+
   const params: Record<string, string> = {
     sort_by: mood.sortBy,
-    "vote_count.gte": String(mood.voteCountGte),
+    "vote_count.gte": String(voteCountGte),
     "with_runtime.gte": String(RUNTIME_FLOOR),
     watch_region: "NO",
     with_watch_monetization_types: "flatrate",
   };
   // TMDB: "," = AND, "|" = OR — `npm run check:moods -- --probe` verifies it.
-  if (mood.genres.length) {
-    params.with_genres = mood.genres.join(mood.genreMatch === "all" ? "," : "|");
+  if (genres.length) {
+    params.with_genres = genres.join(mood.genreMatch === "all" ? "," : "|");
   }
   if (mood.excludeGenres?.length) params.without_genres = mood.excludeGenres.join(",");
-  if (mood.voteAverageGte) params["vote_average.gte"] = String(mood.voteAverageGte);
-  if (mood.keywords?.length) params.with_keywords = mood.keywords.join("|");
+  if (voteAverageGte) params["vote_average.gte"] = String(voteAverageGte);
+  if (keywords?.length) params.with_keywords = keywords.join("|");
   return { ...params, ...certificationParams(mood.certification) };
 }
 
@@ -41,64 +55,6 @@ function moodFor(key: string): MoodConfig {
   return moodMap[key];
 }
 
-export function buildMoodParams(moodKey: string): Record<string, string> {
-  return paramsForConfig(moodFor(moodKey));
-}
-
-/**
- * Merge several moods into one TMDB query: shared genres (or each mood's
- * primary genre), the strictest quality floors, and the union of exclusions
- * minus the target genres.
- *
- * @deprecated A merged query matches neither mood; it goes once moods are
- * searched as separate pools and blended. Don't add callers.
- */
-export function buildMergedMoodParams(moodKeys: string[]): Record<string, string> {
-  if (moodKeys.length === 1) return buildMoodParams(moodKeys[0]);
-
-  const configs = moodKeys.map(moodFor);
-
-  const genreCounts = new Map<number, number>();
-  for (const cfg of configs) {
-    for (const g of cfg.genres) {
-      genreCounts.set(g, (genreCounts.get(g) ?? 0) + 1);
-    }
-  }
-  const sharedGenres = [...genreCounts.entries()]
-    .filter(([, count]) => count > 1)
-    .map(([genre]) => genre);
-  const targetGenres =
-    sharedGenres.length > 0
-      ? sharedGenres
-      : [...new Set(configs.flatMap((c) => c.genres.slice(0, 1)))];
-
-  const voteCountGte = Math.max(...configs.map((c) => c.voteCountGte));
-  const voteAverageGte = Math.max(...configs.map((c) => c.voteAverageGte ?? 0));
-
-  const targetSet = new Set(targetGenres);
-  const allExcludes = new Set<number>();
-  for (const cfg of configs) {
-    for (const g of cfg.excludeGenres ?? []) {
-      if (!targetSet.has(g)) allExcludes.add(g);
-    }
-  }
-
-  const params: Record<string, string> = {
-    sort_by: "vote_average.desc",
-    "vote_count.gte": String(voteCountGte),
-    "with_runtime.gte": String(RUNTIME_FLOOR),
-    watch_region: "NO",
-    with_watch_monetization_types: "flatrate",
-  };
-  if (targetGenres.length > 0) params.with_genres = targetGenres.join("|");
-  if (allExcludes.size > 0) params.without_genres = [...allExcludes].join(",");
-  if (voteAverageGte > 0) params["vote_average.gte"] = String(voteAverageGte);
-
-  const allKeywords = new Set(configs.flatMap((c) => c.keywords ?? []));
-  if (allKeywords.size > 0) params.with_keywords = [...allKeywords].join("|");
-
-  // One query serves every merged mood, so a mood's safety cap covers them all.
-  // Only `family` has a cap today; take the strictest if a second one appears.
-  const cap = configs.find((c) => c.certification)?.certification;
-  return { ...params, ...certificationParams(cap) };
+export function buildMoodParams(moodKey: string, tier: Tier = 0): Record<string, string> {
+  return paramsForConfig(moodFor(moodKey), tier);
 }

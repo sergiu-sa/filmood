@@ -1,3 +1,6 @@
+import type { RefinementKey } from "@/lib/moodFilters";
+import type { Tier } from "@/lib/moodQuery";
+
 export interface Film {
   id: number;
   title: string;
@@ -45,6 +48,39 @@ export interface MoodConfig {
 
 export type EraKey = "classic" | "modern" | "fresh";
 export type TempoKey = "slowburn" | "fastpaced";
+
+// ─── Mood discover ──────────────────────────────────
+
+/** A film in a mood search. `genre_ids` feeds the "why this film" line; `moodKeys` are the moods that found it. */
+export interface DiscoverFilm extends Film {
+  vote_count: number;
+  genre_ids: number[];
+  moodKeys: string[];
+}
+
+/** Response shape for GET /api/movies/discover. */
+export interface DiscoverResponse {
+  moods: { key: string; label: string; accent: AccentColor }[];
+  films: DiscoverFilm[];
+  /** The seed that ordered this list; the same URL gives the same list. */
+  seed: number;
+  /** The highest tier any mood was loosened to (0 = not loosened). */
+  relaxed: Tier;
+  /** One mood failed to load; the films are the other mood's. */
+  partial: boolean;
+  interpreted: {
+    text: string;
+    moods: string[];
+    era: EraKey | null;
+    tempo: TempoKey | null;
+    unmatched: string[];
+    droppedMoods: string[];
+  } | null;
+  /** Only when the result is thin: filters whose removal would add films, most first. */
+  suggestions: { remove: RefinementKey; total: number }[];
+  /** Only when nothing matched: the first mood's neighbours, minus moods already searched. */
+  relatedMoods: string[];
+}
 
 // ─── Film Detail Types ─────────────────────────────
 

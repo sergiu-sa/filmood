@@ -11,6 +11,7 @@ interface MoodCardProps {
   accentColor: AccentColor;
   isSelected: boolean;
   onSelect: (key: string) => void;
+  disabled?: boolean;
 }
 
 export default function MoodCard({
@@ -21,14 +22,19 @@ export default function MoodCard({
   accentColor,
   isSelected,
   onSelect,
+  disabled = false,
 }: MoodCardProps) {
   const accent = ACCENT_VARS[accentColor];
 
   return (
     <button
       onClick={() => onSelect(moodKey)}
+      disabled={disabled}
+      aria-pressed={isSelected}
       className="group relative flex flex-col overflow-hidden text-left cursor-pointer"
       style={{
+        opacity: disabled ? 0.45 : 1,
+        cursor: disabled ? "not-allowed" : undefined,
         background: "var(--surface2)",
         border: `1px solid ${isSelected ? accent.base : "var(--border)"}`,
         borderRadius: "12px",
@@ -41,7 +47,7 @@ export default function MoodCard({
       <div
         className={`pointer-events-none absolute -top-[40%] -left-[20%] h-[80%] w-[140%]
           rounded-full transition-opacity duration-500
-          ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+          ${isSelected ? "opacity-100" : disabled ? "opacity-0" : "opacity-0 group-hover:opacity-100"}`}
         style={{ background: accent.glow, filter: "blur(25px)" }}
         aria-hidden="true"
       />

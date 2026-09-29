@@ -55,6 +55,32 @@ describe("resolveMoodText", () => {
     }
   });
 
+  // Both are the describe field's own placeholder copy.
+  it("resolves the placeholder 'cozy 80s heist' in full", () => {
+    const r = resolveMoodText("cozy 80s heist");
+    expect(r.moodKeys).toEqual(["easy", "thrilling"]);
+    expect(r.era).toBe("classic");
+    expect(r.keywords).toEqual([TMDB_KEYWORDS.heist.id]);
+    expect(r.unmatched).toEqual([]);
+  });
+
+  it("resolves the placeholder 'slow-burn noir' in full", () => {
+    const r = resolveMoodText("slow-burn noir");
+    expect(r.moodKeys).toEqual(["dark"]);
+    expect(r.tempo).toBe("slowburn");
+    expect(r.unmatched).toEqual([]);
+  });
+
+  it("lists the meaningful words that matched nothing, once each", () => {
+    const r = resolveMoodText("I want a cozy film with dragons and more dragons");
+    expect(r.moodKeys).toEqual(["easy"]);
+    expect(r.unmatched).toEqual(["dragons", "more"]);
+  });
+
+  it("does not report a word a bigram consumed", () => {
+    expect(resolveMoodText("date night").unmatched).toEqual([]);
+  });
+
   it("empty input returns no matches", () => {
     const r = resolveMoodText("   ");
     expect(r.matched).toBe(false);

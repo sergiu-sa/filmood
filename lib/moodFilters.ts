@@ -7,6 +7,7 @@ import {
   mergeExtraKeywords,
   isEraKey,
   isTempoKey,
+  EXCLUSION_OPTIONS,
 } from "@/lib/moodRefinements";
 import type { ResolvedMoodText } from "@/lib/moodResolver";
 import type { EraKey, TempoKey } from "@/lib/types";
@@ -19,6 +20,11 @@ export interface Refinements {
   tempo: TempoKey | null;
   extraKeywords: number[];
 }
+
+/** The filters a user set and can take back off. extraKeywords come from the text, so they're not one. */
+export type RefinementKey = "era" | "tempo" | "runtime" | "language" | "exclude";
+
+const REFINEMENT_KEYS: RefinementKey[] = ["era", "tempo", "runtime", "language", "exclude"];
 
 export const EMPTY_REFINEMENTS: Refinements = {
   runtime: null,
@@ -36,18 +42,46 @@ export function parseRefinements(
 ): Refinements {
   const eraParam = sp.get("era");
   const tempoParam = sp.get("tempo");
-  const exclude = sp.get("exclude") ?? "";
+  const excludeParam = sp.get("exclude") ?? "";
+  // Rebuilt from the offered genres, never forwarded raw: malformed input would
+  // 400 at TMDB, and a free-form list would make every request a cache miss.
+  const excludeIds = /^\d+(,\d+)*$/.test(excludeParam)
+    ? new Set(excludeParam.split(",").map(Number))
+    : new Set<number>();
+  const exclude = EXCLUSION_OPTIONS.filter((o) => excludeIds.has(o.id)).map((o) => o.id);
+  const runtime = sp.get("runtime");
+  const language = sp.get("language");
   return {
-    runtime: sp.get("runtime"),
-    language: sp.get("language"),
-    // TMDB's without_genres takes a comma-separated id list; anything else
-    // earns a 400 upstream, which would reach tmdbError and surface as our
-    // 500 for what is purely client input.
-    exclude: /^\d+(,\d+)*$/.test(exclude) ? exclude : null,
+    runtime: runtime === "short" || runtime === "long" ? runtime : null,
+    language: language === "en" || language === "scand" ? language : null,
+    exclude: exclude.length ? exclude.join(",") : null,
     era: isEraKey(eraParam) ? eraParam : resolved?.era ?? null,
     tempo: isTempoKey(tempoParam) ? tempoParam : resolved?.tempo ?? null,
     extraKeywords: resolved?.keywords ?? [],
   };
+}
+
+export function activeRefinementKeys(r: Refinements): RefinementKey[] {
+  return REFINEMENT_KEYS.filter((key) => r[key] !== null);
+}
+
+/**
+ * The active filters that deleting their URL param clears. The free text can
+ * imply an era or tempo, which has no param to delete or comes straight back.
+ */
+export function removableRefinementKeys(
+  sp: URLSearchParams,
+  resolved: ResolvedMoodText | null,
+): RefinementKey[] {
+  return activeRefinementKeys(parseRefinements(sp, resolved)).filter((key) => {
+    const without = new URLSearchParams(sp);
+    without.delete(key);
+    return parseRefinements(without, resolved)[key] === null;
+  });
+}
+
+export function withoutRefinement(r: Refinements, key: RefinementKey): Refinements {
+  return { ...r, [key]: null };
 }
 
 export function applyRefinements(

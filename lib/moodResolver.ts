@@ -122,11 +122,19 @@ export const SYNONYMS: Record<string, SynonymEntry> = {
   snappy: { tempo: "fastpaced" },
 };
 
+// Filler words that carry no mood, so they never count as unmatched.
+const STOPWORDS = new Set([
+  "a", "an", "the", "and", "or", "but", "with", "of", "for", "something",
+  "movie", "film", "films", "i", "want", "me", "to", "in", "like", "feel",
+]);
+
 export interface ResolvedMoodText {
   moodKeys: string[];
   keywords: number[];
   era: EraKey | null;
   tempo: TempoKey | null;
+  /** Meaningful words that matched nothing, so the echo can say what it couldn't read. */
+  unmatched: string[];
   /** True if anything matched. Callers can show a "couldn't find a match" nudge otherwise. */
   matched: boolean;
 }
@@ -147,9 +155,9 @@ export function resolveMoodText(text: string): ResolvedMoodText {
   let tempo: TempoKey | null = null;
   const matchedBigrams = new Set<number>();
 
-  const consume = (key: string, bigramStart?: number) => {
+  const consume = (key: string, bigramStart?: number): boolean => {
     const entry = SYNONYMS[key];
-    if (!entry) return;
+    if (!entry) return false;
     entry.moods?.forEach((m) => {
       if (m in moodMap) moodSet.add(m);
     });
@@ -160,12 +168,15 @@ export function resolveMoodText(text: string): ResolvedMoodText {
       matchedBigrams.add(bigramStart);
       matchedBigrams.add(bigramStart + 1);
     }
+    return true;
   };
 
   // Bigrams first so they can claim both tokens before unigram fallbacks.
   bigrams.forEach((bg, i) => consume(bg, i));
+  const unmatched = new Set<string>();
   tokens.forEach((tk, i) => {
-    if (!matchedBigrams.has(i)) consume(tk);
+    if (matchedBigrams.has(i) || consume(tk) || STOPWORDS.has(tk)) return;
+    unmatched.add(tk);
   });
 
   const moodKeys = [...moodSet];
@@ -175,6 +186,7 @@ export function resolveMoodText(text: string): ResolvedMoodText {
     keywords,
     era,
     tempo,
+    unmatched: [...unmatched],
     matched:
       moodKeys.length > 0 || keywords.length > 0 || era !== null || tempo !== null,
   };

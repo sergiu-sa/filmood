@@ -2,7 +2,8 @@
 /**
  * Measures the mood engine against live TMDB. Run locally, not in CI.
  *
- *   npm run check:moods                      mood × refinement coverage table
+ *   npm run check:moods                      mood × refinement coverage table, with
+ *                                            the tier the ladder settles on when thin
  *   npm run check:moods -- --keywords        verify every TMDB_KEYWORDS id by name
  *   npm run check:moods -- --find "<name>"   keyword candidates, for curating new ones
  *   npm run check:moods -- --probe           verify how TMDB reads "," and "|"
@@ -13,18 +14,14 @@ import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { config as loadEnv } from "dotenv";
 import { allMoods } from "@/lib/moodMap";
-import { buildMoodParams } from "@/lib/moodQuery";
-import {
-  applyRefinements,
-  EMPTY_REFINEMENTS,
-  type Refinements,
-} from "@/lib/moodFilters";
+import { EMPTY_REFINEMENTS, type Refinements } from "@/lib/moodFilters";
+import { buildSearchParams, MIN_RESULTS, searchMood } from "@/lib/moodSearch";
+import { mulberry32 } from "@/lib/seededRandom";
 import { TMDB_KEYWORDS } from "@/lib/tmdbKeywords";
 import { tmdbJson, tmdbJsonOptional } from "@/lib/tmdb-fetch";
 
 loadEnv({ path: path.resolve(__dirname, "../.env.local") });
 
-const MIN_RESULTS = 12;
 // Plain Node ignores Next's cache options; any number keeps tmdbJson off its
 // `cache: "no-store"` branch.
 const REVALIDATE = 0;
@@ -48,13 +45,6 @@ async function tmdb<T>(p: string, params: Record<string, string>): Promise<T> {
 const discover = (params: Record<string, string>) =>
   tmdb<DiscoverPage>("/discover/movie", { ...params, page: "1" });
 
-// Built exactly as the discover route builds a single-mood query.
-function moodQuery(key: string, r: Partial<Refinements>): Record<string, string> {
-  const params: Record<string, string> = { language: "en-US", ...buildMoodParams(key) };
-  applyRefinements(params, { ...EMPTY_REFINEMENTS, ...r });
-  return params;
-}
-
 const COLUMNS: [string, Partial<Refinements>][] = [
   ["none", {}],
   ["classic", { era: "classic" }],
@@ -77,9 +67,17 @@ async function coverage(): Promise<boolean> {
   for (const mood of allMoods) {
     const cells: string[] = [];
     for (const [name, r] of COLUMNS) {
-      const page = await discover(moodQuery(mood.key, r));
+      const refinements = { ...EMPTY_REFINEMENTS, ...r };
+      const page = await discover(buildSearchParams(mood.key, refinements, 0));
       const n = page.total_results ?? 0;
-      cells.push(n < MIN_RESULTS ? `**${n}**` : String(n));
+      if (n < MIN_RESULTS) {
+        // What the discover route serves: the tier the ladder settles on.
+        await sleep(CALL_GAP_MS);
+        const pool = await searchMood(mood.key, refinements, mulberry32(1));
+        cells.push(`**${n}** → ${pool.total} (t${pool.tier})`);
+      } else {
+        cells.push(String(n));
+      }
       if (name !== "none") continue;
       if (n < MIN_RESULTS) ok = false;
       const cap = mood.certification;
@@ -92,6 +90,7 @@ async function coverage(): Promise<boolean> {
     console.log(`| ${mood.key} | ${cells.join(" | ")} |`);
   }
 
+  console.log("\nCells: tier-0 total; when thin, → the total at the tier the ladder settles on.");
   console.log(`\nTop 3, no refinements:\n${tops.join("\n")}`);
   if (caps.length) console.log(`\nCertification caps (in every query):\n${caps.join("\n")}`);
   if (!ok) console.log(`\nFAIL: a mood is below ${MIN_RESULTS} with no refinements.`);
