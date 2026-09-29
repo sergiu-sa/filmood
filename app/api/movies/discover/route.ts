@@ -1,96 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
-import { moodMap, normalizeMoodKeys } from "@/lib/moodMap";
-import {
-  buildMoodParams,
-  buildMergedMoodParams,
-  certificationParams,
-} from "@/lib/moodQuery";
+import { MAX_MOODS, moodMap, normalizeMoodKeys } from "@/lib/moodMap";
 import { resolveMoodText } from "@/lib/moodResolver";
-import { applyRefinements, parseRefinements } from "@/lib/moodFilters";
-import { tmdbError } from "@/lib/api-errors";
-import { tmdbJson, TMDBError, settleTMDB } from "@/lib/tmdb-fetch";
+import { parseRefinements } from "@/lib/moodFilters";
+import { runMoodSearch } from "@/lib/moodSearch";
+import { mulberry32, newSeed, parseSeed } from "@/lib/seededRandom";
+import { parseSource, recordSearchEvent } from "@/lib/searchLog";
+import { mapTMDBDiscoverFilm } from "@/lib/tmdb";
+import { badRequest, tmdbError } from "@/lib/api-errors";
 import { getAuthUser, getSupabaseAdmin } from "@/lib/supabase-server";
 import { recordMoodPicks } from "@/lib/mood-history";
+import type { DiscoverResponse } from "@/lib/types";
 
-// How many TMDB result pages to pool per search. Page 1 is always fetched
-// (quality anchor); one more page is picked from [2..MAX_PAGE] to widen the
-// pool and vary results across repeat searches.
-const MAX_PAGE = 3;
-// Final deck size returned to the client.
-const RESULT_LIMIT = 20;
-
-// Fetch a specific TMDB discover page. A 404 yields []; anything worse rejects
-// so the caller decides whether that page was optional.
-async function fetchDiscoverPage(
-  baseParams: Record<string, string>,
-  page: number,
-): Promise<{ id: number }[]> {
-  try {
-    const data = await tmdbJson<{ results?: { id: number }[] }>(
-      "/discover/movie",
-      { ...baseParams, page: String(page) },
-      // Uncached: every mood combination is a distinct query.
-      false,
-    );
-    return data.results ?? [];
-  } catch (error) {
-    // One page genuinely missing shouldn't sink the search. Anything else —
-    // a missing key, a rotated key, a rate limit — must reach the handler's
-    // catch, or a broken deploy renders as "no films match your mood".
-    if (error instanceof TMDBError && error.status === 404) return [];
-    throw error;
-  }
-}
-
-// Fetch page 1 + one random page from [2..MAX_PAGE] and return the merged,
-// deduped pool. Pooling widens the candidate set so a Fisher-Yates shuffle
-// produces genuine variety across repeat searches, while page 1 keeps
-// quality anchored.
-async function fetchDiscoverPool(
-  baseParams: Record<string, string>,
-): Promise<{ id: number }[]> {
-  const secondPage = 2 + Math.floor(Math.random() * (MAX_PAGE - 1));
-  // Page 1 is the result; the random page only widens variety. Doubling the
-  // request rate is also what provokes a rate limiter, so losing the optional
-  // page must not throw away the page we actually need.
-  const [firstResult, secondResult] = await Promise.allSettled([
-    fetchDiscoverPage(baseParams, 1),
-    fetchDiscoverPage(baseParams, secondPage),
-  ]);
-  if (firstResult.status === "rejected") throw firstResult.reason;
-  const first = firstResult.value;
-  const second = secondResult.status === "fulfilled" ? secondResult.value : [];
-  const seen = new Set<number>();
-  const pool: { id: number }[] = [];
-  for (const film of [...first, ...second]) {
-    if (seen.has(film.id)) continue;
-    seen.add(film.id);
-    pool.push(film);
-  }
-  return pool;
-}
-
-function shuffle<T>(arr: T[]): T[] {
-  const copy = [...arr];
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
-}
+// The input's maxLength is not a security boundary.
+const MAX_TEXT_LENGTH = 120;
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const moodParam = searchParams.get("mood");
-  const text = searchParams.get("text");
+  const text = (searchParams.get("text") ?? "").trim().slice(0, MAX_TEXT_LENGTH);
 
   // Resolve the optional free-form text into mood keys + keywords + era/tempo.
   // Explicit chip values for era/tempo win over anything inferred from text.
-  const resolved = text && text.trim() ? resolveMoodText(text.trim()) : null;
+  const resolved = text ? resolveMoodText(text) : null;
 
-  const tileKeys = normalizeMoodKeys((moodParam ?? "").split(","));
+  const tileKeys = normalizeMoodKeys((searchParams.get("mood") ?? "").split(","));
   const textKeys = resolved?.moodKeys ?? [];
-  const moodKeys = [...new Set([...tileKeys, ...textKeys])];
+  const allKeys = [...new Set([...tileKeys, ...textKeys])];
+  const moodKeys = allKeys.slice(0, MAX_MOODS);
 
   if (moodKeys.length === 0) {
     // Resolver picked up era/tempo/keywords but no mood word — we need at least
@@ -100,13 +35,10 @@ export async function GET(request: NextRequest) {
       (resolved.era !== null ||
         resolved.tempo !== null ||
         resolved.keywords.length > 0);
-    return NextResponse.json(
-      {
-        error: partialMatch
-          ? "Add a feeling word — like 'funny', 'dark', or 'cozy'. Era or tempo alone isn't enough."
-          : "Provide a mood tile or describe your mood",
-      },
-      { status: 400 }
+    return badRequest(
+      partialMatch
+        ? "Add a feeling word — like 'funny', 'dark', or 'cozy'. Era or tempo alone isn't enough."
+        : "Provide a mood tile or describe your mood",
     );
   }
 
@@ -121,76 +53,57 @@ export async function GET(request: NextRequest) {
   }
 
   const refinements = parseRefinements(searchParams, resolved);
+  const seed = parseSeed(searchParams.get("seed")) ?? newSeed();
 
   try {
-    // ── Primary: merged mood query ──
-    // For a single mood this is just that mood's query. For several it builds
-    // one TMDB query from their shared genres (or each mood's primary genre).
-    const mergedQuery = { language: "en-US", ...buildMergedMoodParams(moodKeys) };
-    applyRefinements(mergedQuery, refinements);
+    const result = await runMoodSearch(moodKeys, refinements, mulberry32(seed));
 
-    // Fetch pages 1 + random(2..MAX_PAGE) and shuffle so repeat searches
-    // return different films instead of the same top 20.
-    let films: { id: number }[] = shuffle(await fetchDiscoverPool(mergedQuery));
-
-    // ── Fallback: if the merged pool returned < 5 films and we have
-    //    multiple moods, supplement with per-mood pools so the page
-    //    never feels empty. The blended results stay at the top. ──
-    if (films.length < 5 && moodKeys.length > 1) {
-      const seen = new Set(films.map((f) => f.id));
-
-      // A family pick caps the whole search, not just family's own pool.
-      const cap = certificationParams(
-        moodKeys.map((k) => moodMap[k].certification).find(Boolean),
-      );
-
-      // Supplementary pools only top up an already-thin result, so one
-      // failing mood must not discard the films we already have.
-      const { values, firstRejection } = await settleTMDB(
-        moodKeys.map((key) => {
-          const query = { language: "en-US", ...buildMoodParams(key), ...cap };
-          applyRefinements(query, refinements);
-          return fetchDiscoverPool(query);
-        }),
-      );
-      const fallbackPools = values.map((pool) => pool ?? []);
-
-      // Nothing anywhere plus a real failure is an outage, not "no matches".
-      if (
-        films.length === 0 &&
-        fallbackPools.every((pool) => pool.length === 0) &&
-        firstRejection
-      ) {
-        throw firstRejection;
-      }
-      const extras = shuffle(fallbackPools.flat()).filter((f) => {
-        if (seen.has(f.id)) return false;
-        seen.add(f.id);
-        return true;
-      });
-
-      // Merged (blended) results first, then individual mood results
-      films = [...films, ...extras];
-    }
-
-    films = films.slice(0, RESULT_LIMIT);
-
-    const labels = moodKeys.map((k) => moodMap[k].label);
-
-    return NextResponse.json({
-      mood: moodKeys.join(","),
-      moods: labels,
-      films,
-      total: films.length,
-      resolved: resolved
+    const body: DiscoverResponse = {
+      moods: moodKeys.map((k) => ({
+        key: k,
+        label: moodMap[k].tagLabel,
+        accent: moodMap[k].accentColor,
+      })),
+      films: result.films.map(mapTMDBDiscoverFilm),
+      seed,
+      relaxed: result.relaxed,
+      partial: result.partial,
+      interpreted: resolved
         ? {
-            matched: resolved.matched,
-            addedMoods: textKeys,
+            text,
+            moods: textKeys,
             era: resolved.era,
             tempo: resolved.tempo,
+            unmatched: resolved.unmatched,
+            droppedMoods: allKeys.slice(MAX_MOODS),
           }
         : null,
-    });
+      suggestions: result.suggestions,
+      relatedMoods: result.relatedMoods,
+    };
+
+    const { era, tempo, runtime } = refinements;
+    const filters = Object.fromEntries(
+      Object.entries({ era, tempo, runtime }).filter(([, v]) => v !== null),
+    ) as Record<string, string>;
+    // Fire-and-forget like recordMoodPicks, and wrapped so even a missing admin
+    // client can't turn a finished search into an error.
+    Promise.resolve()
+      .then(() =>
+        recordSearchEvent(getSupabaseAdmin(), {
+          moods: moodKeys,
+          filters,
+          hasText: text.length > 0,
+          source: parseSource(searchParams.get("src")),
+          resultCount: body.films.length,
+          relaxed: body.relaxed,
+          partial: body.partial,
+          suggestionsShown: body.suggestions.length > 0,
+        }),
+      )
+      .catch((err) => console.error("search_events insert failed", err));
+
+    return NextResponse.json(body);
   } catch (error) {
     return tmdbError(error, "Failed to fetch films");
   }

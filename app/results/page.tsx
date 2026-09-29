@@ -1,15 +1,17 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import Breadcrumb from "@/components/Breadcrumb";
 import FilmCard from "@/components/film/FilmCard";
 import TopPick from "@/components/results/TopPick";
 import { useMediaQuery } from "@/lib/useMediaQuery";
-import type { Film, AccentColor, Provider } from "@/lib/types";
-import { moodMap, normalizeMoodKeys } from "@/lib/moodMap";
+import type { AccentColor, DiscoverFilm, DiscoverResponse, Provider } from "@/lib/types";
+import { moodMap } from "@/lib/moodMap";
 import { ACCENT_VARS } from "@/lib/constants";
+import { newSeed, parseSeed } from "@/lib/seededRandom";
+import { pickTopFilm } from "@/lib/topPick";
 
 function getMeta(moods: string[]) {
   const key = moods[0]?.trim().toLowerCase() ?? "";
@@ -27,6 +29,7 @@ function getMeta(moods: string[]) {
 
 /* ── Results content ── */
 function ResultsContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const mood = searchParams.get("mood");
   const runtime = searchParams.get("runtime");
@@ -35,8 +38,10 @@ function ResultsContent() {
   const era = searchParams.get("era");
   const tempo = searchParams.get("tempo");
   const text = searchParams.get("text");
+  const seed = parseSeed(searchParams.get("seed"));
+  const src = searchParams.get("src");
 
-  const [films, setFilms] = useState<Film[]>([]);
+  const [films, setFilms] = useState<DiscoverFilm[]>([]);
   const [moods, setMoods] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -69,14 +74,19 @@ function ResultsContent() {
       return;
     }
 
-    // Shared links can still carry a retired mood key.
-    const parsedMoods = normalizeMoodKeys((mood ?? "").split(","));
+    // The seed goes into the URL before the first fetch, so Back to this page
+    // restores the same list. The replace re-runs this effect, which fetches once.
+    if (!seed) {
+      const withSeed = new URLSearchParams(searchParams.toString());
+      withSeed.set("seed", String(newSeed()));
+      router.replace(`/results?${withSeed}`, { scroll: false });
+      return;
+    }
 
     const fetchFilms = async () => {
       try {
         setLoading(true);
         setError(null);
-        setMoods(parsedMoods);
 
         const params = new URLSearchParams();
         if (mood) params.set("mood", mood);
@@ -86,9 +96,11 @@ function ResultsContent() {
         if (era) params.set("era", era);
         if (tempo) params.set("tempo", tempo);
         if (text) params.set("text", text);
+        params.set("seed", String(seed));
+        if (src) params.set("src", src);
 
         const res = await fetch(`/api/movies/discover?${params.toString()}`);
-        const data = await res.json();
+        const data: DiscoverResponse & { error?: string } = await res.json();
 
         if (!res.ok) {
           throw new Error(data.error || "Failed to load films");
@@ -98,14 +110,8 @@ function ResultsContent() {
           throw new Error(data.error);
         }
 
-        // Surface moods inferred from free-form text so the header pills still
-        // show something meaningful when the user didn't pick a tile.
-        if (Array.isArray(data.moods) && data.moods.length > 0 && parsedMoods.length === 0) {
-          // data.mood is the resolved mood key list (comma-separated)
-          const resolvedKeys = typeof data.mood === "string" ? data.mood.split(",") : [];
-          setMoods(resolvedKeys);
-        }
-
+        // The server's list: retired keys resolved, text moods added, capped at two.
+        setMoods(data.moods.map((m) => m.key));
         setFilms(Array.isArray(data.films) ? data.films : []);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load films");
@@ -115,15 +121,10 @@ function ResultsContent() {
     };
 
     fetchFilms();
-  }, [mood, runtime, language, exclude, era, tempo, text]);
+  }, [mood, runtime, language, exclude, era, tempo, text, seed, src, router, searchParams]);
 
   // Fetch providers for the top pick
-  const topPick =
-    films.length > 0
-      ? films.reduce((best, f) =>
-          (f.vote_average ?? 0) > (best.vote_average ?? 0) ? f : best,
-        )
-      : null;
+  const topPick = pickTopFilm(films);
 
   useEffect(() => {
     if (!topPick) return;

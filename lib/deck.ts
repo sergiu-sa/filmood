@@ -1,27 +1,14 @@
 import { normalizeMoodKeys } from "@/lib/moodMap";
-import { buildMoodParams } from "@/lib/moodQuery";
-import { tmdbJsonOptional, settleTMDB } from "@/lib/tmdb-fetch";
-import {
-  applyEra,
-  applyTempo,
-  mergeExtraKeywords,
-} from "@/lib/moodRefinements";
+import { EMPTY_REFINEMENTS, type Refinements } from "@/lib/moodFilters";
+import { searchMood } from "@/lib/moodSearch";
+import { mulberry32, newSeed } from "@/lib/seededRandom";
+import { settleTMDB } from "@/lib/tmdb-fetch";
 import type { DeckFilm, EraKey, TempoKey } from "@/lib/types";
 
 const DECK_SIZE = 15;
 // Cap how many text-derived keyword IDs we union across the group: they're ORed
 // with each mood's own keywords, so a large group's would dilute every mood.
 const MAX_SHARED_EXTRA_KEYWORDS = 3;
-
-interface TMDBDiscoverResult {
-  id: number;
-  title: string;
-  poster_path: string | null;
-  release_date: string;
-  vote_average: number;
-  overview: string;
-  genre_ids: number[];
-}
 
 interface ParticipantInput {
   mood_selections: string[] | null;
@@ -118,33 +105,20 @@ export async function buildSharedDeck(
   }
 
   // Aggregate group refinements
-  const sharedEra = majorityVote(participants.map((p) => p.era ?? null));
-  const sharedTempo = majorityVote(participants.map((p) => p.tempo ?? null));
-  const sharedKeywords = topKeywords(participants, MAX_SHARED_EXTRA_KEYWORDS);
+  const groupRefinements: Refinements = {
+    ...EMPTY_REFINEMENTS,
+    era: majorityVote(participants.map((p) => p.era ?? null)),
+    tempo: majorityVote(participants.map((p) => p.tempo ?? null)),
+    extraKeywords: topKeywords(participants, MAX_SHARED_EXTRA_KEYWORDS),
+  };
+  // A deck is built once and stored, so it needs no reproducible seed.
+  const rng = mulberry32(newSeed());
 
-  // Fetch TMDB results for each unique mood in parallel
+  // Search each unique mood in parallel, on the same ladder as solo results.
   const fetchResults = allocations.map(async ({ mood, count }) => {
-    const params: Record<string, string> = {
-      language: "en-US",
-      page: "1",
-      ...buildMoodParams(mood),
-    };
-
-    // Apply group-level refinements on top of the per-mood TMDB params.
-    applyTempo(params, sharedTempo);
-    applyEra(params, sharedEra);
-    mergeExtraKeywords(params, sharedKeywords);
-
-    // A 404 means no films for this mood; worse statuses reject and are
-    // gathered by the allSettled below.
-    const data = await tmdbJsonOptional<{ results?: TMDBDiscoverResult[] }>(
-      "/discover/movie",
-      params,
-      // Uncached: every mood + refinement combination is a distinct query.
-      false,
-    );
-    const results: DeckFilm[] = (data.results ?? []).map(
-      (r: TMDBDiscoverResult) => ({
+    const pool = await searchMood(mood, groupRefinements, rng);
+    const results: DeckFilm[] = pool.films.map(
+      (r) => ({
         id: r.id,
         title: r.title,
         poster_path: r.poster_path,

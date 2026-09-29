@@ -2,19 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { allMoods } from "@/lib/moodMap";
+import { allMoods, MAX_MOODS } from "@/lib/moodMap";
 import type { EraKey, TempoKey } from "@/lib/types";
 import MoodCard from "./MoodCard";
 import MoodExtras from "@/components/mood/MoodExtras";
 import { chipStyle, FieldLabel } from "@/components/mood/chipStyle";
-
-// Genre IDs for exclusion chips
-const EXCLUSION_OPTIONS = [
-  { id: 27, label: "Horror" },
-  { id: 10749, label: "Romance" },
-  { id: 16, label: "Animation" },
-  { id: 99, label: "Docs" },
-];
+import { EXCLUSION_OPTIONS } from "@/lib/moodRefinements";
 
 interface MoodPanelProps {
   isOpen: boolean;
@@ -91,7 +84,7 @@ export default function MoodPanel({
           marginBottom: "16px",
         }}
       >
-        All moods
+        All moods · pick up to {MAX_MOODS}
       </div>
 
       {/* Full mood grid */}
@@ -106,6 +99,7 @@ export default function MoodPanel({
             accentColor={mood.accentColor}
             isSelected={selectedMoods.has(mood.key)}
             onSelect={onSelectMood}
+            disabled={count >= MAX_MOODS && !selectedMoods.has(mood.key)}
           />
         ))}
       </div>

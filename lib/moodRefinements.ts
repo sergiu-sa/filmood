@@ -14,6 +14,14 @@ export const ERA_OPTIONS: { value: EraKey; label: string }[] = [
   { value: "fresh", label: "Fresh" },
 ];
 
+/** The genres a search can exclude. The panel offers these and the parser accepts nothing else. */
+export const EXCLUSION_OPTIONS = [
+  { id: 27, label: "Horror" },
+  { id: 10749, label: "Romance" },
+  { id: 16, label: "Animation" },
+  { id: 99, label: "Docs" },
+];
+
 export const TEMPO_OPTIONS: { value: TempoKey; label: string }[] = [
   { value: "slowburn", label: "Slow-burn" },
   { value: "fastpaced", label: "Fast-paced" },

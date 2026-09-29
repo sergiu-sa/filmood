@@ -206,6 +206,9 @@ export const moodMap: Record<string, MoodConfig> = {
 // All moods as an array for UI iteration
 export const allMoods = Object.values(moodMap);
 
+/** A search blends at most two moods, and the pickers stop at the same number. */
+export const MAX_MOODS = 2;
+
 /** Retired mood keys → the mood that absorbed them. Old history rows and shared links still carry them. */
 export const LEGACY_MOOD_ALIASES: Record<string, string> = {
   beautiful: "cry",

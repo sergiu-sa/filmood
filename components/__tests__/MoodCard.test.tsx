@@ -37,6 +37,21 @@ describe("MoodCard", () => {
     expect(defaultProps.onSelect).toHaveBeenCalledWith("laugh");
   });
 
+  it("exposes the selection to assistive tech", () => {
+    const { rerender } = render(<MoodCard {...defaultProps} />);
+    expect(screen.getByRole("button")).toHaveAttribute("aria-pressed", "false");
+    rerender(<MoodCard {...defaultProps} isSelected />);
+    expect(screen.getByRole("button")).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("ignores clicks when disabled", () => {
+    render(<MoodCard {...defaultProps} disabled />);
+    const button = screen.getByRole("button");
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(defaultProps.onSelect).not.toHaveBeenCalled();
+  });
+
   it("renders each supported accent color without throwing", () => {
     const colors = ["gold", "blue", "rose", "violet", "teal", "ember"] as const;
     for (const accentColor of colors) {
