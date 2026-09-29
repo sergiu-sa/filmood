@@ -15,8 +15,8 @@ function discoverSeeds(page: Page): string[] {
 
 const urlSeed = (page: Page) => new URL(page.url()).searchParams.get("seed");
 
-// Dev mode mounts the page twice (React StrictMode), so the count varies; what
-// matters is that no request goes out without the URL's seed.
+// No request may go out without the URL's seed. The request count is pinned in
+// results-empty-state.test.ts.
 function expectAllSeeded(seeds: string[], seed: string | null) {
   expect(seeds.length).toBeGreaterThan(0);
   expect(new Set(seeds)).toEqual(new Set([seed]));

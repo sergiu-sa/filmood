@@ -124,6 +124,9 @@ function ResultsContent() {
 
         const res = await fetch(`/api/movies/discover?${params.toString()}`);
         const data: DiscoverResponse & { error?: string } = await res.json();
+        // Superseded (a related mood, then Back). The guard above skips re-runs,
+        // so an effect cleanup flag could leave nothing fetching.
+        if (fetchedQuery.current !== query) return;
 
         if (!res.ok) {
           throw new Error(data.error || "Failed to load films");
@@ -143,9 +146,11 @@ function ResultsContent() {
           partial: data.partial,
         });
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load films");
+        if (fetchedQuery.current === query) {
+          setError(err instanceof Error ? err.message : "Failed to load films");
+        }
       } finally {
-        setLoading(false);
+        if (fetchedQuery.current === query) setLoading(false);
       }
     };
 

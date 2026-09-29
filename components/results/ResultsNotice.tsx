@@ -36,7 +36,7 @@ export default function ResultsNotice({
 }: ResultsNoticeProps) {
   const empty = count === 0;
   const thin = !empty && suggestions.length > 0;
-  const widened = !empty && relaxed > 0;
+  const widened = !empty && !thin && relaxed > 0;
   if (!empty && !thin && !widened && !partial) return null;
 
   const buttons = suggestions.length > 0 && (

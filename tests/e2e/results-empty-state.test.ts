@@ -53,15 +53,12 @@ test.describe("Results empty state", () => {
     await page.waitForURL((url) => !url.searchParams.has("era") && !url.searchParams.has("src"));
     expect(new URL(page.url()).searchParams.get("seed")).toBe("4242");
     await expect(page.getByRole("heading", { level: 2, name: /midnight harvest/i })).toBeVisible();
-    await page.waitForLoadState("networkidle");
 
-    // Dropping src from the URL must not refetch: a refetch would go out without it.
+    // Each discover request logs a search_events row, so dropping src must not refetch.
     const afterClick = requests.filter((p) => !p.has("era"));
-    expect(afterClick.length).toBeGreaterThan(0);
-    for (const p of afterClick) {
-      expect(p.get("src")).toBe("suggestion");
-      expect(p.get("seed")).toBe("4242");
-    }
+    expect(afterClick).toHaveLength(1);
+    expect(afterClick[0].get("src")).toBe("suggestion");
+    expect(afterClick[0].get("seed")).toBe("4242");
   });
 
   test("src leaves the URL after the first fetch, so a reload isn't credited again", async ({ page }) => {
@@ -71,15 +68,61 @@ test.describe("Results empty state", () => {
     await page.waitForURL((url) => !url.searchParams.has("src"));
     expect(new URL(page.url()).searchParams.get("seed")).toBe("4242");
     await expect(page.getByRole("heading", { level: 2, name: /midnight harvest/i })).toBeVisible();
-    await page.waitForLoadState("networkidle");
 
-    expect(requests.length).toBeGreaterThan(0);
-    expect(requests.map((p) => p.get("src"))).toEqual(requests.map(() => "related"));
+    expect(requests.map((p) => p.get("src"))).toEqual(["related"]);
 
     const reload = page.waitForRequest((req) => isDiscover(req.url()));
     await page.reload();
     const params = new URL((await reload).url()).searchParams;
     expect(params.get("seed")).toBe("4242");
     expect(params.has("src")).toBe(false);
+  });
+
+  test("a related mood without a seed gets one first, then sends src exactly once", async ({ page }) => {
+    await stubEmptyWithEra(page);
+    const requests = discoverParams(page);
+
+    await page.goto("/results?mood=laugh&era=classic&seed=4242");
+    await page.getByRole("link", { name: "Need a hug" }).click();
+    await page.waitForURL(
+      (url) => url.searchParams.get("mood") === "easy" && url.searchParams.has("seed") && !url.searchParams.has("src"),
+    );
+    await expect(page.getByRole("heading", { level: 2, name: /midnight harvest/i })).toBeVisible();
+
+    const easy = requests.filter((p) => p.get("mood") === "easy");
+    expect(easy).toHaveLength(1);
+    expect(easy[0].get("src")).toBe("related");
+    expect(easy[0].get("seed")).toBe(new URL(page.url()).searchParams.get("seed"));
+    for (const p of requests) expect(p.get("seed")).toMatch(/^\d+$/);
+  });
+
+  test("a late answer for a mood you left doesn't replace the page", async ({ page }) => {
+    await stubEmptyWithEra(page);
+    let releaseEasy = () => {};
+    const easyHeld = new Promise<void>((resolve) => (releaseEasy = resolve));
+    await page.route(/\/api\/movies\/discover(\?.*)?$/, async (route) => {
+      if (new URL(route.request().url()).searchParams.get("mood") === "easy") await easyHeld;
+      return route.fallback();
+    });
+
+    await page.goto("/results?mood=laugh&era=classic&seed=4242");
+    await page.getByRole("link", { name: "Need a hug" }).click();
+    await page.waitForURL((url) => url.searchParams.get("mood") === "easy" && !url.searchParams.has("src"));
+
+    await page.goBack();
+    await page.waitForURL(/era=classic/);
+    await expect(page.getByRole("heading", { level: 1, name: /nothing fits/i })).toBeVisible();
+
+    const easyDone = page.waitForEvent(
+      "requestfinished",
+      (req) => isDiscover(req.url()) && new URL(req.url()).searchParams.get("mood") === "easy",
+    );
+    releaseEasy();
+    await easyDone;
+    // A stale answer would render a frame or two after its body arrives.
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+
+    await expect(page.getByRole("heading", { level: 1, name: /nothing fits/i })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: /midnight harvest/i })).toHaveCount(0);
   });
 });

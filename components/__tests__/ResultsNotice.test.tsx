@@ -129,6 +129,14 @@ describe("ResultsNotice", () => {
     expect(screen.queryByText(/widened a little/i)).not.toBeInTheDocument();
   });
 
+  it("relaxed: stays quiet when the thin notice already says to loosen a filter", () => {
+    render(
+      <ResultsNotice {...base} count={5} relaxed={1} suggestions={[{ remove: "era", total: 64 }]} />,
+    );
+    expect(screen.getByText(/only 5 films match/i)).toBeInTheDocument();
+    expect(screen.queryByText(/widened a little/i)).not.toBeInTheDocument();
+  });
+
   it("partial: says one mood failed", () => {
     render(<ResultsNotice {...base} count={14} partial />);
     expect(
