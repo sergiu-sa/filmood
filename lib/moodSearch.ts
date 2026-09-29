@@ -8,7 +8,6 @@
 import { moodMap } from "@/lib/moodMap";
 import { buildMoodParams, certificationParams, type Tier } from "@/lib/moodQuery";
 import {
-  activeRefinementKeys,
   applyRefinements,
   withoutRefinement,
   type RefinementKey,
@@ -169,15 +168,16 @@ function blend(pools: MoodPool[], rng: () => number): MoodSearchResult["films"] 
   return [...both, ...alternated].slice(0, RESULT_LIMIT);
 }
 
-/** For each active filter, how many films the settled pools would have without it. */
+/** For each removable filter, how many films the settled pools would have without it. */
 async function suggestRemovals(
   pools: MoodPool[],
   r: Refinements,
+  removable: RefinementKey[],
   cap: CertificationCap,
   count: number,
 ): Promise<MoodSearchResult["suggestions"]> {
   const probes = await Promise.all(
-    activeRefinementKeys(r).map(async (remove) => {
+    removable.map(async (remove) => {
       // Suggestions are optional, so a failed probe just counts nothing.
       const { values } = await settleTMDB(
         pools.map((p) =>
@@ -193,11 +193,15 @@ async function suggestRemovals(
     .slice(0, MAX_SUGGESTIONS);
 }
 
-/** 1–2 moods → blended, capped result, plus suggestions when it's thin. */
+/**
+ * 1–2 moods → blended, capped result, plus suggestions when it's thin.
+ * `removable` lists the filters a suggestion may offer to remove (see `removableRefinementKeys`).
+ */
 export async function runMoodSearch(
   moodKeys: string[],
   r: Refinements,
   rng: () => number,
+  removable: RefinementKey[],
 ): Promise<MoodSearchResult> {
   // Picking "Everyone's watching" means kids are watching, so its cap covers every pool.
   const cap = moodKeys.map((k) => moodMap[k].certification).find(Boolean);
@@ -213,12 +217,12 @@ export async function runMoodSearch(
   // Nothing to show plus a real failure is an outage, not "no matches".
   if (films.length === 0 && firstRejection) throw firstRejection;
 
-  const thin = films.length < MIN_RESULTS && activeRefinementKeys(r).length > 0;
+  const thin = films.length < MIN_RESULTS && removable.length > 0;
   return {
     films,
     relaxed: Math.max(0, ...pools.map((p) => p.tier)) as Tier,
     partial: firstRejection !== null,
-    suggestions: thin ? await suggestRemovals(pools, r, cap, films.length) : [],
+    suggestions: thin ? await suggestRemovals(pools, r, removable, cap, films.length) : [],
     relatedMoods:
       films.length === 0
         ? moodMap[moodKeys[0]].relatedMoods.filter((k) => !moodKeys.includes(k))

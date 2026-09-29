@@ -214,6 +214,29 @@ describe("buildSharedDeck", () => {
     expect(sent.get("with_runtime.gte")).toBe("120");
   });
 
+  // The deck shares the solo ladder: a thin mood loosens instead of starving its slots.
+  it("climbs a tier for a thin mood, on hour-cached calls", async () => {
+    const spy = vi.fn().mockImplementation((url: string) => {
+      const withKeywords = new URL(url).searchParams.has("with_keywords");
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(withKeywords ? fakeTMDBResponse(3) : fakeTMDBResponse(20, 100)),
+      });
+    });
+    global.fetch = spy;
+
+    // dark is genre-essential, so tier 1 drops its keywords.
+    const result = await buildSharedDeck([{ mood_selections: ["dark"] }]);
+
+    const sent = spy.mock.calls.map(([url]) => new URL(url as string).searchParams);
+    expect(sent).toHaveLength(2);
+    expect(sent[0].has("with_keywords")).toBe(true);
+    expect(sent[1].has("with_keywords")).toBe(false);
+    expect(result).toHaveLength(15);
+    for (const film of result) expect(film.id).toBeGreaterThanOrEqual(100);
+    for (const [, init] of spy.mock.calls) expect(init).toEqual({ next: { revalidate: 3600 } });
+  });
+
   it("each film in the deck has the correct shape", async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,

@@ -1,3 +1,6 @@
+import type { RefinementKey } from "@/lib/moodFilters";
+import type { Tier } from "@/lib/moodQuery";
+
 export interface Film {
   id: number;
   title: string;
@@ -62,7 +65,7 @@ export interface DiscoverResponse {
   /** The seed that ordered this list; the same URL gives the same list. */
   seed: number;
   /** The highest tier any mood was loosened to (0 = not loosened). */
-  relaxed: 0 | 1 | 2;
+  relaxed: Tier;
   /** One mood failed to load; the films are the other mood's. */
   partial: boolean;
   interpreted: {
@@ -74,7 +77,7 @@ export interface DiscoverResponse {
     droppedMoods: string[];
   } | null;
   /** Only when the result is thin: filters whose removal would add films, most first. */
-  suggestions: { remove: "era" | "tempo" | "runtime" | "language" | "exclude"; total: number }[];
+  suggestions: { remove: RefinementKey; total: number }[];
   /** Only when nothing matched: the first mood's neighbours, minus moods already searched. */
   relatedMoods: string[];
 }

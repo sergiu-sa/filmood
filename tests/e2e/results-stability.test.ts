@@ -41,9 +41,12 @@ test.describe("Results stability", () => {
     await page.getByRole("link", { name: /view details/i }).click();
     await page.waitForURL(/\/film\/\d+$/);
 
+    // Back must refetch, and that request must carry the same seed.
+    const refetch = page.waitForRequest((req) => new URL(req.url()).pathname === "/api/movies/discover");
     await page.goBack();
     await page.waitForURL(/\/results\?/);
     expect(urlSeed(page)).toBe(seed);
+    expect(new URL((await refetch).url()).searchParams.get("seed")).toBe(seed);
     await expect(page.getByRole("heading", { level: 2, name: /midnight harvest/i })).toBeVisible();
     expectAllSeeded(seeds, seed);
   });

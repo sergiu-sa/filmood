@@ -2,6 +2,7 @@ import {
   activeRefinementKeys,
   applyRefinements,
   parseRefinements,
+  removableRefinementKeys,
   withoutRefinement,
   EMPTY_REFINEMENTS,
 } from "@/lib/moodFilters";
@@ -153,5 +154,32 @@ describe("withoutRefinement", () => {
     const r = { ...EMPTY_REFINEMENTS, era: "classic" as const, runtime: "short", extraKeywords: [9] };
     expect(withoutRefinement(r, "era")).toEqual({ ...r, era: null });
     expect(r.era).toBe("classic");
+  });
+});
+
+// A suggestion's button deletes the URL param, so only filters that deletion
+// actually clears are worth offering.
+describe("removableRefinementKeys", () => {
+  it("offers every filter set in the URL when there is no text", () => {
+    expect(removableRefinementKeys(sp("era=classic&tempo=slowburn&runtime=short"), null)).toEqual([
+      "era",
+      "tempo",
+      "runtime",
+    ]);
+  });
+
+  it("skips an era the text implied, since there's no param to delete", () => {
+    const resolved = resolveMoodText("cozy 80s heist");
+    expect(parseRefinements(sp("runtime=short"), resolved).era).toBe("classic");
+    expect(removableRefinementKeys(sp("runtime=short"), resolved)).toEqual(["runtime"]);
+  });
+
+  it("skips a URL era the text would bring back", () => {
+    const resolved = resolveMoodText("80s noir");
+    expect(removableRefinementKeys(sp("era=fresh"), resolved)).toEqual([]);
+  });
+
+  it("ignores params that don't apply", () => {
+    expect(removableRefinementKeys(sp("runtime=forever&exclude=12345"), null)).toEqual([]);
   });
 });

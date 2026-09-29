@@ -38,6 +38,17 @@ async function setup({
   getSupabaseAdmin = () => ({}),
 }: Setup = {}) {
   const recordMoodPicks = vi.fn().mockResolvedValue(1);
+  // Next runs after() callbacks once the response is sent; tests run them by hand.
+  const afterCallbacks: (() => unknown)[] = [];
+  vi.doMock("next/server", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("next/server")>()),
+    after: (callback: () => unknown) => {
+      afterCallbacks.push(callback);
+    },
+  }));
+  const flushAfter = async () => {
+    for (const callback of afterCallbacks.splice(0)) await callback();
+  };
   const tmdbJson = vi.fn(async (_path: string, params: Params = {}) => {
     const body = tmdb(params);
     if (body instanceof Error) throw body;
@@ -57,11 +68,14 @@ async function setup({
     tmdbJson,
   }));
   const { GET } = await import("@/app/api/movies/discover/route");
+  const request = (query: string) =>
+    GET(new NextRequest(`http://localhost/api/movies/discover?${query}`));
   const get = async (query: string) => {
-    const res = await GET(new NextRequest(`http://localhost/api/movies/discover?${query}`));
+    const res = await request(query);
+    await flushAfter();
     return { status: res.status, body: await res.json() };
   };
-  return { get, tmdbJson, recordMoodPicks, recordSearchEvent };
+  return { get, request, flushAfter, tmdbJson, recordMoodPicks, recordSearchEvent };
 }
 
 const sentParams = (tmdbJson: ReturnType<typeof vi.fn>) =>
@@ -228,6 +242,48 @@ describe("GET /api/movies/discover", () => {
       suggestionsShown: false,
     });
     expect(JSON.stringify(event)).not.toMatch(/user-1|secret|forever/);
+  });
+
+  it("writes mood history and the search log only after the response", async () => {
+    const { request, flushAfter, recordMoodPicks, recordSearchEvent } = await setup({
+      user: { id: "user-1" },
+    });
+    const res = await request("mood=laugh");
+
+    expect(res.status).toBe(200);
+    expect(recordMoodPicks).not.toHaveBeenCalled();
+    expect(recordSearchEvent).not.toHaveBeenCalled();
+    await flushAfter();
+    expect(recordMoodPicks).toHaveBeenCalledTimes(1);
+    expect(recordSearchEvent).toHaveBeenCalledTimes(1);
+  });
+
+  // A thin result's suggestion buttons delete the URL param, so an era read
+  // from the text must not be offered: there's nothing to delete.
+  describe("suggestions", () => {
+    const thinWithEra = (p: Params) =>
+      p["primary_release_date.lte"]
+        ? { results: [rawFilm(1)], total_results: 1, total_pages: 1 }
+        : fullPage();
+
+    it("offers to remove an era set in the URL", async () => {
+      const { get } = await setup({ tmdb: thinWithEra });
+      const { body } = await get("mood=laugh&era=classic");
+      expect(body.suggestions).toEqual([{ remove: "era", total: 400 }]);
+    });
+
+    it("does not offer to remove an era read from the text", async () => {
+      const { get, tmdbJson } = await setup({ tmdb: thinWithEra });
+      const { body } = await get("text=cozy%2080s%20heist");
+
+      expect(body.interpreted.era).toBe("classic");
+      expect(body.films.length).toBeLessThan(12);
+      expect(body.suggestions).toEqual([]);
+      // And no probe was spent on it.
+      for (const params of sentParams(tmdbJson)) {
+        expect(params["primary_release_date.lte"]).toBe("1989-12-31");
+      }
+    });
   });
 
   it("logs an unknown src as direct", async () => {

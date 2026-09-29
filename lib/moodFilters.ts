@@ -65,6 +65,21 @@ export function activeRefinementKeys(r: Refinements): RefinementKey[] {
   return REFINEMENT_KEYS.filter((key) => r[key] !== null);
 }
 
+/**
+ * The active filters that deleting their URL param clears. The free text can
+ * imply an era or tempo, which has no param to delete or comes straight back.
+ */
+export function removableRefinementKeys(
+  sp: URLSearchParams,
+  resolved: ResolvedMoodText | null,
+): RefinementKey[] {
+  return activeRefinementKeys(parseRefinements(sp, resolved)).filter((key) => {
+    const without = new URLSearchParams(sp);
+    without.delete(key);
+    return parseRefinements(without, resolved)[key] === null;
+  });
+}
+
 export function withoutRefinement(r: Refinements, key: RefinementKey): Refinements {
   return { ...r, [key]: null };
 }

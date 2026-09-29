@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { MAX_MOODS, moodMap, normalizeMoodKeys } from "@/lib/moodMap";
 import { resolveMoodText } from "@/lib/moodResolver";
-import { parseRefinements } from "@/lib/moodFilters";
+import { parseRefinements, removableRefinementKeys } from "@/lib/moodFilters";
 import { runMoodSearch } from "@/lib/moodSearch";
 import { mulberry32, newSeed, parseSeed } from "@/lib/seededRandom";
 import { parseSource, recordSearchEvent } from "@/lib/searchLog";
@@ -42,13 +42,14 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Record mood picks for signed-in users. Fire-and-forget — Vercel's
-  // serverless runtime waits for pending promises before the function
-  // exits, so the insert is reliable even though we don't await it here.
+  // after(), not an unawaited promise: Next keeps the function alive until it
+  // finishes, which an unawaited promise isn't guaranteed.
   const user = await getAuthUser(request);
   if (user) {
-    recordMoodPicks(getSupabaseAdmin(), user.id, moodKeys).catch((err) =>
-      console.error("mood_history insert failed", err),
+    after(() =>
+      recordMoodPicks(getSupabaseAdmin(), user.id, moodKeys).catch((err) =>
+        console.error("mood_history insert failed", err),
+      ),
     );
   }
 
@@ -56,7 +57,12 @@ export async function GET(request: NextRequest) {
   const seed = parseSeed(searchParams.get("seed")) ?? newSeed();
 
   try {
-    const result = await runMoodSearch(moodKeys, refinements, mulberry32(seed));
+    const result = await runMoodSearch(
+      moodKeys,
+      refinements,
+      mulberry32(seed),
+      removableRefinementKeys(searchParams, resolved),
+    );
 
     const body: DiscoverResponse = {
       moods: moodKeys.map((k) => ({
@@ -86,11 +92,10 @@ export async function GET(request: NextRequest) {
     const filters = Object.fromEntries(
       Object.entries({ era, tempo, runtime }).filter(([, v]) => v !== null),
     ) as Record<string, string>;
-    // Fire-and-forget like recordMoodPicks, and wrapped so even a missing admin
-    // client can't turn a finished search into an error.
-    Promise.resolve()
-      .then(() =>
-        recordSearchEvent(getSupabaseAdmin(), {
+    // Async so a missing admin client rejects into the catch instead of throwing.
+    after(async () => {
+      try {
+        await recordSearchEvent(getSupabaseAdmin(), {
           moods: moodKeys,
           filters,
           hasText: text.length > 0,
@@ -99,9 +104,11 @@ export async function GET(request: NextRequest) {
           relaxed: body.relaxed,
           partial: body.partial,
           suggestionsShown: body.suggestions.length > 0,
-        }),
-      )
-      .catch((err) => console.error("search_events insert failed", err));
+        });
+      } catch (err) {
+        console.error("search_events insert failed", err);
+      }
+    });
 
     return NextResponse.json(body);
   } catch (error) {

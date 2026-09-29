@@ -13,7 +13,12 @@ import {
   runMoodSearch,
   searchMood,
 } from "@/lib/moodSearch";
-import { EMPTY_REFINEMENTS, type Refinements } from "@/lib/moodFilters";
+import {
+  activeRefinementKeys,
+  EMPTY_REFINEMENTS,
+  type RefinementKey,
+  type Refinements,
+} from "@/lib/moodFilters";
 import { mulberry32 } from "@/lib/seededRandom";
 
 type Params = Record<string, string>;
@@ -52,6 +57,13 @@ const calls = () => mockTmdb.mock.calls.map(([, params]) => params as Params);
 const isMood = (params: Params, genres: string) => params.with_genres === genres;
 const refine = (r: Partial<Refinements>): Refinements => ({ ...EMPTY_REFINEMENTS, ...r });
 const rng = () => mulberry32(1);
+// No free text here, so every active filter is one the user can remove.
+const search = (
+  moodKeys: string[],
+  r: Refinements,
+  random: () => number,
+  removable: RefinementKey[] = activeRefinementKeys(r),
+) => runMoodSearch(moodKeys, r, random, removable);
 
 beforeEach(() => {
   mockTmdb.mockReset();
@@ -215,7 +227,7 @@ describe("runMoodSearch — blend", () => {
 
   it("shuffles a single mood and tags it", async () => {
     respond(() => page(ids(1, 20)));
-    const result = await runMoodSearch(["laugh"], EMPTY_REFINEMENTS, rng());
+    const result = await search(["laugh"], EMPTY_REFINEMENTS, rng());
 
     expect(result.films.map((f) => f.id).sort((x, y) => x - y)).toEqual(ids(1, 20));
     expect(result.films.map((f) => f.id)).not.toEqual(ids(1, 20));
@@ -225,7 +237,7 @@ describe("runMoodSearch — blend", () => {
 
   it("puts the intersection first, then alternates the two moods", async () => {
     twoPools([...ids(1, 6), 100, 101], [100, 101, ...ids(200, 6)]);
-    const result = await runMoodSearch(["laugh", "thrilling"], EMPTY_REFINEMENTS, rng());
+    const result = await search(["laugh", "thrilling"], EMPTY_REFINEMENTS, rng());
     const keys = result.films.map((f) => f.moodKeys.join("+"));
 
     expect(result.films.slice(0, 2).map((f) => f.id).sort()).toEqual([100, 101]);
@@ -238,14 +250,14 @@ describe("runMoodSearch — blend", () => {
 
   it("caps the blend at RESULT_LIMIT", async () => {
     twoPools(ids(1, 20), ids(100, 20));
-    const result = await runMoodSearch(["laugh", "thrilling"], EMPTY_REFINEMENTS, rng());
+    const result = await search(["laugh", "thrilling"], EMPTY_REFINEMENTS, rng());
     expect(result.films).toHaveLength(RESULT_LIMIT);
   });
 
   it("gives the same order for the same seed and a different one for another", async () => {
     twoPools(ids(1, 20), ids(100, 20));
     const order = async (seed: number) =>
-      (await runMoodSearch(["laugh", "thrilling"], EMPTY_REFINEMENTS, mulberry32(seed))).films.map(
+      (await search(["laugh", "thrilling"], EMPTY_REFINEMENTS, mulberry32(seed))).films.map(
         (f) => f.id,
       );
     expect(await order(11)).toEqual(await order(11));
@@ -262,7 +274,7 @@ describe("runMoodSearch — blend", () => {
         const base = (isMood(p, "35") ? 0 : 100_000) + Number(p.page) * 1000;
         return page(ids(base, p.page === "1" ? 20 : 5), 400, 20) as never;
       });
-      const result = await runMoodSearch(["laugh", "thrilling"], EMPTY_REFINEMENTS, mulberry32(3));
+      const result = await search(["laugh", "thrilling"], EMPTY_REFINEMENTS, mulberry32(3));
       return result.films.map((f) => f.id);
     };
     expect(await run("35")).toEqual(await run("28"));
@@ -271,7 +283,7 @@ describe("runMoodSearch — blend", () => {
   // Picking "Everyone's watching" means kids are watching, so the cap covers both pools.
   it("carries the family cap into the other mood's pool", async () => {
     respond(() => page(ids(1, 20)));
-    await runMoodSearch(["family", "dark"], EMPTY_REFINEMENTS, rng());
+    await search(["family", "dark"], EMPTY_REFINEMENTS, rng());
 
     expect(calls().some((p) => p.with_genres === "80")).toBe(true);
     for (const params of calls()) {
@@ -288,7 +300,7 @@ describe("runMoodSearch — blend", () => {
       if (isMood(p, "35")) return page(ids(1, 20));
       return p.with_keywords ? page([900]) : page(ids(100, 20));
     });
-    const result = await runMoodSearch(["laugh", "dark"], EMPTY_REFINEMENTS, rng());
+    const result = await search(["laugh", "dark"], EMPTY_REFINEMENTS, rng());
     expect(result.relaxed).toBe(1);
   });
 });
@@ -296,7 +308,7 @@ describe("runMoodSearch — blend", () => {
 describe("runMoodSearch — failure", () => {
   it("returns the surviving pool and flags partial when one mood fails", async () => {
     respond((p) => (isMood(p, "35") ? new TMDBError(429, "/discover/movie") : page(ids(100, 20))));
-    const result = await runMoodSearch(["laugh", "thrilling"], EMPTY_REFINEMENTS, rng());
+    const result = await search(["laugh", "thrilling"], EMPTY_REFINEMENTS, rng());
 
     expect(result.partial).toBe(true);
     expect(result.films).toHaveLength(20);
@@ -306,7 +318,7 @@ describe("runMoodSearch — failure", () => {
   it("throws the first failure when every mood fails", async () => {
     respond(() => new TMDBError(429, "/discover/movie"));
     await expect(
-      runMoodSearch(["laugh", "thrilling"], EMPTY_REFINEMENTS, rng()),
+      search(["laugh", "thrilling"], EMPTY_REFINEMENTS, rng()),
     ).rejects.toMatchObject({ status: 429 });
   });
 
@@ -314,7 +326,7 @@ describe("runMoodSearch — failure", () => {
   it("throws when the only surviving pool is empty", async () => {
     respond((p) => (isMood(p, "35") ? new TMDBError(503, "/discover/movie") : page([])));
     await expect(
-      runMoodSearch(["laugh", "thrilling"], EMPTY_REFINEMENTS, rng()),
+      search(["laugh", "thrilling"], EMPTY_REFINEMENTS, rng()),
     ).rejects.toMatchObject({ status: 503 });
   });
 });
@@ -329,7 +341,7 @@ describe("runMoodSearch — suggestions and related moods", () => {
       if (era) return page(ids(1, 20), 40);
       return page(ids(1, 20), 999);
     });
-    const result = await runMoodSearch(
+    const result = await search(
       ["laugh"],
       refine({ era: "classic", runtime: "short" }),
       rng(),
@@ -351,7 +363,7 @@ describe("runMoodSearch — suggestions and related moods", () => {
       if (!p.with_original_language) return page([], 30);
       return page([], 40);
     });
-    const result = await runMoodSearch(
+    const result = await search(
       ["laugh", "thrilling"],
       refine({ era: "classic", runtime: "short", language: "en", exclude: "99" }),
       rng(),
@@ -365,15 +377,34 @@ describe("runMoodSearch — suggestions and related moods", () => {
     ]);
   });
 
+  it("only probes the filters it was told the user can remove", async () => {
+    respond((p) => (p["primary_release_date.lte"] && p["with_runtime.lte"] ? page([1], 1) : page([], 50)));
+    const result = await search(["laugh"], refine({ era: "classic", runtime: "short" }), rng(), [
+      "runtime",
+    ]);
+
+    expect(result.suggestions).toEqual([{ remove: "runtime", total: 50 }]);
+    // Every call keeps the era: nothing probed without it.
+    for (const params of calls()) expect(params["primary_release_date.lte"]).toBe("1989-12-31");
+  });
+
+  it("makes no probe calls when nothing is removable", async () => {
+    respond(() => page([1], 1));
+    const result = await search(["laugh"], refine({ era: "classic" }), rng(), []);
+    expect(result.suggestions).toEqual([]);
+    // tier 0 and tier 2 only.
+    expect(calls()).toHaveLength(2);
+  });
+
   it("drops a suggestion that would not add films", async () => {
     respond(() => page([1, 2], 2));
-    const result = await runMoodSearch(["laugh"], refine({ era: "fresh" }), rng());
+    const result = await search(["laugh"], refine({ era: "fresh" }), rng());
     expect(result.suggestions).toEqual([]);
   });
 
   it("makes no probe calls without an active filter", async () => {
     respond(() => page([1, 2], 2));
-    const result = await runMoodSearch(["laugh"], EMPTY_REFINEMENTS, rng());
+    const result = await search(["laugh"], EMPTY_REFINEMENTS, rng());
     expect(result.suggestions).toEqual([]);
     // tier 0 and tier 2 only: laugh's tier 1 equals tier 0.
     expect(calls()).toHaveLength(2);
@@ -381,7 +412,7 @@ describe("runMoodSearch — suggestions and related moods", () => {
 
   it("makes no probe calls when the result is not thin", async () => {
     respond(() => page(ids(1, 20), 400));
-    const result = await runMoodSearch(["laugh"], refine({ era: "classic" }), rng());
+    const result = await search(["laugh"], refine({ era: "classic" }), rng());
     expect(result.suggestions).toEqual([]);
     expect(calls()).toHaveLength(1);
   });
@@ -391,7 +422,7 @@ describe("runMoodSearch — suggestions and related moods", () => {
       if (p["primary_release_date.lte"]) return page([1], 1);
       return new TMDBError(429, "/discover/movie");
     });
-    const result = await runMoodSearch(["laugh"], refine({ era: "classic" }), rng());
+    const result = await search(["laugh"], refine({ era: "classic" }), rng());
     expect(result.films).toHaveLength(1);
     expect(result.suggestions).toEqual([]);
   });
@@ -401,7 +432,7 @@ describe("runMoodSearch — suggestions and related moods", () => {
       if (!p["primary_release_date.lte"]) return page([], 50);
       return p["vote_count.gte"] === "150" ? page([1], 1) : page([], 0);
     });
-    await runMoodSearch(["dark"], refine({ era: "classic" }), rng());
+    await search(["dark"], refine({ era: "classic" }), rng());
     const probe = calls().at(-1);
     expect(probe?.["primary_release_date.lte"]).toBeUndefined();
     expect(probe?.["vote_count.gte"]).toBe("150");
@@ -410,17 +441,17 @@ describe("runMoodSearch — suggestions and related moods", () => {
 
   it("offers the first mood's neighbours only when nothing matched", async () => {
     respond(() => page([]));
-    const empty = await runMoodSearch(["dark"], EMPTY_REFINEMENTS, rng());
+    const empty = await search(["dark"], EMPTY_REFINEMENTS, rng());
     expect(empty.relatedMoods).toEqual(["unsettled", "thrilling", "mindbending"]);
 
     respond(() => page([1]));
-    const thin = await runMoodSearch(["dark"], EMPTY_REFINEMENTS, rng());
+    const thin = await search(["dark"], EMPTY_REFINEMENTS, rng());
     expect(thin.relatedMoods).toEqual([]);
   });
 
   it("never offers a mood that was already searched", async () => {
     respond(() => page([]));
-    const result = await runMoodSearch(["dark", "unsettled"], EMPTY_REFINEMENTS, rng());
+    const result = await search(["dark", "unsettled"], EMPTY_REFINEMENTS, rng());
     expect(result.relatedMoods).toEqual(["thrilling", "mindbending"]);
   });
 });
