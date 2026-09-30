@@ -1,17 +1,32 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
 import Breadcrumb from "@/components/Breadcrumb";
 import FilmCard from "@/components/film/FilmCard";
 import TopPick from "@/components/results/TopPick";
+import ResultsNotice from "@/components/results/ResultsNotice";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import type { AccentColor, DiscoverFilm, DiscoverResponse, Provider } from "@/lib/types";
 import { moodMap } from "@/lib/moodMap";
 import { ACCENT_VARS } from "@/lib/constants";
 import { newSeed, parseSeed } from "@/lib/seededRandom";
 import { pickTopFilm } from "@/lib/topPick";
+import type { RefinementKey } from "@/lib/moodFilters";
+
+type Notice = Pick<DiscoverResponse, "suggestions" | "relatedMoods" | "relaxed" | "partial">;
+
+const NO_NOTICE: Notice = { suggestions: [], relatedMoods: [], relaxed: 0, partial: false };
+
+// Keyed by the URL param a suggestion removes.
+const SUGGESTION_LABELS: Record<RefinementKey, string> = {
+  era: "Any era",
+  tempo: "Any tempo",
+  runtime: "Any length",
+  language: "Any language",
+  exclude: "All genres",
+};
 
 function getMeta(moods: string[]) {
   const key = moods[0]?.trim().toLowerCase() ?? "";
@@ -43,10 +58,12 @@ function ResultsContent() {
 
   const [films, setFilms] = useState<DiscoverFilm[]>([]);
   const [moods, setMoods] = useState<string[]>([]);
+  const [notice, setNotice] = useState<Notice>(NO_NOTICE);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [providers, setProviders] = useState<Provider[] | null>(null);
   const [providersLoading, setProvidersLoading] = useState(false);
+  const fetchedQuery = useRef<string | null>(null);
 
   // Grid breakpoints via useMediaQuery (inline styles, not CSS classes)
   // to avoid Tailwind v4 layer conflicts in production
@@ -83,24 +100,33 @@ function ResultsContent() {
       return;
     }
 
+    const params = new URLSearchParams();
+    if (mood) params.set("mood", mood);
+    if (runtime) params.set("runtime", runtime);
+    if (language) params.set("language", language);
+    if (exclude) params.set("exclude", exclude);
+    if (era) params.set("era", era);
+    if (tempo) params.set("tempo", tempo);
+    if (text) params.set("text", text);
+    params.set("seed", String(seed));
+
+    // Dropping src below re-runs this effect with the same query; don't fetch
+    // (and log the search) twice.
+    const query = params.toString();
+    if (query === fetchedQuery.current) return;
+    fetchedQuery.current = query;
+    if (src) params.set("src", src);
+
     const fetchFilms = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        const params = new URLSearchParams();
-        if (mood) params.set("mood", mood);
-        if (runtime) params.set("runtime", runtime);
-        if (language) params.set("language", language);
-        if (exclude) params.set("exclude", exclude);
-        if (era) params.set("era", era);
-        if (tempo) params.set("tempo", tempo);
-        if (text) params.set("text", text);
-        params.set("seed", String(seed));
-        if (src) params.set("src", src);
-
         const res = await fetch(`/api/movies/discover?${params.toString()}`);
         const data: DiscoverResponse & { error?: string } = await res.json();
+        // Superseded (a related mood, then Back). The guard above skips re-runs,
+        // so an effect cleanup flag could leave nothing fetching.
+        if (fetchedQuery.current !== query) return;
 
         if (!res.ok) {
           throw new Error(data.error || "Failed to load films");
@@ -113,14 +139,30 @@ function ResultsContent() {
         // The server's list: retired keys resolved, text moods added, capped at two.
         setMoods(data.moods.map((m) => m.key));
         setFilms(Array.isArray(data.films) ? data.films : []);
+        setNotice({
+          suggestions: data.suggestions,
+          relatedMoods: data.relatedMoods,
+          relaxed: data.relaxed,
+          partial: data.partial,
+        });
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load films");
+        if (fetchedQuery.current === query) {
+          setError(err instanceof Error ? err.message : "Failed to load films");
+        }
       } finally {
-        setLoading(false);
+        if (fetchedQuery.current === query) setLoading(false);
       }
     };
 
     fetchFilms();
+
+    // src credits this one search in search_events. Left in the URL, Back and
+    // reload would credit it again.
+    if (src) {
+      const withoutSrc = new URLSearchParams(searchParams.toString());
+      withoutSrc.delete("src");
+      router.replace(`/results?${withoutSrc}`, { scroll: false });
+    }
   }, [mood, runtime, language, exclude, era, tempo, text, seed, src, router, searchParams]);
 
   // Fetch providers for the top pick
@@ -150,6 +192,13 @@ function ResultsContent() {
     // Only re-fetch when the top pick film ID changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topPick?.id]);
+
+  const removeFilter = (param: string) => {
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete(param);
+    next.set("src", "suggestion");
+    router.replace(`/results?${next}`, { scroll: false });
+  };
 
   if (!mood && !text) {
     return (
@@ -236,46 +285,50 @@ function ResultsContent() {
           />
         </div>
 
-        <div
-          className="font-sans"
-          style={{
-            fontSize: "10px",
-            fontWeight: 700,
-            textTransform: "uppercase",
-            letterSpacing: "2.2px",
-            color: accent.base,
-            marginBottom: "12px",
-          }}
-        >
-          {films.length} films found
-        </div>
+        {films.length > 0 && (
+          <>
+            <div
+              className="font-sans"
+              style={{
+                fontSize: "10px",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "2.2px",
+                color: accent.base,
+                marginBottom: "12px",
+              }}
+            >
+              {films.length} films found
+            </div>
 
-        <h1
-          className="font-serif"
-          style={{
-            fontSize: "clamp(30px, 5vw, 44px)",
-            fontWeight: 600,
-            lineHeight: 1.1,
-            letterSpacing: "-0.6px",
-            color: "var(--t1)",
-            marginBottom: "10px",
-          }}
-        >
-          Your Matches
-        </h1>
+            <h1
+              className="font-serif"
+              style={{
+                fontSize: "clamp(30px, 5vw, 44px)",
+                fontWeight: 600,
+                lineHeight: 1.1,
+                letterSpacing: "-0.6px",
+                color: "var(--t1)",
+                marginBottom: "10px",
+              }}
+            >
+              Your Matches
+            </h1>
 
-        <p
-          className="font-sans"
-          style={{
-            fontSize: "13px",
-            color: "var(--t2)",
-            lineHeight: 1.6,
-            maxWidth: "460px",
-            margin: "0 auto 16px",
-          }}
-        >
-          {tagline}
-        </p>
+            <p
+              className="font-sans"
+              style={{
+                fontSize: "13px",
+                color: "var(--t2)",
+                lineHeight: 1.6,
+                maxWidth: "460px",
+                margin: "0 auto 16px",
+              }}
+            >
+              {tagline}
+            </p>
+          </>
+        )}
 
         {/* Mood pills */}
         <div
@@ -314,6 +367,13 @@ function ResultsContent() {
           })}
         </div>
       </div>
+
+      <ResultsNotice
+        count={films.length}
+        {...notice}
+        labels={SUGGESTION_LABELS}
+        onRemove={removeFilter}
+      />
 
       {/* ── Top pick ── */}
       {topPick && (
