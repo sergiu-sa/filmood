@@ -32,6 +32,7 @@ export type IconName =
   | "arrow-right"
   | "home"
   | "shuffle"
+  | "plus"
   | "star-burst";
 
 interface IconProps {
@@ -312,6 +313,12 @@ export default function Icon({ name, size = 16, className }: IconProps) {
           strokeLinejoin="round"
         >
           <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
+        </svg>
+      );
+    case "plus":
+      return (
+        <svg {...common} fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
+          <path d="M12 5v14M5 12h14" />
         </svg>
       );
     case "star-burst":

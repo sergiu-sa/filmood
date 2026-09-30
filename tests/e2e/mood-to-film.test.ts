@@ -23,8 +23,9 @@ test.describe("Mood → results → film detail", () => {
     await page.getByRole("button", { name: /find films/i }).click();
     await page.waitForURL(/\/results\?mood=/);
 
+    // The stub always answers "laugh", whichever tile was clicked; the h1 is the mood header's.
     await expect(
-      page.getByRole("heading", { level: 1, name: /your matches/i }),
+      page.getByRole("heading", { level: 1, name: "Need to laugh" }),
     ).toBeVisible();
 
     // "Midnight Harvest" is the highest-rated fixture — confirms data pipeline reached UI.
