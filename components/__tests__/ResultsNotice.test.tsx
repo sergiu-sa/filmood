@@ -116,7 +116,7 @@ describe("ResultsNotice", () => {
     expect(onRemove).toHaveBeenCalledExactlyOnceWith("time");
   });
 
-  it("falls back to the param name when a label is missing", () => {
+  it("falls back to the filter key when a label is missing", () => {
     render(<ResultsNotice {...base} suggestions={[{ remove: "where", total: 30 }]} />);
     expect(screen.getByRole("button", { name: "where · 30 films" })).toBeInTheDocument();
   });

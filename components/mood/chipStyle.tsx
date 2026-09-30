@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 
 // Shared chip + field-label styles used across mood UI (dashboard panel,
-// group mood page, refinement blocks). Kept here so the visual language
+// group mood page, the Era/Tempo block). Kept here so the visual language
 // stays consistent and no component has to redeclare them.
 
 export function chipStyle(isActive: boolean): CSSProperties {

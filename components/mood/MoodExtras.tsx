@@ -1,6 +1,6 @@
 "use client";
 
-// Shared refinement block rendered under the mood grid on both the single-user
+// Shared Era/Tempo/text block rendered under the mood grid on both the single-user
 // dashboard and the group mood page. Stateless: parent owns the values and
 // passes callbacks. Uses the shared chipStyle helper.
 

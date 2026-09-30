@@ -99,6 +99,20 @@ test.describe("Results empty state", () => {
     for (const param of ["time", "tempo", "runtime"]) expect(requests[1].has(param)).toBe(false);
   });
 
+  // Home's Tempo chips arrive as time=, so this forwarding is their only path to the API.
+  test("forwards Time, Era and Where from the URL in one request", async ({ page }) => {
+    const requests = discoverParams(page);
+
+    await page.goto("/results?mood=laugh&time=long&era=fresh&where=any&seed=4242");
+    await expect(page.getByRole("heading", { level: 2, name: /midnight harvest/i })).toBeVisible();
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0].get("time")).toBe("long");
+    expect(requests[0].get("era")).toBe("fresh");
+    expect(requests[0].get("where")).toBe("any");
+    expect(requests[0].get("seed")).toBe("4242");
+  });
+
   // Norway is the default, so loosening Where writes where=any rather than deleting it.
   test("an Anywhere suggestion sets where=any and keeps the seed", async ({ page }) => {
     await stubEmpty(page, (sp) => sp.get("where") !== "any", { remove: "where", total: 64 });
@@ -110,6 +124,7 @@ test.describe("Results empty state", () => {
     expect(new URL(page.url()).searchParams.get("seed")).toBe("4242");
     await expect(page.getByRole("heading", { level: 2, name: /midnight harvest/i })).toBeVisible();
 
+    expect(requests).toHaveLength(2);
     const anywhere = requests.filter((p) => p.get("where") === "any");
     expect(anywhere).toHaveLength(1);
     expect(anywhere[0].get("src")).toBe("suggestion");

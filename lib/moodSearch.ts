@@ -15,7 +15,6 @@ import type { MoodConfig } from "@/lib/types";
 export const MIN_RESULTS = 12;
 export const RESULT_LIMIT = 20;
 const MAX_EXTRA_PAGE = 5;
-const MAX_SUGGESTIONS = 3;
 /**
  * Mood discover calls cache for an hour, unlike free-text search: moods ×
  * tiers × filter values is a finite space, so repeats are cache hits.
@@ -184,8 +183,7 @@ async function suggestRemovals(
   );
   return probes
     .filter((s) => s.total > count)
-    .sort((x, y) => y.total - x.total)
-    .slice(0, MAX_SUGGESTIONS);
+    .sort((x, y) => y.total - x.total);
 }
 
 /**

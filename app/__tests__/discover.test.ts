@@ -308,7 +308,7 @@ describe("GET /api/movies/discover", () => {
 
     it("offers to remove an era set in the URL", async () => {
       const { get } = await setup({ tmdb: thinWithEra });
-      const { body } = await get("mood=laugh&era=classic&where=any");
+      const { body } = await get("mood=laugh&era=classic");
       expect(body.suggestions).toEqual([{ remove: "era", total: 400 }]);
     });
 
@@ -340,13 +340,13 @@ describe("GET /api/movies/discover", () => {
 
     it("does not offer to remove an era read from the text", async () => {
       const { get, tmdbJson } = await setup({ tmdb: thinWithEra });
-      // Anywhere, so the default Where isn't a suggestion either.
-      const { body } = await get("text=cozy%2080s%20heist&where=any");
+      const { body } = await get("text=cozy%2080s%20heist");
 
       expect(body.interpreted.era).toBe("classic");
       expect(body.films.length).toBeLessThan(12);
-      expect(body.suggestions).toEqual([]);
-      // And no probe was spent on it.
+      // Only the default Where: its probe keeps the era, so both thin pools sum to 2.
+      expect(body.suggestions).toEqual([{ remove: "where", total: 2 }]);
+      // And no probe was spent on the era.
       for (const params of sentParams(tmdbJson)) {
         expect(params["primary_release_date.lte"]).toBe("1989-12-31");
       }
