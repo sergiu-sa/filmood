@@ -6,8 +6,9 @@ type ProviderRow = { provider_id: number; provider_name: string };
 
 // TMDB's /watch/providers/movie?watch_region=NO, trimmed to what matters.
 const NORWAY: ProviderRow[] = [
-  { provider_id: 8, provider_name: "Netflix" },
+  // Listed first so a prefix match would take it: Netflix Kids is not Netflix.
   { provider_id: 175, provider_name: "Netflix Kids" },
+  { provider_id: 8, provider_name: "Netflix" },
   { provider_id: 76, provider_name: "Viaplay" },
   { provider_id: 1899, provider_name: "HBO Max" },
   { provider_id: 431, provider_name: "TV 2 Play" },
