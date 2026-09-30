@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
 import { normalizeMoodKeys } from "@/lib/moodMap";
 import { resolveMoodText } from "@/lib/moodResolver";
-import { isEraKey, isTempoKey } from "@/lib/moodRefinements";
+import { isEraKey, isTempoKey } from "@/lib/moodFilters";
 import { resolveSession, resolveParticipant } from "@/lib/group-api";
 import { buildSharedDeck } from "@/lib/deck";
 import { internalError } from "@/lib/api-errors";

@@ -14,8 +14,6 @@ describe("buildMoodParams", () => {
     expect(params.sort_by).toBe("popularity.desc");
     expect(params["vote_count.gte"]).toBe("500");
     expect(params.without_genres).toBe("27,16");
-    expect(params.watch_region).toBe("NO");
-    expect(params.with_watch_monetization_types).toBe("flatrate");
   });
 
   // TMDB reads "," as AND, so a comma here asked for Fantasy AND Adventure AND Sci-Fi.
@@ -90,12 +88,20 @@ describe("buildMoodParams", () => {
     },
   );
 
-  it("always sets the runtime floor, watch region and monetization type", () => {
+  it("always sets the runtime floor", () => {
     for (const mood of allMoods) {
-      const params = buildMoodParams(mood.key);
-      expect(params["with_runtime.gte"]).toBe(String(RUNTIME_FLOOR));
-      expect(params.watch_region).toBe("NO");
-      expect(params.with_watch_monetization_types).toBe("flatrate");
+      expect(buildMoodParams(mood.key)["with_runtime.gte"]).toBe(String(RUNTIME_FLOOR));
+    }
+  });
+
+  // Where it streams is the user's Where filter (lib/moodFilters), not part of the mood.
+  it("never limits where a film streams, at any tier", () => {
+    for (const mood of allMoods) {
+      for (const tier of [0, 1, 2] as const) {
+        const params = buildMoodParams(mood.key, tier);
+        expect(params.watch_region).toBeUndefined();
+        expect(params.with_watch_monetization_types).toBeUndefined();
+      }
     }
   });
 

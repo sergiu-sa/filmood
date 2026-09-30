@@ -1,13 +1,10 @@
 import type { CSSProperties } from "react";
 
 // Shared chip + field-label styles used across mood UI (dashboard panel,
-// group mood page, refinement blocks). Kept here so the visual language
+// group mood page, the Era/Tempo block). Kept here so the visual language
 // stays consistent and no component has to redeclare them.
 
-export function chipStyle(
-  isActive: boolean,
-  variant?: "exclusion",
-): CSSProperties {
+export function chipStyle(isActive: boolean): CSSProperties {
   return {
     padding: "7px 12px",
     borderRadius: "8px",
@@ -17,23 +14,17 @@ export function chipStyle(
     border: "1px solid",
     transition: "all 0.2s",
     userSelect: "none",
-    ...(variant === "exclusion" && isActive
+    ...(isActive
       ? {
-          background: "var(--rose-soft)",
-          color: "var(--rose)",
-          borderColor: "rgba(var(--rose-rgb), 0.25)",
+          background: "var(--t1)",
+          color: "var(--bg)",
+          borderColor: "transparent",
         }
-      : isActive
-        ? {
-            background: "var(--t1)",
-            color: "var(--bg)",
-            borderColor: "transparent",
-          }
-        : {
-            background: "var(--surface)",
-            color: "var(--t2)",
-            borderColor: "var(--border)",
-          }),
+      : {
+          background: "var(--surface)",
+          color: "var(--t2)",
+          borderColor: "var(--border)",
+        }),
   };
 }
 

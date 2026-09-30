@@ -1,5 +1,5 @@
 import { normalizeMoodKeys } from "@/lib/moodMap";
-import { EMPTY_REFINEMENTS, type Refinements } from "@/lib/moodFilters";
+import { EMPTY_FILTERS, LEGACY_TEMPO_TIME, type Filters } from "@/lib/moodFilters";
 import { searchMood } from "@/lib/moodSearch";
 import { mulberry32, newSeed } from "@/lib/seededRandom";
 import { settleTMDB } from "@/lib/tmdb-fetch";
@@ -104,11 +104,12 @@ export async function buildSharedDeck(
     allocated++;
   }
 
-  // Aggregate group refinements
-  const groupRefinements: Refinements = {
-    ...EMPTY_REFINEMENTS,
+  // Aggregate group filters. Participants still store a tempo, read as a Time.
+  const tempo = majorityVote(participants.map((p) => p.tempo ?? null));
+  const groupFilters: Filters = {
+    ...EMPTY_FILTERS,
     era: majorityVote(participants.map((p) => p.era ?? null)),
-    tempo: majorityVote(participants.map((p) => p.tempo ?? null)),
+    time: tempo ? LEGACY_TEMPO_TIME[tempo] : null,
     extraKeywords: topKeywords(participants, MAX_SHARED_EXTRA_KEYWORDS),
   };
   // A deck is built once and stored, so it needs no reproducible seed.
@@ -116,7 +117,7 @@ export async function buildSharedDeck(
 
   // Search each unique mood in parallel, on the same ladder as solo results.
   const fetchResults = allocations.map(async ({ mood, count }) => {
-    const pool = await searchMood(mood, groupRefinements, rng);
+    const pool = await searchMood(mood, groupFilters, rng);
     const results: DeckFilm[] = pool.films.map(
       (r) => ({
         id: r.id,

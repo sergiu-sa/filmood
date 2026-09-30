@@ -1,15 +1,17 @@
 import Link from "next/link";
 import { moodMap } from "@/lib/moodMap";
 import { ACCENT_VARS } from "@/lib/constants";
+import type { FilterKey } from "@/lib/moodFilters";
+import type { DiscoverResponse } from "@/lib/types";
 
 interface ResultsNoticeProps {
   count: number;
-  suggestions: { remove: string; total: number }[];
+  suggestions: DiscoverResponse["suggestions"];
   relatedMoods: string[];
   relaxed: 0 | 1 | 2;
   partial: boolean;
-  labels: Record<string, string>;
-  onRemove: (param: string) => void;
+  labels: Partial<Record<FilterKey, string>>;
+  onRemove: (key: FilterKey) => void;
 }
 
 const filmCount = (n: number) => `${n} ${n === 1 ? "film" : "films"}`;
@@ -23,7 +25,7 @@ const note = {
 
 /**
  * The results page's empty, thin, relaxed and partial notices. Presentational:
- * `onRemove` receives the URL param a suggestion clears.
+ * `onRemove` receives the filter a suggestion loosens.
  */
 export default function ResultsNotice({
   count,

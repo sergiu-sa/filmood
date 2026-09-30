@@ -643,13 +643,6 @@ svg.logo-static { overflow: visible; }
   transform: translateY(-1px);
 }
 
-.btn-panel-refine:hover {
-  border-color: var(--border-active) !important;
-  color: var(--t1) !important;
-  background: var(--surface3) !important;
-  transform: translateY(-1px);
-}
-
 /* ═══════════════════════════════════════════════════════════
    Hover + focus parity
    Inline JS hover mutations were pre-Session-7 — these CSS classes

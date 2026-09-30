@@ -7,12 +7,7 @@
 
 import { moodMap } from "@/lib/moodMap";
 import { buildMoodParams, certificationParams, type Tier } from "@/lib/moodQuery";
-import {
-  applyRefinements,
-  withoutRefinement,
-  type RefinementKey,
-  type Refinements,
-} from "@/lib/moodFilters";
+import { applyFilters, withoutFilter, type FilterKey, type Filters } from "@/lib/moodFilters";
 import { mulberry32, SEED_MAX } from "@/lib/seededRandom";
 import { settleTMDB, tmdbJson, TMDBError } from "@/lib/tmdb-fetch";
 import type { MoodConfig } from "@/lib/types";
@@ -20,7 +15,6 @@ import type { MoodConfig } from "@/lib/types";
 export const MIN_RESULTS = 12;
 export const RESULT_LIMIT = 20;
 const MAX_EXTRA_PAGE = 5;
-const MAX_SUGGESTIONS = 3;
 /**
  * Mood discover calls cache for an hour, unlike free-text search: moods ×
  * tiers × filter values is a finite space, so repeats are cache hits.
@@ -51,7 +45,7 @@ export interface MoodSearchResult {
   films: (TMDBDiscoverRaw & { moodKeys: string[] })[];
   relaxed: Tier;
   partial: boolean;
-  suggestions: { remove: RefinementKey; total: number }[];
+  suggestions: { remove: FilterKey; total: number }[];
   relatedMoods: string[];
 }
 
@@ -64,7 +58,7 @@ interface DiscoverPage {
 /** The exact TMDB query for one mood at one tier: the mood, a search-wide cap, then the user's filters. */
 export function buildSearchParams(
   moodKey: string,
-  r: Refinements,
+  f: Filters,
   tier: Tier,
   cap?: CertificationCap,
 ): Record<string, string> {
@@ -75,7 +69,7 @@ export function buildSearchParams(
   };
   // Text keywords sharpen a mood the way its own keywords do, so they go when those do.
   const keepsKeywords = tier === 0 || moodMap[moodKey].essential === "keywords";
-  applyRefinements(params, keepsKeywords ? r : { ...r, extraKeywords: [] });
+  applyFilters(params, keepsKeywords ? f : { ...f, extraKeywords: [] });
   return params;
 }
 
@@ -119,16 +113,16 @@ function shuffle<T>(items: T[], rng: () => number): T[] {
 /** One mood: climb tiers until page 1 reports ≥ MIN_RESULTS, then widen with one extra page. */
 export async function searchMood(
   moodKey: string,
-  r: Refinements,
+  f: Filters,
   rng: () => number,
   cap?: CertificationCap,
 ): Promise<MoodPool> {
-  let params = buildSearchParams(moodKey, r, 0, cap);
+  let params = buildSearchParams(moodKey, f, 0, cap);
   let best = { tier: 0 as Tier, params, page: await fetchPage(params, 1) };
 
   for (const tier of [1, 2] as const) {
     if (best.page.total >= MIN_RESULTS) break;
-    const next = buildSearchParams(moodKey, r, tier, cap);
+    const next = buildSearchParams(moodKey, f, tier, cap);
     // A mood with nothing to drop at tier 1 would repeat tier 0's call.
     if (JSON.stringify(next) === JSON.stringify(params)) continue;
     params = next;
@@ -171,8 +165,8 @@ function blend(pools: MoodPool[], rng: () => number): MoodSearchResult["films"] 
 /** For each removable filter, how many films the settled pools would have without it. */
 async function suggestRemovals(
   pools: MoodPool[],
-  r: Refinements,
-  removable: RefinementKey[],
+  f: Filters,
+  removable: FilterKey[],
   cap: CertificationCap,
   count: number,
 ): Promise<MoodSearchResult["suggestions"]> {
@@ -181,7 +175,7 @@ async function suggestRemovals(
       // Suggestions are optional, so a failed probe just counts nothing.
       const { values } = await settleTMDB(
         pools.map((p) =>
-          fetchPage(buildSearchParams(p.moodKey, withoutRefinement(r, remove), p.tier, cap), 1),
+          fetchPage(buildSearchParams(p.moodKey, withoutFilter(f, remove), p.tier, cap), 1),
         ),
       );
       return { remove, total: values.reduce((sum, v) => sum + (v?.total ?? 0), 0) };
@@ -189,19 +183,18 @@ async function suggestRemovals(
   );
   return probes
     .filter((s) => s.total > count)
-    .sort((x, y) => y.total - x.total)
-    .slice(0, MAX_SUGGESTIONS);
+    .sort((x, y) => y.total - x.total);
 }
 
 /**
  * 1–2 moods → blended, capped result, plus suggestions when it's thin.
- * `removable` lists the filters a suggestion may offer to remove (see `removableRefinementKeys`).
+ * `removable` lists the filters a suggestion may offer to loosen (see `removableFilterKeys`).
  */
 export async function runMoodSearch(
   moodKeys: string[],
-  r: Refinements,
+  f: Filters,
   rng: () => number,
-  removable: RefinementKey[],
+  removable: FilterKey[],
 ): Promise<MoodSearchResult> {
   // Picking "Everyone's watching" means kids are watching, so its cap covers every pool.
   const cap = moodKeys.map((k) => moodMap[k].certification).find(Boolean);
@@ -210,7 +203,7 @@ export async function runMoodSearch(
   const poolRngs = moodKeys.map(() => mulberry32(1 + Math.floor(rng() * SEED_MAX)));
 
   const { values, firstRejection } = await settleTMDB(
-    moodKeys.map((key, i) => searchMood(key, r, poolRngs[i], cap)),
+    moodKeys.map((key, i) => searchMood(key, f, poolRngs[i], cap)),
   );
   const pools = values.filter((p): p is MoodPool => p !== undefined);
   const films = blend(pools, rng);
@@ -222,7 +215,7 @@ export async function runMoodSearch(
     films,
     relaxed: Math.max(0, ...pools.map((p) => p.tier)) as Tier,
     partial: firstRejection !== null,
-    suggestions: thin ? await suggestRemovals(pools, r, removable, cap, films.length) : [],
+    suggestions: thin ? await suggestRemovals(pools, f, removable, cap, films.length) : [],
     relatedMoods:
       films.length === 0
         ? moodMap[moodKeys[0]].relatedMoods.filter((k) => !moodKeys.includes(k))

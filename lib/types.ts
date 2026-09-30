@@ -1,4 +1,4 @@
-import type { RefinementKey } from "@/lib/moodFilters";
+import type { FilterKey } from "@/lib/moodFilters";
 import type { Tier } from "@/lib/moodQuery";
 
 export interface Film {
@@ -47,7 +47,17 @@ export interface MoodConfig {
 }
 
 export type EraKey = "classic" | "modern" | "fresh";
+/** Legacy: old links and the group flow still send it; both are read as a Time (`LEGACY_TEMPO_TIME`). */
 export type TempoKey = "slowburn" | "fastpaced";
+export type TimeKey = "short" | "medium" | "long";
+export type WhereKey = "norway" | "any";
+
+/** The filters a search actually ran with, as the discover response reports them. */
+export interface AppliedFilters {
+  time: TimeKey | null;
+  era: EraKey | null;
+  where: WhereKey;
+}
 
 // ─── Mood discover ──────────────────────────────────
 
@@ -62,6 +72,7 @@ export interface DiscoverFilm extends Film {
 export interface DiscoverResponse {
   moods: { key: string; label: string; accent: AccentColor }[];
   films: DiscoverFilm[];
+  filters: AppliedFilters;
   /** The seed that ordered this list; the same URL gives the same list. */
   seed: number;
   /** The highest tier any mood was loosened to (0 = not loosened). */
@@ -72,12 +83,12 @@ export interface DiscoverResponse {
     text: string;
     moods: string[];
     era: EraKey | null;
-    tempo: TempoKey | null;
+    time: TimeKey | null;
     unmatched: string[];
     droppedMoods: string[];
   } | null;
   /** Only when the result is thin: filters whose removal would add films, most first. */
-  suggestions: { remove: RefinementKey; total: number }[];
+  suggestions: { remove: FilterKey; total: number }[];
   /** Only when nothing matched: the first mood's neighbours, minus moods already searched. */
   relatedMoods: string[];
 }

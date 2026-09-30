@@ -21,7 +21,7 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-const labels = { era: "Any era", runtime: "Any length" };
+const labels = { era: "Any era", time: "Any length" };
 
 const base = {
   count: 0,
@@ -45,7 +45,7 @@ describe("ResultsNotice", () => {
         {...base}
         suggestions={[
           { remove: "era", total: 146 },
-          { remove: "runtime", total: 1 },
+          { remove: "time", total: 1 },
         ]}
         relatedMoods={["easy", "datenight", "family"]}
       />,
@@ -106,19 +106,19 @@ describe("ResultsNotice", () => {
         count={3}
         suggestions={[
           { remove: "era", total: 40 },
-          { remove: "runtime", total: 12 },
+          { remove: "time", total: 12 },
         ]}
         onRemove={onRemove}
       />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: /any length/i }));
-    expect(onRemove).toHaveBeenCalledExactlyOnceWith("runtime");
+    expect(onRemove).toHaveBeenCalledExactlyOnceWith("time");
   });
 
-  it("falls back to the param name when a label is missing", () => {
-    render(<ResultsNotice {...base} suggestions={[{ remove: "tempo", total: 30 }]} />);
-    expect(screen.getByRole("button", { name: "tempo · 30 films" })).toBeInTheDocument();
+  it("falls back to the filter key when a label is missing", () => {
+    render(<ResultsNotice {...base} suggestions={[{ remove: "where", total: 30 }]} />);
+    expect(screen.getByRole("button", { name: "where · 30 films" })).toBeInTheDocument();
   });
 
   it("relaxed: a quiet note, but not over an empty result", () => {

@@ -1,112 +1,142 @@
-// The user-chosen filters layered on top of a mood's TMDB query. Pure, so the
-// discover route and scripts/check-moods.ts build the exact same query.
+// The user's filters on top of a mood's TMDB query: Time, Era and Where. Pure,
+// so the discover route, the group deck, check-moods and the results page all
+// read and apply them the same way.
 
-import {
-  applyEra,
-  applyTempo,
-  mergeExtraKeywords,
-  isEraKey,
-  isTempoKey,
-  EXCLUSION_OPTIONS,
-} from "@/lib/moodRefinements";
 import type { ResolvedMoodText } from "@/lib/moodResolver";
-import type { EraKey, TempoKey } from "@/lib/types";
+import type { AppliedFilters, EraKey, TempoKey, TimeKey, WhereKey } from "@/lib/types";
 
-export interface Refinements {
-  runtime: string | null;
-  language: string | null;
-  exclude: string | null;
-  era: EraKey | null;
-  tempo: TempoKey | null;
+export interface Filters extends AppliedFilters {
+  /** Read from the free text, not set by the user: never probed or offered. */
   extraKeywords: number[];
 }
 
-/** The filters a user set and can take back off. extraKeywords come from the text, so they're not one. */
-export type RefinementKey = "era" | "tempo" | "runtime" | "language" | "exclude";
+export type FilterKey = keyof AppliedFilters;
 
-const REFINEMENT_KEYS: RefinementKey[] = ["era", "tempo", "runtime", "language", "exclude"];
+const FILTER_KEYS: FilterKey[] = ["time", "era", "where"];
 
-export const EMPTY_REFINEMENTS: Refinements = {
-  runtime: null,
-  language: null,
-  exclude: null,
-  era: null,
-  tempo: null,
-  extraKeywords: [],
+export const TIME_OPTIONS: { value: TimeKey; label: string; gte?: number; lte?: number }[] = [
+  { value: "short", label: "Under 100 min", lte: 100 },
+  { value: "medium", label: "Under 2 hours", lte: 120 },
+  { value: "long", label: "Long & immersive", gte: 140 },
+];
+
+export const ERA_OPTIONS: { value: EraKey; label: string; gte?: string; lte?: string }[] = [
+  { value: "classic", label: "Before 1990", lte: "1989-12-31" },
+  { value: "modern", label: "1990–2009", gte: "1990-01-01", lte: "2009-12-31" },
+  { value: "fresh", label: "2010 onwards", gte: "2010-01-01" },
+];
+
+export const WHERE_OPTIONS: { value: WhereKey; label: string }[] = [
+  { value: "norway", label: "Streaming in Norway" },
+  { value: "any", label: "Anywhere" },
+];
+
+export const EMPTY_FILTERS: Filters = { time: null, era: null, where: "norway", extraKeywords: [] };
+
+export function isTimeKey(v: string | null | undefined): v is TimeKey {
+  return TIME_OPTIONS.some((o) => o.value === v);
+}
+
+export function isEraKey(v: string | null | undefined): v is EraKey {
+  return ERA_OPTIONS.some((o) => o.value === v);
+}
+
+export function isWhereKey(v: string | null | undefined): v is WhereKey {
+  return WHERE_OPTIONS.some((o) => o.value === v);
+}
+
+/** Old shared links and the group flow's stored tempo. Goes with the last tempo reader. */
+export const LEGACY_TEMPO_TIME: Record<TempoKey, TimeKey> = { slowburn: "long", fastpaced: "short" };
+
+export function isTempoKey(v: string | null | undefined): v is TempoKey {
+  return v === "slowburn" || v === "fastpaced";
+}
+
+/** Every URL param that sets a filter, so clearing one leaves no alias behind. */
+const FILTER_PARAMS: Record<FilterKey, string[]> = {
+  time: ["time", "tempo", "runtime"],
+  era: ["era"],
+  where: ["where"],
 };
 
-/** Explicit era/tempo params win over anything inferred from the free text. */
-export function parseRefinements(
-  sp: URLSearchParams,
-  resolved: ResolvedMoodText | null,
-): Refinements {
-  const eraParam = sp.get("era");
-  const tempoParam = sp.get("tempo");
-  const excludeParam = sp.get("exclude") ?? "";
-  // Rebuilt from the offered genres, never forwarded raw: malformed input would
-  // 400 at TMDB, and a free-form list would make every request a cache miss.
-  const excludeIds = /^\d+(,\d+)*$/.test(excludeParam)
-    ? new Set(excludeParam.split(",").map(Number))
-    : new Set<number>();
-  const exclude = EXCLUSION_OPTIONS.filter((o) => excludeIds.has(o.id)).map((o) => o.id);
+function timeFromParams(sp: URLSearchParams): TimeKey | null {
+  const time = sp.get("time");
+  if (isTimeKey(time)) return time;
+  const tempo = sp.get("tempo");
+  if (isTempoKey(tempo)) return LEGACY_TEMPO_TIME[tempo];
   const runtime = sp.get("runtime");
-  const language = sp.get("language");
+  return runtime === "short" || runtime === "long" ? runtime : null;
+}
+
+/**
+ * Explicit params beat the free text; `time` beats the legacy `tempo`, which
+ * beats the legacy `runtime`. The retired `language` and `exclude` are ignored.
+ */
+export function parseFilters(sp: URLSearchParams, resolved: ResolvedMoodText | null): Filters {
+  const era = sp.get("era");
+  const where = sp.get("where");
   return {
-    runtime: runtime === "short" || runtime === "long" ? runtime : null,
-    language: language === "en" || language === "scand" ? language : null,
-    exclude: exclude.length ? exclude.join(",") : null,
-    era: isEraKey(eraParam) ? eraParam : resolved?.era ?? null,
-    tempo: isTempoKey(tempoParam) ? tempoParam : resolved?.tempo ?? null,
+    time: timeFromParams(sp) ?? (resolved?.tempo ? LEGACY_TEMPO_TIME[resolved.tempo] : null),
+    era: isEraKey(era) ? era : resolved?.era ?? null,
+    where: isWhereKey(where) ? where : EMPTY_FILTERS.where,
     extraKeywords: resolved?.keywords ?? [],
   };
 }
 
-export function activeRefinementKeys(r: Refinements): RefinementKey[] {
-  return REFINEMENT_KEYS.filter((key) => r[key] !== null);
+function isActive(f: Filters, key: FilterKey): boolean {
+  return key === "where" ? f.where !== "any" : f[key] !== null;
 }
 
-/**
- * The active filters that deleting their URL param clears. The free text can
- * imply an era or tempo, which has no param to delete or comes straight back.
- */
-export function removableRefinementKeys(
+export function activeFilterKeys(f: Filters): FilterKey[] {
+  return FILTER_KEYS.filter((key) => isActive(f, key));
+}
+
+export function withoutFilter(f: Filters, key: FilterKey): Filters {
+  return key === "where" ? { ...f, where: "any" } : { ...f, [key]: null };
+}
+
+/** The URL a suggestion navigates to. The route decides with it and the page applies it, so they agree. */
+export function clearFilterParam(sp: URLSearchParams, key: FilterKey): URLSearchParams {
+  const next = new URLSearchParams(sp);
+  FILTER_PARAMS[key].forEach((param) => next.delete(param));
+  // Norway is the default, so deleting the param would change nothing.
+  if (key === "where") next.set("where", "any");
+  return next;
+}
+
+/** Active filters that clearFilterParam actually loosens. A value the text implied comes straight back. */
+export function removableFilterKeys(
   sp: URLSearchParams,
   resolved: ResolvedMoodText | null,
-): RefinementKey[] {
-  return activeRefinementKeys(parseRefinements(sp, resolved)).filter((key) => {
-    const without = new URLSearchParams(sp);
-    without.delete(key);
-    return parseRefinements(without, resolved)[key] === null;
-  });
+): FilterKey[] {
+  return activeFilterKeys(parseFilters(sp, resolved)).filter(
+    (key) => !isActive(parseFilters(clearFilterParam(sp, key), resolved), key),
+  );
 }
 
-export function withoutRefinement(r: Refinements, key: RefinementKey): Refinements {
-  return { ...r, [key]: null };
+function mergeExtraKeywords(params: Record<string, string>, extra: number[]) {
+  if (!extra.length) return;
+  // The mood's own keywords and the text's can overlap ("feel good" is both).
+  // Pipe-joined: TMDB reads "," as AND.
+  const merged = new Set(params.with_keywords ? params.with_keywords.split("|") : []);
+  extra.forEach((k) => merged.add(String(k)));
+  params.with_keywords = [...merged].join("|");
 }
 
-export function applyRefinements(
-  params: Record<string, string>,
-  r: Refinements,
-): void {
-  if (r.runtime === "short") {
-    params["with_runtime.lte"] = "100";
-  } else if (r.runtime === "long") {
-    params["with_runtime.gte"] = "150";
+export function applyFilters(params: Record<string, string>, f: Filters): void {
+  const time = TIME_OPTIONS.find((o) => o.value === f.time);
+  if (time?.lte) params["with_runtime.lte"] = String(time.lte);
+  // Only ever raises the mood's runtime floor; one Time value means one bound.
+  if (time?.gte) params["with_runtime.gte"] = String(time.gte);
+
+  const era = ERA_OPTIONS.find((o) => o.value === f.era);
+  if (era?.gte) params["primary_release_date.gte"] = era.gte;
+  if (era?.lte) params["primary_release_date.lte"] = era.lte;
+
+  if (f.where !== "any") {
+    params.watch_region = "NO";
+    params.with_watch_monetization_types = "flatrate";
   }
 
-  if (r.language === "en") {
-    params["with_original_language"] = "en";
-  } else if (r.language === "scand") {
-    params["with_original_language"] = "en|no|sv|da|fi|is";
-  }
-
-  if (r.exclude) {
-    const existing = params["without_genres"];
-    params["without_genres"] = existing ? `${existing},${r.exclude}` : r.exclude;
-  }
-
-  // Tempo overrides runtime when both are set (more intentional axis).
-  applyTempo(params, r.tempo);
-  applyEra(params, r.era);
-  mergeExtraKeywords(params, r.extraKeywords);
+  mergeExtraKeywords(params, f.extraKeywords);
 }

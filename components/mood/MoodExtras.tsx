@@ -1,11 +1,11 @@
 "use client";
 
-// Shared refinement block rendered under the mood grid on both the single-user
+// Shared Era/Tempo/text block rendered under the mood grid on both the single-user
 // dashboard and the group mood page. Stateless: parent owns the values and
 // passes callbacks. Uses the shared chipStyle helper.
 
 import type { EraKey, TempoKey } from "@/lib/types";
-import { ERA_OPTIONS, TEMPO_OPTIONS } from "@/lib/moodRefinements";
+import { ERA_OPTIONS } from "@/lib/moodFilters";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import { chipStyle, FieldLabel } from "./chipStyle";
 
@@ -24,6 +24,11 @@ interface Props {
   /** Optional label override for the text input placeholder. */
   textPlaceholder?: string;
 }
+
+const TEMPO_OPTIONS: { value: TempoKey; label: string }[] = [
+  { value: "slowburn", label: "Slow-burn" },
+  { value: "fastpaced", label: "Fast-paced" },
+];
 
 export default function MoodExtras({
   era,

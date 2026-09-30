@@ -209,9 +209,27 @@ describe("buildSharedDeck", () => {
     expect(sent.get("page")).toBe("1");
     expect(sent.get("language")).toBe("en-US");
     expect(sent.get("api_key")).toBe("test-key");
-    // Era and tempo are independent axes; both must survive.
+    // Era and tempo are independent axes; both must survive. A stored tempo is
+    // read as a Time (spec §8), so Slow-burn is "Long & immersive": 140+ minutes.
     expect(sent.get("primary_release_date.lte")).toBe("1989-12-31");
-    expect(sent.get("with_runtime.gte")).toBe("120");
+    expect(sent.get("with_runtime.gte")).toBe("140");
+    // Where is still Norwegian subscription streaming for every deck.
+    expect(sent.get("watch_region")).toBe("NO");
+    expect(sent.get("with_watch_monetization_types")).toBe("flatrate");
+  });
+
+  it("reads a Fast-paced majority as Under 100 min, keeping the runtime floor", async () => {
+    const spy = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(fakeTMDBResponse(20)),
+    });
+    global.fetch = spy;
+
+    await buildSharedDeck([{ mood_selections: ["laugh"], tempo: "fastpaced" }]);
+
+    const sent = new URL(spy.mock.calls[0][0] as string).searchParams;
+    expect(sent.get("with_runtime.lte")).toBe("100");
+    expect(sent.get("with_runtime.gte")).toBe("60");
   });
 
   // The deck shares the solo ladder: a thin mood loosens instead of starving its slots.

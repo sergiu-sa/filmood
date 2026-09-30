@@ -36,8 +36,6 @@ export function paramsForConfig(mood: MoodConfig, tier: Tier = 0): Record<string
     sort_by: mood.sortBy,
     "vote_count.gte": String(voteCountGte),
     "with_runtime.gte": String(RUNTIME_FLOOR),
-    watch_region: "NO",
-    with_watch_monetization_types: "flatrate",
   };
   // TMDB: "," = AND, "|" = OR — `npm run check:moods -- --probe` verifies it.
   if (genres.length) {
