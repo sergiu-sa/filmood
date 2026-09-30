@@ -16,23 +16,27 @@ export type FilterKey = keyof AppliedFilters;
 
 const FILTER_KEYS: FilterKey[] = ["time", "era", "where"];
 
-export const TIME_OPTIONS: { value: TimeKey; label: string; gte?: number; lte?: number }[] = [
-  { value: "short", label: "Under 100 min", lte: 100 },
-  { value: "medium", label: "Under 2 hours", lte: 120 },
-  { value: "long", label: "Long & immersive", gte: 140 },
+/** `label` for sheets, suggestions and sentences; `short` for the results bar and its mobile chips. */
+export const TIME_OPTIONS: { value: TimeKey; label: string; short: string; hint: string; gte?: number; lte?: number }[] = [
+  { value: "short", label: "Under 100 min", short: "Under 100 min", hint: "a quick one", lte: 100 },
+  { value: "medium", label: "Under 2 hours", short: "Under 2 h", hint: "a normal night", lte: 120 },
+  { value: "long", label: "Long & immersive", short: "Long", hint: "2 h 20+", gte: 140 },
 ];
 
-export const ERA_OPTIONS: { value: EraKey; label: string; gte?: string; lte?: string }[] = [
-  { value: "classic", label: "Before 1990", lte: "1989-12-31" },
-  { value: "modern", label: "1990–2009", gte: "1990-01-01", lte: "2009-12-31" },
-  { value: "fresh", label: "2010 onwards", gte: "2010-01-01" },
+export const ERA_OPTIONS: { value: EraKey; label: string; short: string; gte?: string; lte?: string }[] = [
+  { value: "classic", label: "Before 1990", short: "Before 1990", lte: "1989-12-31" },
+  { value: "modern", label: "1990–2009", short: "1990–2009", gte: "1990-01-01", lte: "2009-12-31" },
+  { value: "fresh", label: "2010 onwards", short: "2010 on", gte: "2010-01-01" },
 ];
 
-export const WHERE_OPTIONS: { value: WhereKey; label: string }[] = [
-  { value: "mine", label: "My services" },
-  { value: "norway", label: "Streaming in Norway" },
-  { value: "any", label: "Anywhere" },
+export const WHERE_OPTIONS: { value: WhereKey; label: string; short: string }[] = [
+  { value: "mine", label: "My services", short: "My services" },
+  { value: "norway", label: "Streaming in Norway", short: "Norway streaming" },
+  { value: "any", label: "Anywhere", short: "Anywhere" },
 ];
+
+/** What each filter reads when it's off; suggestion buttons use the same words. */
+export const ANY_LABELS: Record<FilterKey, string> = { time: "Any length", era: "Any era", where: "Anywhere" };
 
 export const EMPTY_FILTERS: Filters = {
   time: null,
@@ -111,6 +115,14 @@ export function clearFilterParam(sp: URLSearchParams, key: FilterKey): URLSearch
   FILTER_PARAMS[key].forEach((param) => next.delete(param));
   // Norway is the default, so deleting the param would change nothing.
   if (key === "where") next.set("where", "any");
+  return next;
+}
+
+/** The URL a filter control writes: every alias of `key` removed, then `value` set (null clears Time or Era). */
+export function setFilterParam(sp: URLSearchParams, key: FilterKey, value: string | null): URLSearchParams {
+  const next = new URLSearchParams(sp);
+  FILTER_PARAMS[key].forEach((param) => next.delete(param));
+  if (value !== null) next.set(key, value);
   return next;
 }
 

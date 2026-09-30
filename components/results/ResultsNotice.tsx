@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { moodMap } from "@/lib/moodMap";
 import { ACCENT_VARS } from "@/lib/constants";
+import { filmCount } from "@/lib/filmCount";
 import type { FilterKey } from "@/lib/moodFilters";
 import type { DiscoverResponse } from "@/lib/types";
 
@@ -13,8 +14,6 @@ interface ResultsNoticeProps {
   labels: Partial<Record<FilterKey, string>>;
   onRemove: (key: FilterKey) => void;
 }
-
-const filmCount = (n: number) => `${n} ${n === 1 ? "film" : "films"}`;
 
 const note = {
   fontSize: "12px",

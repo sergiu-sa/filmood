@@ -7,6 +7,8 @@ interface BottomSheetProps {
   onClose: () => void;
   children: React.ReactNode;
   accentColor?: string;
+  /** The dialog's accessible name. */
+  label?: string;
 }
 
 export default function BottomSheet({
@@ -14,6 +16,7 @@ export default function BottomSheet({
   onClose,
   children,
   accentColor,
+  label = "Panel",
 }: BottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const dragStartY = useRef(0);
@@ -150,8 +153,10 @@ export default function BottomSheet({
         ref={sheetRef}
         role="dialog"
         aria-modal="true"
-        aria-label="Panel"
+        aria-label={label}
         tabIndex={-1}
+        // Closed, it only slides off-screen, so without inert Tab would still reach it.
+        inert={!isOpen}
         style={{
           position: "fixed",
           left: 0,

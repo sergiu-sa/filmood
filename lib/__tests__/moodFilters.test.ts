@@ -4,9 +4,13 @@ import {
   clearFilterParam,
   parseFilters,
   removableFilterKeys,
+  setFilterParam,
   withoutFilter,
+  ANY_LABELS,
   EMPTY_FILTERS,
+  ERA_OPTIONS,
   TIME_OPTIONS,
+  WHERE_OPTIONS,
   type Filters,
 } from "@/lib/moodFilters";
 import { resolveMoodText } from "@/lib/moodResolver";
@@ -230,6 +234,39 @@ describe("clearFilterParam", () => {
     expect(clearFilterParam(sp("mood=laugh&where=mine&services=netflix&seed=9"), "where").toString()).toBe(
       "mood=laugh&seed=9&where=any",
     );
+  });
+});
+
+describe("setFilterParam", () => {
+  it("replaces Time and every legacy param that set it", () => {
+    const before = sp("mood=laugh&tempo=slowburn&runtime=long&seed=9");
+    expect(setFilterParam(before, "time", "short").toString()).toBe("mood=laugh&seed=9&time=short");
+    expect(before.toString()).toBe("mood=laugh&tempo=slowburn&runtime=long&seed=9");
+  });
+
+  it("clears Time and Era with null", () => {
+    expect(setFilterParam(sp("mood=laugh&tempo=fastpaced&seed=9"), "time", null).toString()).toBe(
+      "mood=laugh&seed=9",
+    );
+    expect(setFilterParam(sp("mood=laugh&era=classic&seed=9"), "era", null).toString()).toBe(
+      "mood=laugh&seed=9",
+    );
+  });
+
+  it("drops the services when Where leaves My services", () => {
+    expect(setFilterParam(sp("mood=laugh&where=mine&services=netflix&seed=9"), "where", "norway").toString()).toBe(
+      "mood=laugh&seed=9&where=norway",
+    );
+  });
+});
+
+describe("labels", () => {
+  it("gives every option a short label", () => {
+    for (const o of [...TIME_OPTIONS, ...ERA_OPTIONS, ...WHERE_OPTIONS]) expect(o.short).toMatch(/\S/);
+  });
+
+  it("names every filter when it's off", () => {
+    expect(Object.keys(ANY_LABELS).sort()).toEqual(["era", "time", "where"]);
   });
 });
 

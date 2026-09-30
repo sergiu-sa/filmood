@@ -44,13 +44,16 @@ interface Setup {
   tmdb?: (params: Params, path: string) => unknown;
   recordSearchEvent?: ReturnType<typeof vi.fn>;
   getSupabaseAdmin?: () => unknown;
+  authFails?: boolean;
 }
 
 async function setup({
   user = null,
   tmdb = (_params, path) => (path === PROVIDERS_PATH ? providerList : fullPage()),
   recordSearchEvent = vi.fn().mockResolvedValue(undefined),
-  getSupabaseAdmin = () => ({}),
+  // No saved services: a signed-in search with no Where reads them.
+  getSupabaseAdmin = withSaved(null),
+  authFails = false,
 }: Setup = {}) {
   const recordMoodPicks = vi.fn().mockResolvedValue(1);
   // Next runs after() callbacks once the response is sent; tests run them by hand.
@@ -71,7 +74,10 @@ async function setup({
   });
   vi.doMock("@/lib/supabase-server", () => ({
     getSupabaseAdmin,
-    getAuthUser: async () => user,
+    getAuthUser: async () => {
+      if (authFails) throw new Error("auth server down");
+      return user;
+    },
   }));
   vi.doMock("@/lib/mood-history", () => ({ recordMoodPicks }));
   vi.doMock("@/lib/searchLog", async (importOriginal) => ({
@@ -145,7 +151,7 @@ describe("GET /api/movies/discover", () => {
 
     expect(status).toBe(200);
     expect(body.moods).toEqual([{ key: "cry", label: "Need to let it out", accent: "blue" }]);
-    expect(recordMoodPicks).toHaveBeenCalledWith({}, "user-1", ["cry"]);
+    expect(recordMoodPicks).toHaveBeenCalledWith(expect.anything(), "user-1", ["cry"]);
     expect(sentParams(tmdbJson)[0]).toMatchObject({ with_genres: "18" });
   });
 
@@ -155,7 +161,7 @@ describe("GET /api/movies/discover", () => {
 
     expect(body.moods.map((m: { key: string }) => m.key)).toEqual(["laugh", "cry"]);
     expect(body.interpreted).toMatchObject({ moods: ["unsettled"], droppedMoods: ["unsettled"] });
-    expect(recordMoodPicks).toHaveBeenCalledWith({}, "user-1", ["laugh", "cry"]);
+    expect(recordMoodPicks).toHaveBeenCalledWith(expect.anything(), "user-1", ["laugh", "cry"]);
     // unsettled's genres never reach TMDB.
     expect(sentParams(tmdbJson).some((p) => p.with_genres?.includes("9648"))).toBe(false);
   });
@@ -349,13 +355,60 @@ describe("GET /api/movies/discover", () => {
       for (const params of sentParams(tmdbJson)) expect(params.with_watch_providers).toBe("8");
     });
 
-    it("ignores services without where=mine and skips the provider list", async () => {
+    // D4: no Where means "my default", which is My services whenever some are known.
+    it("treats no Where as My services when services are known", async () => {
       const { get, tmdbJson } = await setup();
       const { body } = await get("mood=laugh&services=netflix");
+
+      expect(body.filters.where).toBe("mine");
+      expect(sentParams(tmdbJson).length).toBeGreaterThan(0);
+      for (const params of sentParams(tmdbJson)) expect(params.with_watch_providers).toBe("8");
+    });
+
+    it("settles a guest with no Where and no services on Norway without the provider list", async () => {
+      const { get, tmdbJson } = await setup();
+      const { body } = await get("mood=laugh");
 
       expect(body.filters.where).toBe("norway");
       expect(providerListCalls(tmdbJson)).toBe(0);
       for (const params of sentParams(tmdbJson)) expect(params.with_watch_providers).toBeUndefined();
+    });
+
+    it("uses a signed-in user's saved services when there's no Where", async () => {
+      const { get, tmdbJson } = await setup({ user: { id: "user-1" }, getSupabaseAdmin: withSaved(["Netflix"]) });
+      const { body } = await get("mood=laugh");
+
+      expect(body.filters.where).toBe("mine");
+      expect(sentParams(tmdbJson).length).toBeGreaterThan(0);
+      for (const params of sentParams(tmdbJson)) expect(params.with_watch_providers).toBe("8");
+    });
+
+    it("reads a signed-in user's preferences once and settles on Norway when none are saved", async () => {
+      const admin = withSaved(null);
+      const { get, tmdbJson } = await setup({ user: { id: "user-1" }, getSupabaseAdmin: admin });
+      const { body } = await get("mood=laugh");
+
+      expect(body.filters.where).toBe("norway");
+      expect(admin().from).toHaveBeenCalledTimes(1);
+      expect(admin().from).toHaveBeenCalledWith("streaming_preferences");
+      expect(providerListCalls(tmdbJson)).toBe(0);
+    });
+
+    it("never overrides an explicit Where", async () => {
+      const admin = withSaved(["Netflix"]);
+      const { get, tmdbJson } = await setup({ user: { id: "user-1" }, getSupabaseAdmin: admin });
+      const { body } = await get("mood=laugh&where=norway&services=netflix");
+
+      expect(body.filters.where).toBe("norway");
+      expect(admin().from).not.toHaveBeenCalled();
+      expect(providerListCalls(tmdbJson)).toBe(0);
+      for (const params of sentParams(tmdbJson)) expect(params.with_watch_providers).toBeUndefined();
+    });
+
+    it("logs a default that settled on My services as mine", async () => {
+      const { get, recordSearchEvent } = await setup();
+      await get("mood=laugh&services=netflix");
+      expect(recordSearchEvent.mock.calls[0][1].filters).toEqual({ where: "mine" });
     });
 
     it("logs where=mine without the services", async () => {
@@ -399,6 +452,16 @@ describe("GET /api/movies/discover", () => {
         body: { error: "Failed to fetch films" },
       });
     });
+  });
+
+  it("turns a failed sign-in check into a 500 with a body", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { get, tmdbJson } = await setup({ authFails: true });
+    const { status, body } = await get("mood=laugh");
+
+    expect(status).toBe(500);
+    expect(typeof body.error).toBe("string");
+    expect(tmdbJson).not.toHaveBeenCalled();
   });
 
   it("writes mood history and the search log only after the response", async () => {

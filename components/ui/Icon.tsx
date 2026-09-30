@@ -31,6 +31,7 @@ export type IconName =
   | "chevron-down"
   | "arrow-right"
   | "home"
+  | "shuffle"
   | "star-burst";
 
 interface IconProps {
@@ -298,6 +299,19 @@ export default function Icon({ name, size = 16, className }: IconProps) {
           strokeLinejoin="round"
         >
           <path d="M3 11 L12 3 L21 11 V20 a1 1 0 0 1-1 1 h-5 v-7 h-4 v7 H4 a1 1 0 0 1-1-1 V11 z" />
+        </svg>
+      );
+    case "shuffle":
+      return (
+        <svg
+          {...common}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.6}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
         </svg>
       );
     case "star-burst":
