@@ -86,6 +86,14 @@ describe("FilterBar", () => {
       expect(url.get("seed")).toBe("9");
     });
 
+    it("clears an Era the text set with an explicit any", async () => {
+      search = "text=cozy+80s+heist&seed=9";
+      renderBar({ filters: { era: "classic" } });
+      const [, eraAny] = screen.getAllByRole("radio", { name: "Any" });
+      await userEvent.click(eraAny);
+      expect(lastUrl().get("era")).toBe("any");
+    });
+
     it("drops the services when Where leaves My services", async () => {
       search = "mood=laugh&where=mine&services=netflix&seed=9";
       services.list = ["netflix"];
@@ -233,6 +241,23 @@ describe("FilterBar", () => {
       expect(screen.getByText(/showing films on/i)).toHaveTextContent("Showing films on Netflix in Norway");
     });
 
+    it("returns focus to Edit services when its picker closes", async () => {
+      const user = userEvent.setup();
+      services.list = ["netflix"];
+      renderBar({ filters: { where: "mine" } });
+      await user.click(screen.getByRole("button", { name: "Edit services" }));
+      await user.keyboard("{Escape}");
+      expect(screen.getByRole("button", { name: "Edit services" })).toHaveFocus();
+    });
+
+    it("closes the picker on a click outside", async () => {
+      const user = userEvent.setup();
+      renderBar();
+      await user.click(radio("My services"));
+      await user.click(screen.getByRole("button", { name: "Shuffle" }));
+      expect(screen.queryByRole("dialog", { name: "Which services do you have?" })).toBeNull();
+    });
+
     it("has no services line outside My services", () => {
       services.list = ["netflix"];
       renderBar({ filters: { where: "norway" } });
@@ -292,6 +317,43 @@ describe("FilterBar", () => {
       expect(screen.getByRole("dialog", { name: "Which services do you have?" })).not.toHaveAttribute("inert");
       expect(screen.getByRole("checkbox", { name: "Netflix" })).toBeChecked();
       expect(screen.getByRole("checkbox", { name: "Viaplay" })).toBeChecked();
+    });
+
+    it("opens a fresh picker each time", async () => {
+      const user = userEvent.setup();
+      services.list = ["netflix", "viaplay"];
+      renderBar({ filters: { where: "mine" } });
+      await user.click(screen.getByRole("button", { name: "Edit services" }));
+      await user.click(screen.getByRole("checkbox", { name: "Viaplay" }));
+      await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+      await user.click(screen.getByRole("button", { name: "Edit services" }));
+      expect(screen.getByRole("checkbox", { name: "Viaplay" })).toBeChecked();
+    });
+
+    it("returns focus to what opened the sheet", async () => {
+      const user = userEvent.setup();
+      services.list = ["netflix"];
+      renderBar({ filters: { where: "mine" } });
+      const edit = screen.getByRole("button", { name: "Edit services" });
+      await user.click(edit);
+      await user.click(screen.getByRole("button", { name: "Cancel" }));
+      expect(edit).toHaveFocus();
+    });
+
+    // Outside an aria-modal sheet, a live region may not be read, so the sheet has its own.
+    it("announces the count inside the open sheet", async () => {
+      const user = userEvent.setup();
+      const { container, rerender } = renderBar();
+      await user.click(screen.getByRole("button", { name: "Time Any" }));
+      const sheet = screen.getByRole("dialog", { name: "How much time?" });
+      const inner = sheet.querySelector('[aria-live="polite"]');
+      expect(inner).toHaveTextContent(/^20 films$/);
+      const outer = [...container.querySelectorAll('[aria-live="polite"]')].find((el) => !sheet.contains(el));
+      expect(outer).toBeEmptyDOMElement();
+
+      rerender({ busy: true });
+      expect(inner).toBeEmptyDOMElement();
     });
 
     it("has a 44px Shuffle and names the services in the count line", async () => {

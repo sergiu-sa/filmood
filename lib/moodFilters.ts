@@ -72,6 +72,9 @@ const FILTER_PARAMS: Record<FilterKey, string[]> = {
   where: ["where", "services"],
 };
 
+/** `time=any` / `era=any`: the user cleared a filter the free text set. */
+const ANY = "any";
+
 function timeFromParams(sp: URLSearchParams): TimeKey | null {
   const time = sp.get("time");
   if (isTimeKey(time)) return time;
@@ -82,15 +85,19 @@ function timeFromParams(sp: URLSearchParams): TimeKey | null {
 }
 
 /**
- * Explicit params beat the free text; `time` beats the legacy `tempo`, which
- * beats the legacy `runtime`. The retired `language` and `exclude` are ignored.
+ * Explicit params beat the free text, `any` included; `time` beats the legacy
+ * `tempo`, which beats the legacy `runtime`. The retired `language` and
+ * `exclude` are ignored.
  */
 export function parseFilters(sp: URLSearchParams, resolved: ResolvedMoodText | null): Filters {
   const era = sp.get("era");
   const where = sp.get("where");
   return {
-    time: timeFromParams(sp) ?? (resolved?.tempo ? LEGACY_TEMPO_TIME[resolved.tempo] : null),
-    era: isEraKey(era) ? era : resolved?.era ?? null,
+    time:
+      sp.get("time") === ANY
+        ? null
+        : timeFromParams(sp) ?? (resolved?.tempo ? LEGACY_TEMPO_TIME[resolved.tempo] : null),
+    era: era === ANY ? null : isEraKey(era) ? era : resolved?.era ?? null,
     where: isWhereKey(where) ? where : EMPTY_FILTERS.where,
     extraKeywords: resolved?.keywords ?? [],
     providers: [],
@@ -113,7 +120,7 @@ export function withoutFilter(f: Filters, key: FilterKey): Filters {
 export function clearFilterParam(sp: URLSearchParams, key: FilterKey): URLSearchParams {
   const next = new URLSearchParams(sp);
   FILTER_PARAMS[key].forEach((param) => next.delete(param));
-  // Norway is the default, so deleting the param would change nothing.
+  // A missing Where is the default (My services or Norway), so deleting it wouldn't loosen anything.
   if (key === "where") next.set("where", "any");
   return next;
 }
@@ -122,7 +129,9 @@ export function clearFilterParam(sp: URLSearchParams, key: FilterKey): URLSearch
 export function setFilterParam(sp: URLSearchParams, key: FilterKey, value: string | null): URLSearchParams {
   const next = new URLSearchParams(sp);
   FILTER_PARAMS[key].forEach((param) => next.delete(param));
+  // With text, deleting the param would let the text's Time or Era straight back.
   if (value !== null) next.set(key, value);
+  else if (next.has("text")) next.set(key, ANY);
   return next;
 }
 

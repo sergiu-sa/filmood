@@ -34,6 +34,13 @@ describe("discoverQuery", () => {
     expect(q("mood=laugh&where=mine&seed=9", ["netflix"])).toBe("mood=laugh&where=mine&services=netflix&seed=9");
   });
 
+  // The route reads an unknown Where as no Where.
+  it("adds them with an unknown Where too", () => {
+    expect(q("mood=laugh&where=elsewhere&seed=9", ["netflix"])).toBe(
+      "mood=laugh&where=elsewhere&services=netflix&seed=9",
+    );
+  });
+
   it("never adds them to another Where or over the URL's own", () => {
     expect(q("mood=laugh&where=norway&seed=9", ["netflix"])).toBe("mood=laugh&where=norway&seed=9");
     expect(q("mood=laugh&where=any&seed=9", ["netflix"])).toBe("mood=laugh&where=any&seed=9");

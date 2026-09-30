@@ -6,9 +6,9 @@ import BottomSheet from "@/components/dashboard/BottomSheet";
 import FilterGroup from "@/components/mood/FilterGroup";
 import ServicesPicker, { PICKER_TITLE } from "@/components/results/ServicesPicker";
 import Icon from "@/components/ui/Icon";
-import { filmCount } from "@/lib/filmCount";
+import { filmCount, filmWord } from "@/lib/filmCount";
 import { ANY_LABELS, ERA_OPTIONS, setFilterParam, TIME_OPTIONS, WHERE_OPTIONS, type FilterKey } from "@/lib/moodFilters";
-import { parseServices, PLATFORMS, type PlatformSlug } from "@/lib/platforms";
+import { parseServices, platformsFor, type PlatformSlug } from "@/lib/platforms";
 import { newSeed } from "@/lib/seededRandom";
 import { useDismiss } from "@/lib/useDismiss";
 import { useMediaQuery } from "@/lib/useMediaQuery";
@@ -49,8 +49,6 @@ const LONG = {
 };
 
 const serviceList = new Intl.ListFormat("en-GB", { type: "conjunction" });
-const serviceNames = (slugs: readonly PlatformSlug[]) =>
-  PLATFORMS.filter((p) => slugs.includes(p.slug)).map((p) => p.name);
 
 /**
  * The results page's Time · Era · Where bar, count and Shuffle: a sticky bar on
@@ -64,6 +62,10 @@ export default function FilterBar({ filters, count, busy }: FilterBarProps) {
   const services = useServices();
   const [pending, setPending] = useState<{ url: string; key: FilterKey; value: string | null } | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  // A new key per open: the mobile sheet keeps its content mounted, and a
+  // reopened picker must start from the current list, not the last edit.
+  const [pickerKey, setPickerKey] = useState(0);
+  const openerRef = useRef<HTMLElement | null>(null);
   const [sheet, setSheet] = useState<{ open: boolean; kind: Sheet }>({ open: false, kind: "time" });
   const whereRef = useRef<HTMLDivElement>(null);
 
@@ -96,17 +98,32 @@ export default function FilterBar({ filters, count, busy }: FilterBarProps) {
     write(next, "filter");
   };
 
+  const openPicker = () => {
+    setPickerKey((k) => k + 1);
+    if (isMobile) {
+      setSheet({ open: true, kind: "services" });
+    } else {
+      openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      setPickerOpen(true);
+    }
+  };
+
   const closePicker = () => {
     setPickerOpen(false);
-    // My services is the Where group's first radio.
-    whereRef.current?.querySelector<HTMLElement>('[role="radio"]')?.focus();
+    const opener = openerRef.current;
+    // Safari doesn't focus a clicked button, so the opener can be body; My
+    // services, the Where group's first radio, is the fallback.
+    const target =
+      opener && opener !== document.body && opener.isConnected
+        ? opener
+        : whereRef.current?.querySelector<HTMLElement>('[role="radio"]');
+    target?.focus();
   };
   useDismiss(whereRef, pickerOpen, closePicker);
 
   const choose = (key: FilterKey, value: string | null) => {
     if (key === "where" && value === "mine" && known.length === 0) {
-      if (isMobile) setSheet({ open: true, kind: "services" });
-      else setPickerOpen(true);
+      openPicker();
       return;
     }
     setPickerOpen(false);
@@ -127,11 +144,17 @@ export default function FilterBar({ filters, count, busy }: FilterBarProps) {
   };
 
   const mine = filters.where === "mine" && known.length > 0;
-  const names = serviceNames(known);
+  const names = platformsFor(known).map((p) => p.name);
+  const countText = (
+    <>
+      <strong style={{ color: "var(--t1)", fontWeight: 700 }}>{count}</strong> {filmWord(count)}
+    </>
+  );
 
+  // The open sheet is aria-modal, so it carries its own live region and this one stays quiet.
   const liveRegion = (
     <p aria-live="polite" className="sr-only">
-      {busy ? "" : filmCount(count)}
+      {busy || sheet.open ? "" : filmCount(count)}
     </p>
   );
 
@@ -236,7 +259,7 @@ export default function FilterBar({ filters, count, busy }: FilterBarProps) {
           }}
         >
           <span>
-            <strong style={{ color: "var(--t1)" }}>{count}</strong> {count === 1 ? "film" : "films"}
+            {countText}
             {mine && ` on ${names.join(", ")}`}
           </span>
           {mine && (
@@ -244,7 +267,7 @@ export default function FilterBar({ filters, count, busy }: FilterBarProps) {
               <span aria-hidden="true">·</span>
               <button
                 type="button"
-                onClick={() => setSheet({ open: true, kind: "services" })}
+                onClick={openPicker}
                 style={{ ...editStyle, minHeight: "44px" }}
               >
                 Edit services
@@ -256,7 +279,7 @@ export default function FilterBar({ filters, count, busy }: FilterBarProps) {
 
         <BottomSheet isOpen={sheet.open} onClose={closeSheet} label={kind === "services" ? PICKER_TITLE : SHEET_TITLES[kind]}>
           {kind === "services" ? (
-            <ServicesPicker {...pickerProps} onCancel={closeSheet} />
+            <ServicesPicker key={pickerKey} {...pickerProps} onCancel={closeSheet} />
           ) : (
             <div className="font-sans" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: "8px" }}>
@@ -282,6 +305,9 @@ export default function FilterBar({ filters, count, busy }: FilterBarProps) {
                   <Icon name="close" size={18} />
                 </button>
               </div>
+              <p aria-live="polite" className="sr-only">
+                {busy ? "" : filmCount(count)}
+              </p>
               <FilterGroup
                 label={SHEET_TITLES[kind]}
                 hideLabel
@@ -364,14 +390,12 @@ export default function FilterBar({ filters, count, busy }: FilterBarProps) {
                 boxShadow: "0 24px 60px var(--overlay-scrim)",
               }}
             >
-              <ServicesPicker {...pickerProps} onCancel={closePicker} />
+              <ServicesPicker key={pickerKey} {...pickerProps} onCancel={closePicker} />
             </div>
           )}
         </div>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "12px" }}>
-          <span style={{ fontSize: "13px", color: "var(--t2)", whiteSpace: "nowrap" }}>
-            <strong style={{ color: "var(--t1)", fontWeight: 700 }}>{count}</strong> {count === 1 ? "film" : "films"}
-          </span>
+          <span style={{ fontSize: "13px", color: "var(--t2)", whiteSpace: "nowrap" }}>{countText}</span>
           <button
             type="button"
             onClick={shuffle}
@@ -403,7 +427,7 @@ export default function FilterBar({ filters, count, busy }: FilterBarProps) {
           style={{ width: "100%", margin: "10px 0 0", paddingLeft: "4px", fontSize: "12.5px", color: "var(--t2)" }}
         >
           Showing films on <span style={{ color: "var(--t1)" }}>{serviceList.format(names)}</span> in Norway ·{" "}
-          <button type="button" onClick={() => setPickerOpen(true)} style={editStyle}>
+          <button type="button" onClick={openPicker} style={editStyle}>
             Edit services
           </button>
         </p>

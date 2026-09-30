@@ -1,5 +1,6 @@
 // The results page's discover request. Pure.
 
+import { isWhereKey } from "@/lib/moodFilters";
 import { parseSeed } from "@/lib/seededRandom";
 
 // Fixed order, so the same URL in any order is the same request.
@@ -17,9 +18,9 @@ export function discoverQuery(sp: URLSearchParams, deviceServices: readonly stri
   const where = sp.get("where");
   const out = new URLSearchParams();
   for (const key of FORWARDED) {
-    // No Where means "my default" (Q1), so this device's services go with it.
+    // No Where (or one the route doesn't know) means "my default" (Q1), so this device's services go with it.
     const value =
-      key === "services" && !sp.get("services") && (!where || where === "mine")
+      key === "services" && !sp.get("services") && (where === "mine" || !isWhereKey(where))
         ? deviceServices.join(",")
         : sp.get(key);
     if (value) out.set(key, value);

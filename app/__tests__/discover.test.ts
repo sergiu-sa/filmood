@@ -146,22 +146,24 @@ describe("GET /api/movies/discover", () => {
 
   // Shared links and history still carry retired keys.
   it("resolves the retired key beautiful to cry", async () => {
-    const { get, tmdbJson, recordMoodPicks } = await setup({ user: { id: "user-1" } });
+    const admin = withSaved(null);
+    const { get, tmdbJson, recordMoodPicks } = await setup({ user: { id: "user-1" }, getSupabaseAdmin: admin });
     const { status, body } = await get("mood=beautiful");
 
     expect(status).toBe(200);
     expect(body.moods).toEqual([{ key: "cry", label: "Need to let it out", accent: "blue" }]);
-    expect(recordMoodPicks).toHaveBeenCalledWith(expect.anything(), "user-1", ["cry"]);
+    expect(recordMoodPicks).toHaveBeenCalledWith(admin(), "user-1", ["cry"]);
     expect(sentParams(tmdbJson)[0]).toMatchObject({ with_genres: "18" });
   });
 
   it("keeps two moods, tiles first, and reports the text moods it dropped", async () => {
-    const { get, tmdbJson, recordMoodPicks } = await setup({ user: { id: "user-1" } });
+    const admin = withSaved(null);
+    const { get, tmdbJson, recordMoodPicks } = await setup({ user: { id: "user-1" }, getSupabaseAdmin: admin });
     const { body } = await get("mood=laugh,cry&text=scary");
 
     expect(body.moods.map((m: { key: string }) => m.key)).toEqual(["laugh", "cry"]);
     expect(body.interpreted).toMatchObject({ moods: ["unsettled"], droppedMoods: ["unsettled"] });
-    expect(recordMoodPicks).toHaveBeenCalledWith(expect.anything(), "user-1", ["laugh", "cry"]);
+    expect(recordMoodPicks).toHaveBeenCalledWith(admin(), "user-1", ["laugh", "cry"]);
     // unsettled's genres never reach TMDB.
     expect(sentParams(tmdbJson).some((p) => p.with_genres?.includes("9648"))).toBe(false);
   });
@@ -405,6 +407,15 @@ describe("GET /api/movies/discover", () => {
       for (const params of sentParams(tmdbJson)) expect(params.with_watch_providers).toBeUndefined();
     });
 
+    it("treats an unknown Where like no Where", async () => {
+      const { get, tmdbJson } = await setup();
+      const { body } = await get("mood=laugh&where=elsewhere&services=netflix");
+
+      expect(body.filters.where).toBe("mine");
+      expect(sentParams(tmdbJson).length).toBeGreaterThan(0);
+      for (const params of sentParams(tmdbJson)) expect(params.with_watch_providers).toBe("8");
+    });
+
     it("logs a default that settled on My services as mine", async () => {
       const { get, recordSearchEvent } = await setup();
       await get("mood=laugh&services=netflix");
@@ -516,6 +527,16 @@ describe("GET /api/movies/discover", () => {
       });
       const { body } = await get("mood=laugh");
       expect(body.suggestions).toEqual([{ remove: "where", total: 400 }]);
+    });
+
+    it("lets an explicit any clear an era read from the text", async () => {
+      const { get, tmdbJson } = await setup();
+      const { body } = await get("text=cozy%2080s%20heist&era=any");
+
+      expect(body.interpreted.era).toBe("classic");
+      expect(body.filters.era).toBeNull();
+      expect(sentParams(tmdbJson).length).toBeGreaterThan(0);
+      for (const params of sentParams(tmdbJson)) expect(params["primary_release_date.lte"]).toBeUndefined();
     });
 
     it("does not offer to remove an era read from the text", async () => {

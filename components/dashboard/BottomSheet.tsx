@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useLayoutEffect, useRef, useCallback } from "react";
 
 interface BottomSheetProps {
   isOpen: boolean;
@@ -25,19 +25,23 @@ export default function BottomSheet({
 
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
-  // Lock body scroll when open & manage focus
-  useEffect(() => {
+  // Lock body scroll when open & manage focus. A layout effect, so the element
+  // to return to is recorded before a child's mount effect moves focus into the sheet.
+  useLayoutEffect(() => {
+    let frame = 0;
     if (isOpen) {
       document.body.style.overflow = "hidden";
       previousFocusRef.current = document.activeElement as HTMLElement;
       // Focus the sheet itself so screen readers announce the dialog
-      requestAnimationFrame(() => sheetRef.current?.focus());
+      frame = requestAnimationFrame(() => sheetRef.current?.focus());
     } else {
       document.body.style.overflow = "";
       // Restore focus to the element that opened the sheet
       previousFocusRef.current?.focus();
     }
     return () => {
+      // Closed within a frame of opening, the pending focus would land on the closed sheet.
+      cancelAnimationFrame(frame);
       document.body.style.overflow = "";
     };
   }, [isOpen]);

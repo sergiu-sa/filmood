@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { PLATFORMS, type PlatformSlug } from "@/lib/platforms";
+import { PLATFORMS, platformsFor, type PlatformSlug } from "@/lib/platforms";
 
 /** The picker's heading, and the name of the popover or sheet that holds it. */
 export const PICKER_TITLE = "Which services do you have?";
@@ -41,7 +41,7 @@ export default function ServicesPicker({ initial, signedIn, saved, onConfirm, on
     setFailed(false);
     try {
       await onConfirm(
-        PLATFORMS.filter((p) => picked.includes(p.slug)).map((p) => p.slug),
+        platformsFor(picked).map((p) => p.slug),
         toProfile,
       );
     } catch {

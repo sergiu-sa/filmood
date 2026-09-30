@@ -23,6 +23,13 @@ test.describe("Results filter bar", () => {
   });
 
   test("a filter keeps the seed, fetches once and sticks under the header", async ({ page }) => {
+    // Hold the filtered answer, so the page can be checked while it's busy.
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    await page.route(/\/api\/movies\/discover(\?.*)?$/, async (route) => {
+      if (new URL(route.request().url()).searchParams.get("time") === "short") await held;
+      return route.fallback();
+    });
     const requests = discoverParams(page);
     await page.goto("/results?mood=laugh&seed=4242");
     await expect(topPick(page)).toBeVisible();
@@ -31,6 +38,14 @@ test.describe("Results filter bar", () => {
     await page.getByRole("radiogroup", { name: "Time" }).getByRole("radio", { name: "Under 100 min" }).click();
     await page.waitForURL((url) => url.searchParams.get("time") === "short" && !url.searchParams.has("src"));
     expect(urlParams(page).get("seed")).toBe("4242");
+
+    // The last answer stays on screen, dimmed, and the count goes quiet until the new one lands.
+    const results = page.locator('[aria-busy="true"]');
+    await expect(results).toHaveCSS("opacity", "0.5");
+    await expect(results.getByRole("heading", { level: 2, name: /midnight harvest/i })).toBeVisible();
+    await expect(liveRegion(page)).toHaveText("");
+    release();
+    await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
     await expect(liveRegion(page)).toHaveText("5 films");
 
     expect(requests).toHaveLength(2);

@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { getAuthHeaders } from "@/lib/getAuthToken";
-import { parseServices, PLATFORMS, slugsFromNames, type PlatformSlug } from "@/lib/platforms";
+import { parseServices, platformsFor, slugsFromNames, type PlatformSlug } from "@/lib/platforms";
 
 export const SERVICES_STORAGE_KEY = "filmood:services";
 
@@ -85,7 +85,7 @@ export function useServices(): Services {
       writeDeviceServices(slugs);
       return;
     }
-    const platforms = PLATFORMS.filter((p) => slugs.includes(p.slug)).map((p) => p.name);
+    const platforms = platformsFor(slugs).map((p) => p.name);
     const res = await fetch("/api/streaming-preferences", {
       method: "PUT",
       headers: await getAuthHeaders(),
