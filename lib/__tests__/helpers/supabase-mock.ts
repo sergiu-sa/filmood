@@ -15,9 +15,9 @@ export const mockUser = {
  * Creates a mock Supabase client.
  *
  * Each call to .from("table") starts a new query chain.
- * The chain is fully chainable (select, insert, update, delete, eq, order all return the chain).
+ * The chain is fully chainable (select, insert, update, upsert, delete, eq, order all return the chain).
  * The chain resolves to the next response from the responses queue when:
- *   - .single() is called, or
+ *   - .single() or .maybeSingle() is called, or
  *   - the chain is awaited directly (it's a thenable)
  */
 type MockResponse = { data?: unknown; error?: unknown; count?: number | null };
@@ -31,13 +31,14 @@ export function createMockSupabase(responses: MockResponse[] = []) {
       const chain: Record<string, unknown> = {};
 
       for (const method of [
-        "select", "insert", "update", "delete",
+        "select", "insert", "update", "upsert", "delete",
         "eq", "neq", "order", "limit",
       ]) {
         chain[method] = vi.fn(() => chain);
       }
 
       chain.single = vi.fn(() => response);
+      chain.maybeSingle = vi.fn(() => response);
 
       // Make the chain awaitable for queries that don't end with .single()
       chain.then = (resolve: (value: unknown) => void) => resolve(response);

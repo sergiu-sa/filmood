@@ -9,7 +9,7 @@ Filmood starts from how you want to feel rather than from a catalogue. Pick a mo
 ## Features
 
 **Solo**
-- **12 moods**, from *Need to laugh* to *Bend my mind*. Combine two, narrow by length, era and where it streams, or describe what you want in your own words ("cozy 80s heist").
+- **12 moods**, from *Need to laugh* to *Bend my mind*. Combine two, narrow by length, era and where it streams (down to *My services*, the ones you have), or describe what you want in your own words ("cozy 80s heist").
 - **Search and browse.** Search by title, actor or director. Browse trending, top rated, new releases, in cinemas, by genre, or streaming in Norway.
 - **Film pages.** Cast and crew, trailers and clips, an image gallery, where to stream it in any country (with local age rating and release date), similar films, reviews and external links.
 - **Profile.** Your top moods and genres, films you opened but didn't save, an activity timeline, your saved films, your streaming services, and account settings.

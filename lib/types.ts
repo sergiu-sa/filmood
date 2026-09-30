@@ -50,7 +50,7 @@ export type EraKey = "classic" | "modern" | "fresh";
 /** Legacy: old links and the group flow still send it; both are read as a Time (`LEGACY_TEMPO_TIME`). */
 export type TempoKey = "slowburn" | "fastpaced";
 export type TimeKey = "short" | "medium" | "long";
-export type WhereKey = "norway" | "any";
+export type WhereKey = "mine" | "norway" | "any";
 
 /** The filters a search actually ran with, as the discover response reports them. */
 export interface AppliedFilters {
