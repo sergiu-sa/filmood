@@ -1,31 +1,24 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect, useRef, Suspense } from "react";
+import { useState, useEffect, useRef, useSyncExternalStore, Suspense } from "react";
 import Link from "next/link";
 import Breadcrumb from "@/components/Breadcrumb";
 import FilmCard from "@/components/film/FilmCard";
 import TopPick from "@/components/results/TopPick";
 import ResultsNotice from "@/components/results/ResultsNotice";
+import FilterBar from "@/components/results/FilterBar";
 import { useMediaQuery } from "@/lib/useMediaQuery";
-import type { AccentColor, DiscoverFilm, DiscoverResponse, Provider } from "@/lib/types";
+import type { AccentColor, DiscoverResponse, Provider } from "@/lib/types";
 import { moodMap } from "@/lib/moodMap";
 import { ACCENT_VARS } from "@/lib/constants";
 import { newSeed, parseSeed } from "@/lib/seededRandom";
 import { pickTopFilm } from "@/lib/topPick";
-import { clearFilterParam, type FilterKey } from "@/lib/moodFilters";
+import { ANY_LABELS, clearFilterParam, type FilterKey } from "@/lib/moodFilters";
 import { getAuthHeaders } from "@/lib/getAuthToken";
-
-type Notice = Pick<DiscoverResponse, "suggestions" | "relatedMoods" | "relaxed" | "partial">;
-
-const NO_NOTICE: Notice = { suggestions: [], relatedMoods: [], relaxed: 0, partial: false };
-
-// Keyed by the filter a suggestion loosens.
-const SUGGESTION_LABELS: Record<FilterKey, string> = {
-  time: "Any length",
-  era: "Any era",
-  where: "Anywhere",
-};
+import { discoverQuery } from "@/lib/discoverQuery";
+import { filmCount } from "@/lib/filmCount";
+import { useDeviceServices } from "@/lib/useServices";
 
 function getMeta(moods: string[]) {
   const key = moods[0]?.trim().toLowerCase() ?? "";
@@ -41,27 +34,27 @@ function getMeta(moods: string[]) {
    hero card for the solo-results "top match". This stub kept only as a
    marker; the implementation has moved out of this file. */
 
+const noSubscribe = () => () => {};
+
 /* ── Results content ── */
 function ResultsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const mood = searchParams.get("mood");
-  const time = searchParams.get("time");
-  const era = searchParams.get("era");
-  const where = searchParams.get("where");
-  const services = searchParams.get("services");
-  // Old shared links; the API reads both as a Time.
-  const tempo = searchParams.get("tempo");
-  const runtime = searchParams.get("runtime");
   const text = searchParams.get("text");
   const seed = parseSeed(searchParams.get("seed"));
   const src = searchParams.get("src");
+  const deviceServices = useDeviceServices();
+  // Hydrating, the device's services read as none. A query built then would
+  // fetch, and fetch again once they're read.
+  const hydrated = useSyncExternalStore(noSubscribe, () => true, () => false);
+  const query = hydrated ? discoverQuery(searchParams, deviceServices) : null;
 
-  const [films, setFilms] = useState<DiscoverFilm[]>([]);
-  const [moods, setMoods] = useState<string[]>([]);
-  const [notice, setNotice] = useState<Notice>(NO_NOTICE);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // What's on screen and what failed, each with the query it answers, so
+  // "busy" is derived from the URL instead of being set in the effect.
+  const [shown, setShown] = useState<{ query: string; data: DiscoverResponse } | null>(null);
+  const [failed, setFailed] = useState<{ query: string; message: string } | null>(null);
+  const busy = shown !== null && shown.query !== query && failed?.query !== query;
   const [providers, setProviders] = useState<Provider[] | null>(null);
   const [providersLoading, setProvidersLoading] = useState(false);
   const fetchedQuery = useRef<string | null>(null);
@@ -87,10 +80,7 @@ function ResultsContent() {
 
   useEffect(() => {
     // Text alone is enough to kick off a search — mood tiles are optional now.
-    if (!mood && !text) {
-      setLoading(false);
-      return;
-    }
+    if (!mood && !text) return;
 
     // The seed goes into the URL before the first fetch, so Back to this page
     // restores the same list. The replace re-runs this effect, which fetches once.
@@ -101,31 +91,17 @@ function ResultsContent() {
       return;
     }
 
-    const params = new URLSearchParams();
-    if (mood) params.set("mood", mood);
-    if (time) params.set("time", time);
-    if (era) params.set("era", era);
-    if (where) params.set("where", where);
-    if (services) params.set("services", services);
-    if (tempo) params.set("tempo", tempo);
-    if (runtime) params.set("runtime", runtime);
-    if (text) params.set("text", text);
-    params.set("seed", String(seed));
-
     // Dropping src below re-runs this effect with the same query; don't fetch
     // (and log the search) twice.
-    const query = params.toString();
-    if (query === fetchedQuery.current) return;
+    if (!query || query === fetchedQuery.current) return;
     fetchedQuery.current = query;
+    const params = new URLSearchParams(query);
     if (src) params.set("src", src);
 
     const fetchFilms = async () => {
       try {
-        setLoading(true);
-        setError(null);
-
         // Signed in, discover reads saved services for where=mine and records mood history.
-        const res = await fetch(`/api/movies/discover?${params.toString()}`, {
+        const res = await fetch(`/api/movies/discover?${params}`, {
           headers: await getAuthHeaders(),
         });
         const data: DiscoverResponse & { error?: string } = await res.json();
@@ -133,29 +109,14 @@ function ResultsContent() {
         // so an effect cleanup flag could leave nothing fetching.
         if (fetchedQuery.current !== query) return;
 
-        if (!res.ok) {
+        if (!res.ok || data.error) {
           throw new Error(data.error || "Failed to load films");
         }
-
-        if (data.error) {
-          throw new Error(data.error);
-        }
-
-        // The server's list: retired keys resolved, text moods added, capped at two.
-        setMoods(data.moods.map((m) => m.key));
-        setFilms(Array.isArray(data.films) ? data.films : []);
-        setNotice({
-          suggestions: data.suggestions,
-          relatedMoods: data.relatedMoods,
-          relaxed: data.relaxed,
-          partial: data.partial,
-        });
+        setShown({ query, data });
       } catch (err) {
         if (fetchedQuery.current === query) {
-          setError(err instanceof Error ? err.message : "Failed to load films");
+          setFailed({ query, message: err instanceof Error ? err.message : "Failed to load films" });
         }
-      } finally {
-        if (fetchedQuery.current === query) setLoading(false);
       }
     };
 
@@ -168,7 +129,11 @@ function ResultsContent() {
       withoutSrc.delete("src");
       router.replace(`/results?${withoutSrc}`, { scroll: false });
     }
-  }, [mood, time, era, where, services, tempo, runtime, text, seed, src, router, searchParams]);
+  }, [mood, text, seed, src, query, router, searchParams]);
+
+  const films = shown?.data.films ?? [];
+  // The server's list: retired keys resolved, text moods added, capped at two.
+  const moods = shown?.data.moods.map((m) => m.key) ?? [];
 
   // Fetch providers for the top pick
   const topPick = pickTopFilm(films);
@@ -220,7 +185,34 @@ function ResultsContent() {
     );
   }
 
-  if (loading) {
+  if (failed && failed.query === query) {
+    return (
+      <div
+        className="flex flex-col items-center justify-center gap-4"
+        style={{ minHeight: "60vh" }}
+      >
+        <p style={{ fontSize: "14px", color: "var(--rose)" }}>{failed.message}</p>
+        <Link
+          href="/"
+          className="font-sans"
+          style={{
+            padding: "10px 24px",
+            borderRadius: "var(--r)",
+            background: "none",
+            color: "var(--t2)",
+            fontSize: "13px",
+            fontWeight: 500,
+            border: "1px solid var(--border)",
+            textDecoration: "none",
+          }}
+        >
+          Try different moods
+        </Link>
+      </div>
+    );
+  }
+
+  if (!shown) {
     return (
       <div
         className="flex flex-col items-center justify-center gap-3"
@@ -241,33 +233,6 @@ function ResultsContent() {
         >
           Finding films for your mood...
         </p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div
-        className="flex flex-col items-center justify-center gap-4"
-        style={{ minHeight: "60vh" }}
-      >
-        <p style={{ fontSize: "14px", color: "var(--rose)" }}>{error}</p>
-        <Link
-          href="/"
-          className="font-sans"
-          style={{
-            padding: "10px 24px",
-            borderRadius: "var(--r)",
-            background: "none",
-            color: "var(--t2)",
-            fontSize: "13px",
-            fontWeight: 500,
-            border: "1px solid var(--border)",
-            textDecoration: "none",
-          }}
-        >
-          Try different moods
-        </Link>
       </div>
     );
   }
@@ -302,7 +267,7 @@ function ResultsContent() {
                 marginBottom: "12px",
               }}
             >
-              {films.length} films found
+              {filmCount(films.length)} found
             </div>
 
             <h1
@@ -372,99 +337,120 @@ function ResultsContent() {
         </div>
       </div>
 
-      <ResultsNotice
-        count={films.length}
-        {...notice}
-        labels={SUGGESTION_LABELS}
-        onRemove={removeFilter}
-      />
+      <FilterBar filters={shown.data.filters} count={films.length} busy={busy} />
 
-      {/* ── Top pick ── */}
-      {topPick && (
-        <TopPick
-          film={topPick}
-          moods={moods}
-          accent={accent}
-          providers={providers}
-          providersLoading={providersLoading}
+      {/* The last answer stays on screen, dimmed, until the new one arrives. */}
+      <div
+        aria-busy={busy}
+        style={{
+          width: "100%",
+          marginTop: "24px",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          opacity: busy ? 0.5 : 1,
+          pointerEvents: busy ? "none" : undefined,
+          transition: "opacity 0.2s ease",
+        }}
+      >
+        <ResultsNotice
+          count={films.length}
+          suggestions={shown.data.suggestions}
+          relatedMoods={shown.data.relatedMoods}
+          relaxed={shown.data.relaxed}
+          partial={shown.data.partial}
+          labels={ANY_LABELS}
+          onRemove={removeFilter}
         />
-      )}
 
-      {/* ── More matches ── */}
-      {restFilms.length > 0 && (
-        <div style={{ width: "100%", maxWidth: "1200px", boxSizing: "border-box" }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
-              marginBottom: "20px",
-            }}
-          >
+        {/* ── Top pick ── */}
+        {topPick && (
+          <TopPick
+            film={topPick}
+            moods={moods}
+            accent={accent}
+            providers={providers}
+            providersLoading={providersLoading}
+          />
+        )}
+
+        {/* ── More matches ── */}
+        {restFilms.length > 0 && (
+          <div style={{ width: "100%", maxWidth: "1200px", boxSizing: "border-box" }}>
             <div
               style={{
-                width: "6px",
-                height: "6px",
-                borderRadius: "50%",
-                background: accent.base,
-                flexShrink: 0,
-              }}
-            />
-            <span
-              className="font-sans"
-              style={{
-                fontSize: "13px",
-                fontWeight: 700,
-                textTransform: "uppercase",
-                letterSpacing: "1.5px",
-                color: "var(--t1)",
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                marginBottom: "20px",
               }}
             >
-              More matches
-            </span>
-            <span
-              className="font-sans"
-              style={{
-                fontSize: "11px",
-                fontWeight: 500,
-                color: "var(--t3)",
-              }}
-            >
-              {restFilms.length} films
-            </span>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: gridColumns,
-              gap: gridGap,
-              width: "100%",
-              ...(isSmall ? { maxWidth: "320px", margin: "0 auto" } : {}),
-            }}
-          >
-            {restFilms.map((film, i) => (
               <div
-                key={film.id}
                 style={{
-                  animation: "fadeUp 0.4s ease both",
-                  animationDelay: `${Math.min(i * 40, 500)}ms`,
+                  width: "6px",
+                  height: "6px",
+                  borderRadius: "50%",
+                  background: accent.base,
+                  flexShrink: 0,
+                }}
+              />
+              <span
+                className="font-sans"
+                style={{
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "1.5px",
+                  color: "var(--t1)",
                 }}
               >
-                <FilmCard
-                  id={film.id}
-                  title={film.title}
-                  posterPath={film.poster_path}
-                  releaseDate={film.release_date}
-                  voteAverage={film.vote_average}
-                  overview={film.overview}
-                  accentBase={accent.base}
-                />
-              </div>
-            ))}
+                More matches
+              </span>
+              <span
+                className="font-sans"
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 500,
+                  color: "var(--t3)",
+                }}
+              >
+                {filmCount(restFilms.length)}
+              </span>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: gridColumns,
+                gap: gridGap,
+                width: "100%",
+                ...(isSmall ? { maxWidth: "320px", margin: "0 auto" } : {}),
+              }}
+            >
+              {restFilms.map((film, i) => (
+                <div
+                  key={film.id}
+                  style={{
+                    animation: "fadeUp 0.4s ease both",
+                    animationDelay: `${Math.min(i * 40, 500)}ms`,
+                  }}
+                >
+                  <FilmCard
+                    id={film.id}
+                    title={film.title}
+                    posterPath={film.poster_path}
+                    releaseDate={film.release_date}
+                    voteAverage={film.vote_average}
+                    overview={film.overview}
+                    accentBase={accent.base}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+      </div>
 
       {/* ── Footer actions ── */}
       <div
@@ -554,7 +540,8 @@ export default function ResultsPage() {
         minHeight: "100vh",
         background: "var(--bg)",
         position: "relative",
-        overflow: "hidden",
+        // clip, not hidden: hidden makes a scroll container, which stops the filter bar sticking.
+        overflow: "clip",
       }}
     >
       {/* Ambient glow */}
@@ -588,7 +575,7 @@ export default function ResultsPage() {
           flexDirection: "column",
           alignItems: "center",
           boxSizing: "border-box",
-          overflowX: "hidden",
+          overflowX: "clip",
         }}
       >
         <Suspense

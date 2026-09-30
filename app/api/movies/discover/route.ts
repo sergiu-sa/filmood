@@ -1,7 +1,7 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { MAX_MOODS, moodMap, normalizeMoodKeys } from "@/lib/moodMap";
 import { resolveMoodText } from "@/lib/moodResolver";
-import { LEGACY_TEMPO_TIME, parseFilters, removableFilterKeys } from "@/lib/moodFilters";
+import { isWhereKey, LEGACY_TEMPO_TIME, parseFilters, removableFilterKeys } from "@/lib/moodFilters";
 import { runMoodSearch } from "@/lib/moodSearch";
 import { resolveWhere } from "@/lib/watchProviders";
 import { mulberry32, newSeed, parseSeed } from "@/lib/seededRandom";
@@ -43,24 +43,26 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // after(), not an unawaited promise: Next keeps the function alive until it
-  // finishes, which an unawaited promise isn't guaranteed.
-  const user = await getAuthUser(request);
-  if (user) {
-    after(() =>
-      recordMoodPicks(getSupabaseAdmin(), user.id, moodKeys).catch((err) =>
-        console.error("mood_history insert failed", err),
-      ),
-    );
-  }
-
   const filters = parseFilters(searchParams, resolved);
+  // D4: no Where means the user's services when there are some; resolveWhere settles on Norway otherwise and says so.
+  const requested = isWhereKey(searchParams.get("where")) ? filters : { ...filters, where: "mine" as const };
   const seed = parseSeed(searchParams.get("seed")) ?? newSeed();
 
   try {
+    const user = await getAuthUser(request);
+    // after(), not an unawaited promise: Next keeps the function alive until it
+    // finishes, which an unawaited promise isn't guaranteed.
+    if (user) {
+      after(() =>
+        recordMoodPicks(getSupabaseAdmin(), user.id, moodKeys).catch((err) =>
+          console.error("mood_history insert failed", err),
+        ),
+      );
+    }
+
     // A failed saved-services read is a 500 like any other failure, never a quiet Norway.
     const settled = await resolveWhere(
-      filters,
+      requested,
       searchParams.get("services"),
       user ? { supabase: getSupabaseAdmin(), userId: user.id } : null,
     );

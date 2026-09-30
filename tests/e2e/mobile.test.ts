@@ -31,4 +31,25 @@ test.describe("Mobile — BottomSheet dashboard panel", () => {
 
     await expect(page.locator("body")).not.toHaveCSS("overflow", "hidden");
   });
+
+  test("a Time sheet applies a pick at once and closes", async ({ page }) => {
+    const requests: URLSearchParams[] = [];
+    page.on("request", (req) => {
+      const url = new URL(req.url());
+      if (url.pathname === "/api/movies/discover") requests.push(url.searchParams);
+    });
+    await page.goto("/results?mood=laugh&seed=4242");
+    await expect(page.getByRole("heading", { level: 2, name: /midnight harvest/i })).toBeVisible();
+
+    await page.getByRole("button", { name: "Time Any" }).tap();
+    const sheet = page.getByRole("dialog", { name: "How much time?" });
+    await sheet.getByRole("radio", { name: /under 100 min/i }).tap();
+
+    await page.waitForURL((url) => url.searchParams.get("time") === "short" && !url.searchParams.has("src"));
+    await sheet.getByRole("button", { name: "Show 5 films" }).tap();
+    expect(requests).toHaveLength(2);
+    expect(requests[1].get("time")).toBe("short");
+    expect(requests[1].get("src")).toBe("filter");
+    await expect(page.locator("body")).not.toHaveCSS("overflow", "hidden");
+  });
 });

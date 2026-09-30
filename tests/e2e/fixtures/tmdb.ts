@@ -116,23 +116,29 @@ export async function mockTmdb(page: Page) {
     }),
   );
 
-  await page.route(/\/api\/movies\/discover(\?.*)?$/, (route) =>
-    route.fulfill({
+  await page.route(/\/api\/movies\/discover(\?.*)?$/, (route) => {
+    const sp = new URL(route.request().url()).searchParams;
+    return route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
         moods: [{ key: "laugh", label: "Need to laugh", accent: "gold" }],
         films: fakeFilms.map((f) => ({ ...f, moodKeys: ["laugh"] })),
-        filters: { time: null, era: null, where: "norway" },
-        seed: Number(new URL(route.request().url()).searchParams.get("seed")),
+        // Echoes what was asked, so the filter bar shows it; the route's own rules are unit-tested.
+        filters: {
+          time: sp.get("time"),
+          era: sp.get("era"),
+          where: sp.get("where") ?? (sp.get("services") ? "mine" : "norway"),
+        },
+        seed: Number(sp.get("seed")),
         relaxed: 0,
         partial: false,
         interpreted: null,
         suggestions: [],
         relatedMoods: [],
       }),
-    }),
-  );
+    });
+  });
 
   await page.route(/\/api\/movies\/search(\?.*)?$/, (route) =>
     route.fulfill({

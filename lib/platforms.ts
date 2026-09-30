@@ -30,3 +30,8 @@ export function parseServices(raw: string | null): PlatformSlug[] {
 export function slugsFromNames(names: readonly string[]): PlatformSlug[] {
   return PLATFORMS.filter((p) => names.includes(p.name)).map((p) => p.slug);
 }
+
+/** The platforms for these slugs, in PLATFORMS order; unknown slugs dropped. */
+export function platformsFor(slugs: readonly string[]) {
+  return PLATFORMS.filter((p) => slugs.includes(p.slug));
+}

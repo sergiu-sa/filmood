@@ -1,4 +1,4 @@
-import { isPlatformName, parseServices, PLATFORMS, slugsFromNames } from "@/lib/platforms";
+import { isPlatformName, parseServices, PLATFORMS, platformsFor, slugsFromNames } from "@/lib/platforms";
 
 describe("PLATFORMS", () => {
   it("has unique slugs and names", () => {
@@ -49,5 +49,11 @@ describe("slugsFromNames", () => {
 
   it("returns slugs in PLATFORMS order", () => {
     expect(slugsFromNames(["Prime Video", "Netflix"])).toEqual(["netflix", "prime-video"]);
+  });
+});
+
+describe("platformsFor", () => {
+  it("returns the platforms in PLATFORMS order, skipping unknown slugs", () => {
+    expect(platformsFor(["prime-video", "hulu", "netflix"]).map((p) => p.name)).toEqual(["Netflix", "Prime Video"]);
   });
 });
