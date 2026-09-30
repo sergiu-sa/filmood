@@ -7,6 +7,7 @@
  *   npm run check:moods -- --keywords        verify every TMDB_KEYWORDS id by name
  *   npm run check:moods -- --find "<name>"   keyword candidates, for curating new ones
  *   npm run check:moods -- --probe           verify how TMDB reads "," and "|"
+ *   npm run check:moods -- --providers       each platform's Norway provider id, matched by name
  *
  * Exits 1 when a check fails. TMDB_API_KEY is loaded from .env.local.
  */
@@ -15,6 +16,8 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { config as loadEnv } from "dotenv";
 import { allMoods } from "@/lib/moodMap";
 import { EMPTY_FILTERS, type Filters } from "@/lib/moodFilters";
+import { PLATFORMS } from "@/lib/platforms";
+import { norwayProviderIds } from "@/lib/watchProviders";
 import { buildSearchParams, MIN_RESULTS, searchMood } from "@/lib/moodSearch";
 import { mulberry32 } from "@/lib/seededRandom";
 import { TMDB_KEYWORDS } from "@/lib/tmdbKeywords";
@@ -198,11 +201,33 @@ async function probe(): Promise<boolean> {
   return ok && commaAny;
 }
 
+async function providers(): Promise<boolean> {
+  const ids = await norwayProviderIds();
+  // Only for the printout: norwayProviderIds keeps the ids, not TMDB's names.
+  const list = await tmdb<{ results?: { provider_id: number; provider_name: string }[] }>(
+    "/watch/providers/movie",
+    { watch_region: "NO", language: "en-US" },
+  );
+  const tmdbName = new Map((list.results ?? []).map((p) => [p.provider_id, p.provider_name]));
+  let ok = true;
+  for (const { slug, name } of PLATFORMS) {
+    const id = ids.get(slug);
+    if (id === undefined) {
+      ok = false;
+      console.log(`✗ ${slug}: TMDB lists no Norway provider for ${name}`);
+    } else {
+      console.log(`✓ ${slug} → ${id} (${tmdbName.get(id)})`);
+    }
+  }
+  return ok;
+}
+
 async function main() {
   const args = process.argv.slice(2);
   let ok: boolean;
   if (args.includes("--keywords")) ok = await keywords();
   else if (args.includes("--probe")) ok = await probe();
+  else if (args.includes("--providers")) ok = await providers();
   else if (args.includes("--find")) ok = await find(args[args.indexOf("--find") + 1]);
   else ok = await coverage();
   if (!ok) process.exitCode = 1;

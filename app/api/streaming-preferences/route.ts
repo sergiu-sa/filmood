@@ -1,17 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
 import { internalError, badRequest } from "@/lib/api-errors";
-
-// Allow-list of platform names. Extending the list is a one-line change
-// here + the StreamingPreferences component.
-const KNOWN_PLATFORMS = new Set([
-  "Netflix",
-  "Viaplay",
-  "HBO Max",
-  "TV 2 Play",
-  "Disney+",
-  "Prime Video",
-]);
+import { isPlatformName } from "@/lib/platforms";
 
 // GET /api/streaming-preferences
 export async function GET(request: NextRequest) {
@@ -51,7 +41,7 @@ export async function PUT(request: NextRequest) {
   }
   const platforms = (body.platforms as unknown[])
     .filter((p): p is string => typeof p === "string")
-    .filter((p) => KNOWN_PLATFORMS.has(p));
+    .filter(isPlatformName);
 
   try {
     const { error } = await getSupabaseAdmin()

@@ -8,6 +8,8 @@ import type { AppliedFilters, EraKey, TempoKey, TimeKey, WhereKey } from "@/lib/
 export interface Filters extends AppliedFilters {
   /** Read from the free text, not set by the user: never probed or offered. */
   extraKeywords: number[];
+  /** TMDB provider ids for `where: "mine"`, set only by `resolveWhere` (lib/watchProviders.ts). */
+  providers: number[];
 }
 
 export type FilterKey = keyof AppliedFilters;
@@ -27,11 +29,18 @@ export const ERA_OPTIONS: { value: EraKey; label: string; gte?: string; lte?: st
 ];
 
 export const WHERE_OPTIONS: { value: WhereKey; label: string }[] = [
+  { value: "mine", label: "My services" },
   { value: "norway", label: "Streaming in Norway" },
   { value: "any", label: "Anywhere" },
 ];
 
-export const EMPTY_FILTERS: Filters = { time: null, era: null, where: "norway", extraKeywords: [] };
+export const EMPTY_FILTERS: Filters = {
+  time: null,
+  era: null,
+  where: "norway",
+  extraKeywords: [],
+  providers: [],
+};
 
 export function isTimeKey(v: string | null | undefined): v is TimeKey {
   return TIME_OPTIONS.some((o) => o.value === v);
@@ -56,7 +65,7 @@ export function isTempoKey(v: string | null | undefined): v is TempoKey {
 const FILTER_PARAMS: Record<FilterKey, string[]> = {
   time: ["time", "tempo", "runtime"],
   era: ["era"],
-  where: ["where"],
+  where: ["where", "services"],
 };
 
 function timeFromParams(sp: URLSearchParams): TimeKey | null {
@@ -80,6 +89,7 @@ export function parseFilters(sp: URLSearchParams, resolved: ResolvedMoodText | n
     era: isEraKey(era) ? era : resolved?.era ?? null,
     where: isWhereKey(where) ? where : EMPTY_FILTERS.where,
     extraKeywords: resolved?.keywords ?? [],
+    providers: [],
   };
 }
 
@@ -92,7 +102,7 @@ export function activeFilterKeys(f: Filters): FilterKey[] {
 }
 
 export function withoutFilter(f: Filters, key: FilterKey): Filters {
-  return key === "where" ? { ...f, where: "any" } : { ...f, [key]: null };
+  return key === "where" ? { ...f, where: "any", providers: [] } : { ...f, [key]: null };
 }
 
 /** The URL a suggestion navigates to. The route decides with it and the page applies it, so they agree. */
@@ -137,6 +147,8 @@ export function applyFilters(params: Record<string, string>, f: Filters): void {
     params.watch_region = "NO";
     params.with_watch_monetization_types = "flatrate";
   }
+  // Pipe-joined: TMDB reads "," as AND, which would demand every service at once.
+  if (f.where === "mine") params.with_watch_providers = f.providers.join("|");
 
   mergeExtraKeywords(params, f.extraKeywords);
 }

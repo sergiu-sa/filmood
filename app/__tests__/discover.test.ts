@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { TMDBError } from "@/lib/tmdb-fetch";
 import type { DiscoverResponse } from "@/lib/types";
+import { createMockSupabase } from "@/lib/__tests__/helpers/supabase-mock";
 
 type Params = Record<string, string>;
 
@@ -24,16 +25,30 @@ const fullPage = (from = 1) => ({
   total_pages: 20,
 });
 
+const PROVIDERS_PATH = "/watch/providers/movie";
+
+// TMDB's Norway provider list, as lib/watchProviders.ts reads it.
+const providerList = {
+  results: [
+    { provider_id: 8, provider_name: "Netflix" },
+    { provider_id: 76, provider_name: "Viaplay" },
+    { provider_id: 1899, provider_name: "HBO Max" },
+    { provider_id: 431, provider_name: "TV 2 Play" },
+    { provider_id: 337, provider_name: "Disney Plus" },
+    { provider_id: 119, provider_name: "Amazon Prime Video" },
+  ],
+};
+
 interface Setup {
   user?: { id: string } | null;
-  tmdb?: (params: Params) => unknown;
+  tmdb?: (params: Params, path: string) => unknown;
   recordSearchEvent?: ReturnType<typeof vi.fn>;
   getSupabaseAdmin?: () => unknown;
 }
 
 async function setup({
   user = null,
-  tmdb = () => fullPage(),
+  tmdb = (_params, path) => (path === PROVIDERS_PATH ? providerList : fullPage()),
   recordSearchEvent = vi.fn().mockResolvedValue(undefined),
   getSupabaseAdmin = () => ({}),
 }: Setup = {}) {
@@ -49,8 +64,8 @@ async function setup({
   const flushAfter = async () => {
     for (const callback of afterCallbacks.splice(0)) await callback();
   };
-  const tmdbJson = vi.fn(async (_path: string, params: Params = {}) => {
-    const body = tmdb(params);
+  const tmdbJson = vi.fn(async (path: string, params: Params = {}) => {
+    const body = tmdb(params, path);
     if (body instanceof Error) throw body;
     return body;
   });
@@ -79,7 +94,16 @@ async function setup({
 }
 
 const sentParams = (tmdbJson: ReturnType<typeof vi.fn>) =>
-  tmdbJson.mock.calls.map(([, params]) => params as Params);
+  tmdbJson.mock.calls.filter(([path]) => path === "/discover/movie").map(([, params]) => params as Params);
+
+const providerListCalls = (tmdbJson: ReturnType<typeof vi.fn>) =>
+  tmdbJson.mock.calls.filter(([path]) => path === PROVIDERS_PATH).length;
+
+/** A signed-in user's streaming_preferences row, as savedServices reads it. */
+const withSaved = (platforms: string[] | null, error: unknown = null) => {
+  const supabase = createMockSupabase([{ data: platforms ? { platforms } : null, error }]);
+  return () => supabase;
+};
 
 describe("GET /api/movies/discover", () => {
   afterEach(() => {
@@ -282,6 +306,96 @@ describe("GET /api/movies/discover", () => {
     for (const params of sentParams(unknown.tmdbJson)) {
       expect(params).toMatchObject({ watch_region: "NO", with_watch_monetization_types: "flatrate" });
     }
+  });
+
+  describe("My services", () => {
+    it("limits a signed-in user to their saved services", async () => {
+      const { get, tmdbJson } = await setup({ user: { id: "user-1" }, getSupabaseAdmin: withSaved(["Netflix"]) });
+      const { body } = await get("mood=laugh&where=mine");
+
+      expect(body.filters.where).toBe("mine");
+      expect(sentParams(tmdbJson).length).toBeGreaterThan(0);
+      for (const params of sentParams(tmdbJson)) {
+        expect(params).toMatchObject({ with_watch_providers: "8", watch_region: "NO" });
+      }
+    });
+
+    // Same set, same query, same cache entry.
+    it.each(["netflix,viaplay", "viaplay,netflix"])("ORs a guest's services=%s", async (services) => {
+      const { get, tmdbJson } = await setup();
+      const { body } = await get(`mood=laugh&where=mine&services=${services}`);
+
+      expect(body.filters.where).toBe("mine");
+      for (const params of sentParams(tmdbJson)) expect(params.with_watch_providers).toBe("8|76");
+    });
+
+    it.each(["", "&services=hulu,constructor"])("settles a guest with no known services on Norway (%s)", async (services) => {
+      const { get, tmdbJson } = await setup();
+      const { body } = await get(`mood=laugh&where=mine${services}`);
+
+      expect(body.filters.where).toBe("norway");
+      for (const params of sentParams(tmdbJson)) {
+        expect(params.with_watch_providers).toBeUndefined();
+        expect(params.watch_region).toBe("NO");
+      }
+    });
+
+    it("prefers saved services over the param", async () => {
+      const { get, tmdbJson } = await setup({ user: { id: "user-1" }, getSupabaseAdmin: withSaved(["Netflix"]) });
+      await get("mood=laugh&where=mine&services=viaplay");
+      for (const params of sentParams(tmdbJson)) expect(params.with_watch_providers).toBe("8");
+    });
+
+    it("ignores services without where=mine and skips the provider list", async () => {
+      const { get, tmdbJson } = await setup();
+      const { body } = await get("mood=laugh&services=netflix");
+
+      expect(body.filters.where).toBe("norway");
+      expect(providerListCalls(tmdbJson)).toBe(0);
+      for (const params of sentParams(tmdbJson)) expect(params.with_watch_providers).toBeUndefined();
+    });
+
+    it("logs where=mine without the services", async () => {
+      const { get, recordSearchEvent } = await setup();
+      await get("mood=laugh&where=mine&services=netflix,viaplay");
+
+      const [, event] = recordSearchEvent.mock.calls[0];
+      expect(event.filters).toEqual({ where: "mine" });
+      expect(JSON.stringify(event)).not.toMatch(/netflix|viaplay/i);
+    });
+
+    it("offers Anywhere for a thin My services search, probing without providers", async () => {
+      const { get, tmdbJson } = await setup({
+        tmdb: (p, path) =>
+          path === PROVIDERS_PATH
+            ? providerList
+            : p.with_watch_providers
+              ? { results: [rawFilm(1)], total_results: 1, total_pages: 1 }
+              : fullPage(),
+      });
+      const { body } = await get("mood=laugh&where=mine&services=netflix");
+
+      expect(body.suggestions).toEqual([{ remove: "where", total: 400 }]);
+      const probes = sentParams(tmdbJson).filter((p) => !p.with_watch_providers);
+      expect(probes).toHaveLength(1);
+      expect(probes[0].watch_region).toBeUndefined();
+    });
+
+    // Failures surface: a broken read never quietly becomes Norway.
+    it.each([
+      ["a database error", { user: { id: "user-1" }, getSupabaseAdmin: withSaved(null, { message: "permission denied" }) }],
+      [
+        "a provider-list failure",
+        { tmdb: (_p: Params, path: string) => (path === PROVIDERS_PATH ? new TMDBError(401, path) : fullPage()) },
+      ],
+    ])("turns %s into a 500 with a safe message", async (_label, options) => {
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      const { get } = await setup(options);
+      expect(await get("mood=laugh&where=mine&services=viaplay")).toEqual({
+        status: 500,
+        body: { error: "Failed to fetch films" },
+      });
+    });
   });
 
   it("writes mood history and the search log only after the response", async () => {

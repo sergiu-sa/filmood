@@ -4,15 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { getAuthHeaders } from "@/lib/getAuthToken";
 import Icon from "@/components/ui/Icon";
-
-const PLATFORMS = [
-  "Netflix",
-  "Viaplay",
-  "HBO Max",
-  "TV 2 Play",
-  "Disney+",
-  "Prime Video",
-];
+import { PLATFORMS } from "@/lib/platforms";
 
 export default function StreamingPreferences() {
   const { user } = useAuth();
@@ -83,7 +75,7 @@ export default function StreamingPreferences() {
       </p>
 
       <div className="flex flex-wrap gap-2">
-        {PLATFORMS.map((platform) => {
+        {PLATFORMS.map(({ name: platform }) => {
           const isActive = list.includes(platform);
           return (
             <button

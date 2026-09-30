@@ -14,6 +14,7 @@ import { ACCENT_VARS } from "@/lib/constants";
 import { newSeed, parseSeed } from "@/lib/seededRandom";
 import { pickTopFilm } from "@/lib/topPick";
 import { clearFilterParam, type FilterKey } from "@/lib/moodFilters";
+import { getAuthHeaders } from "@/lib/getAuthToken";
 
 type Notice = Pick<DiscoverResponse, "suggestions" | "relatedMoods" | "relaxed" | "partial">;
 
@@ -48,6 +49,7 @@ function ResultsContent() {
   const time = searchParams.get("time");
   const era = searchParams.get("era");
   const where = searchParams.get("where");
+  const services = searchParams.get("services");
   // Old shared links; the API reads both as a Time.
   const tempo = searchParams.get("tempo");
   const runtime = searchParams.get("runtime");
@@ -104,6 +106,7 @@ function ResultsContent() {
     if (time) params.set("time", time);
     if (era) params.set("era", era);
     if (where) params.set("where", where);
+    if (services) params.set("services", services);
     if (tempo) params.set("tempo", tempo);
     if (runtime) params.set("runtime", runtime);
     if (text) params.set("text", text);
@@ -121,7 +124,10 @@ function ResultsContent() {
         setLoading(true);
         setError(null);
 
-        const res = await fetch(`/api/movies/discover?${params.toString()}`);
+        // Signed in, discover reads saved services for where=mine and records mood history.
+        const res = await fetch(`/api/movies/discover?${params.toString()}`, {
+          headers: await getAuthHeaders(),
+        });
         const data: DiscoverResponse & { error?: string } = await res.json();
         // Superseded (a related mood, then Back). The guard above skips re-runs,
         // so an effect cleanup flag could leave nothing fetching.
@@ -162,7 +168,7 @@ function ResultsContent() {
       withoutSrc.delete("src");
       router.replace(`/results?${withoutSrc}`, { scroll: false });
     }
-  }, [mood, time, era, where, tempo, runtime, text, seed, src, router, searchParams]);
+  }, [mood, time, era, where, services, tempo, runtime, text, seed, src, router, searchParams]);
 
   // Fetch providers for the top pick
   const topPick = pickTopFilm(films);

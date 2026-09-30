@@ -29,6 +29,15 @@ describe("parseFilters", () => {
     });
   });
 
+  // Only resolveWhere knows the provider ids; the URL can't set them.
+  it("reads My services without providers", () => {
+    expect(parseFilters(sp("where=mine&services=netflix&with_watch_providers=8"), null)).toEqual({
+      ...EMPTY_FILTERS,
+      where: "mine",
+      providers: [],
+    });
+  });
+
   it("falls back to the defaults for values it doesn't know", () => {
     expect(parseFilters(sp("time=forever&era=future&where=moon"), null)).toEqual(EMPTY_FILTERS);
     // hasOwn-style lookups: inherited keys are client input, not values.
@@ -106,6 +115,17 @@ describe("applyFilters", () => {
     expect(any).toEqual({ with_genres: "35" });
   });
 
+  // TMDB reads "," as AND here too, which would demand a film be on every service.
+  it("ORs My services' providers inside Norwegian subscription streaming", () => {
+    const p: Record<string, string> = {};
+    applyFilters(p, filters({ where: "mine", providers: [8, 76] }));
+    expect(p).toEqual({
+      watch_region: "NO",
+      with_watch_monetization_types: "flatrate",
+      with_watch_providers: "8|76",
+    });
+  });
+
   // TMDB reads "," as AND: a comma here would demand the text's keywords
   // *and* the mood's, instead of widening to either.
   it("ORs the text's keywords with the mood's and dedupes", () => {
@@ -172,6 +192,11 @@ describe("withoutFilter", () => {
     expect(withoutFilter(f, "where")).toEqual({ ...f, where: "any" });
     expect(f.time).toBe("short");
   });
+
+  it("drops My services' providers with Where", () => {
+    const f = filters({ where: "mine", providers: [8] });
+    expect(withoutFilter(f, "where")).toEqual({ ...f, where: "any", providers: [] });
+  });
 });
 
 describe("clearFilterParam", () => {
@@ -192,6 +217,12 @@ describe("clearFilterParam", () => {
   it("sets Where to Anywhere", () => {
     expect(clearFilterParam(sp("mood=laugh&seed=9"), "where").get("where")).toBe("any");
     expect(clearFilterParam(sp("mood=laugh&where=norway"), "where").get("where")).toBe("any");
+  });
+
+  it("drops the services with My services", () => {
+    expect(clearFilterParam(sp("mood=laugh&where=mine&services=netflix&seed=9"), "where").toString()).toBe(
+      "mood=laugh&seed=9&where=any",
+    );
   });
 });
 
@@ -215,6 +246,10 @@ describe("removableFilterKeys", () => {
   it("skips a URL Time the text would bring back", () => {
     const resolved = resolveMoodText("slow burn");
     expect(removableFilterKeys(sp("time=short&where=any"), resolved)).toEqual([]);
+  });
+
+  it("offers Anywhere for My services", () => {
+    expect(removableFilterKeys(sp("where=mine&services=netflix"), null)).toEqual(["where"]);
   });
 
   it("doesn't offer Anywhere when it's already Anywhere", () => {

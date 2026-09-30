@@ -3,6 +3,7 @@ import { MAX_MOODS, moodMap, normalizeMoodKeys } from "@/lib/moodMap";
 import { resolveMoodText } from "@/lib/moodResolver";
 import { LEGACY_TEMPO_TIME, parseFilters, removableFilterKeys } from "@/lib/moodFilters";
 import { runMoodSearch } from "@/lib/moodSearch";
+import { resolveWhere } from "@/lib/watchProviders";
 import { mulberry32, newSeed, parseSeed } from "@/lib/seededRandom";
 import { parseSource, recordSearchEvent } from "@/lib/searchLog";
 import { mapTMDBDiscoverFilm } from "@/lib/tmdb";
@@ -57,13 +58,19 @@ export async function GET(request: NextRequest) {
   const seed = parseSeed(searchParams.get("seed")) ?? newSeed();
 
   try {
+    // A failed saved-services read is a 500 like any other failure, never a quiet Norway.
+    const settled = await resolveWhere(
+      filters,
+      searchParams.get("services"),
+      user ? { supabase: getSupabaseAdmin(), userId: user.id } : null,
+    );
     const result = await runMoodSearch(
       moodKeys,
-      filters,
+      settled,
       mulberry32(seed),
       removableFilterKeys(searchParams, resolved),
     );
-    const { time, era, where } = filters;
+    const { time, era, where } = settled;
 
     const body: DiscoverResponse = {
       moods: moodKeys.map((k) => ({
