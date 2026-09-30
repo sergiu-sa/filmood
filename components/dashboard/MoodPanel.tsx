@@ -6,8 +6,7 @@ import { allMoods, MAX_MOODS } from "@/lib/moodMap";
 import type { EraKey, TempoKey } from "@/lib/types";
 import MoodCard from "./MoodCard";
 import MoodExtras from "@/components/mood/MoodExtras";
-import { chipStyle, FieldLabel } from "@/components/mood/chipStyle";
-import { EXCLUSION_OPTIONS } from "@/lib/moodRefinements";
+import { LEGACY_TEMPO_TIME } from "@/lib/moodFilters";
 
 interface MoodPanelProps {
   isOpen: boolean;
@@ -27,11 +26,6 @@ export default function MoodPanel({
   const router = useRouter();
   const count = selectedMoods.size;
 
-  // Refinement state
-  const [showRefine, setShowRefine] = useState(false);
-  const [runtime, setRuntime] = useState<string | null>(null);
-  const [language, setLanguage] = useState<string | null>(null);
-  const [excludedGenres, setExcludedGenres] = useState<Set<number>>(new Set());
   const [era, setEra] = useState<EraKey | null>(null);
   const [tempo, setTempo] = useState<TempoKey | null>(null);
   const [moodText, setMoodText] = useState("");
@@ -39,33 +33,15 @@ export default function MoodPanel({
   const trimmedText = moodText.trim();
   const canSubmit = count > 0 || trimmedText.length > 0;
 
-  const toggleExclusion = (genreId: number) => {
-    setExcludedGenres((prev) => {
-      const next = new Set(prev);
-      if (next.has(genreId)) {
-        next.delete(genreId);
-      } else {
-        next.add(genreId);
-      }
-      return next;
-    });
-  };
-
-  const hasRefinements = runtime !== null || language !== null || excludedGenres.size > 0;
-
   const handleFindFilms = () => {
     if (!canSubmit) return;
 
     const params = new URLSearchParams();
     if (count > 0) params.set("mood", Array.from(selectedMoods).join(","));
 
-    if (runtime) params.set("runtime", runtime);
-    if (language) params.set("language", language);
-    if (excludedGenres.size > 0) {
-      params.set("exclude", Array.from(excludedGenres).join(","));
-    }
     if (era) params.set("era", era);
-    if (tempo) params.set("tempo", tempo);
+    // Tempo was always runtime; send the Time it stands for.
+    if (tempo) params.set("time", LEGACY_TEMPO_TIME[tempo]);
     if (trimmedText) params.set("text", trimmedText);
 
     router.push(`/results?${params.toString()}`);
@@ -114,127 +90,6 @@ export default function MoodPanel({
           onTempoChange={setTempo}
           onTextChange={setMoodText}
         />
-      </div>
-
-      {/* Refine toggle + area */}
-      <div
-        style={{
-          borderTop: "1px solid var(--border)",
-          paddingTop: "14px",
-          marginBottom: "4px",
-        }}
-      >
-        <div className="flex items-center gap-2.5">
-          <button
-            onClick={() => setShowRefine((p) => !p)}
-            className={`cursor-pointer font-sans ${!showRefine ? "btn-panel-refine" : ""}`}
-            style={{
-              padding: "8px 16px",
-              borderRadius: "9px",
-              fontSize: "12px",
-              fontWeight: 500,
-              border: "1px solid",
-              transition: "all 0.25s",
-              ...(showRefine
-                ? {
-                    background: "var(--t1)",
-                    color: "var(--bg)",
-                    borderColor: "transparent",
-                  }
-                : {
-                    background: "var(--gold-soft)",
-                    color: "var(--gold)",
-                    borderColor: "rgba(var(--gold-rgb), 0.2)",
-                  }),
-            }}
-          >
-            Refine results
-          </button>
-
-          {hasRefinements && !showRefine && (
-            <span style={{ fontSize: "11px", color: "var(--t3)" }}>
-              Filters active
-            </span>
-          )}
-        </div>
-
-        {/* Refinement chips */}
-        <div
-          style={{
-            maxHeight: showRefine ? "300px" : "0",
-            opacity: showRefine ? 1 : 0,
-            overflow: "hidden",
-            transition: "max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s, margin 0.3s",
-            marginTop: showRefine ? "14px" : "0",
-          }}
-        >
-          <div
-            className="grid grid-cols-1 sm:grid-cols-3 gap-4"
-            style={{
-              padding: "16px",
-              background: "var(--surface2)",
-              border: "1px solid var(--border)",
-              borderRadius: "12px",
-            }}
-          >
-            {/* Runtime */}
-            <div>
-              <FieldLabel>How long do you have?</FieldLabel>
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  { value: "short", label: "Under 100 min" },
-                  { value: "long", label: "Epic (150+)" },
-                ].map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setRuntime(runtime === opt.value ? null : opt.value)}
-                    className="cursor-pointer font-sans"
-                    style={chipStyle(runtime === opt.value)}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Language */}
-            <div>
-              <FieldLabel>Subtitles okay?</FieldLabel>
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  { value: "en", label: "English only" },
-                  { value: "scand", label: "Nordic + EN" },
-                ].map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setLanguage(language === opt.value ? null : opt.value)}
-                    className="cursor-pointer font-sans"
-                    style={chipStyle(language === opt.value)}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Exclusions */}
-            <div>
-              <FieldLabel>Not in the mood for...</FieldLabel>
-              <div className="flex flex-wrap gap-1.5">
-                {EXCLUSION_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.id}
-                    onClick={() => toggleExclusion(opt.id)}
-                    className="cursor-pointer font-sans"
-                    style={chipStyle(excludedGenres.has(opt.id), "exclusion")}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Action row */}

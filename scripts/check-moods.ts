@@ -2,7 +2,7 @@
 /**
  * Measures the mood engine against live TMDB. Run locally, not in CI.
  *
- *   npm run check:moods                      mood × refinement coverage table, with
+ *   npm run check:moods                      mood × filter coverage table, with
  *                                            the tier the ladder settles on when thin
  *   npm run check:moods -- --keywords        verify every TMDB_KEYWORDS id by name
  *   npm run check:moods -- --find "<name>"   keyword candidates, for curating new ones
@@ -14,7 +14,7 @@ import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { config as loadEnv } from "dotenv";
 import { allMoods } from "@/lib/moodMap";
-import { EMPTY_REFINEMENTS, type Refinements } from "@/lib/moodFilters";
+import { EMPTY_FILTERS, type Filters } from "@/lib/moodFilters";
 import { buildSearchParams, MIN_RESULTS, searchMood } from "@/lib/moodSearch";
 import { mulberry32 } from "@/lib/seededRandom";
 import { TMDB_KEYWORDS } from "@/lib/tmdbKeywords";
@@ -45,16 +45,16 @@ async function tmdb<T>(p: string, params: Record<string, string>): Promise<T> {
 const discover = (params: Record<string, string>) =>
   tmdb<DiscoverPage>("/discover/movie", { ...params, page: "1" });
 
-const COLUMNS: [string, Partial<Refinements>][] = [
+// "none" is the default: no Time or Era, streaming in Norway.
+const COLUMNS: [string, Partial<Filters>][] = [
   ["none", {}],
   ["classic", { era: "classic" }],
   ["modern", { era: "modern" }],
   ["fresh", { era: "fresh" }],
-  ["slowburn", { tempo: "slowburn" }],
-  ["fastpaced", { tempo: "fastpaced" }],
-  ["short", { runtime: "short" }],
-  ["long", { runtime: "long" }],
-  ["en", { language: "en" }],
+  ["short", { time: "short" }],
+  ["medium", { time: "medium" }],
+  ["long", { time: "long" }],
+  ["any", { where: "any" }],
 ];
 
 async function coverage(): Promise<boolean> {
@@ -66,14 +66,14 @@ async function coverage(): Promise<boolean> {
 
   for (const mood of allMoods) {
     const cells: string[] = [];
-    for (const [name, r] of COLUMNS) {
-      const refinements = { ...EMPTY_REFINEMENTS, ...r };
-      const page = await discover(buildSearchParams(mood.key, refinements, 0));
+    for (const [name, f] of COLUMNS) {
+      const filters = { ...EMPTY_FILTERS, ...f };
+      const page = await discover(buildSearchParams(mood.key, filters, 0));
       const n = page.total_results ?? 0;
       if (n < MIN_RESULTS) {
         // What the discover route serves: the tier the ladder settles on.
         await sleep(CALL_GAP_MS);
-        const pool = await searchMood(mood.key, refinements, mulberry32(1));
+        const pool = await searchMood(mood.key, filters, mulberry32(1));
         cells.push(`**${n}** → ${pool.total} (t${pool.tier})`);
       } else {
         cells.push(String(n));
@@ -91,9 +91,9 @@ async function coverage(): Promise<boolean> {
   }
 
   console.log("\nCells: tier-0 total; when thin, → the total at the tier the ladder settles on.");
-  console.log(`\nTop 3, no refinements:\n${tops.join("\n")}`);
+  console.log(`\nTop 3, no filters:\n${tops.join("\n")}`);
   if (caps.length) console.log(`\nCertification caps (in every query):\n${caps.join("\n")}`);
-  if (!ok) console.log(`\nFAIL: a mood is below ${MIN_RESULTS} with no refinements.`);
+  if (!ok) console.log(`\nFAIL: a mood is below ${MIN_RESULTS} with no filters.`);
   return ok;
 }
 

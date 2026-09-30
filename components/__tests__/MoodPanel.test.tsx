@@ -150,18 +150,26 @@ describe("MoodPanel", () => {
     expect(defaultProps.onClose).toHaveBeenCalledOnce();
   });
 
-  // ── Refinement panel visibility ───────────────────────────────────────────
-  it('shows the "Refine results" button', () => {
+  // ── Filters ───────────────────────────────────────────────────────────────
+  // Language and genre exclusions are retired, and "How long" would set the
+  // same Time as the Tempo chips, so the Refine block is gone.
+  it("offers no Refine block", () => {
     render(<MoodPanel {...defaultProps} />);
-    expect(screen.getByText(/refine results/i)).toBeInTheDocument();
+    expect(screen.queryByText(/refine results/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/subtitles okay/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/not in the mood for/i)).not.toBeInTheDocument();
   });
 
-  it('expands the refinement section when "Refine results" is clicked', () => {
-    render(<MoodPanel {...defaultProps} />);
-    fireEvent.click(screen.getByText(/refine results/i));
-    // Refinement options appear
-    expect(screen.getByText(/how long do you have/i)).toBeInTheDocument();
-    expect(screen.getByText(/subtitles okay/i)).toBeInTheDocument();
+  it("sends a Slow-burn tempo as time=long", () => {
+    render(<MoodPanel {...defaultProps} selectedMoods={new Set(["laugh"])} />);
+    fireEvent.click(screen.getByRole("button", { name: "Slow-burn" }));
+    fireEvent.click(screen.getByText(/find films/i));
+
+    const params = new URL(mockPush.mock.calls[0][0], "http://localhost").searchParams;
+    expect(params.get("time")).toBe("long");
+    for (const retired of ["tempo", "runtime", "language", "exclude"]) {
+      expect(params.has(retired)).toBe(false);
+    }
   });
 
   // ── Animation wrapper (non-embedded) ─────────────────────────────────────

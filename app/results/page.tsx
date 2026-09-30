@@ -13,19 +13,17 @@ import { moodMap } from "@/lib/moodMap";
 import { ACCENT_VARS } from "@/lib/constants";
 import { newSeed, parseSeed } from "@/lib/seededRandom";
 import { pickTopFilm } from "@/lib/topPick";
-import type { RefinementKey } from "@/lib/moodFilters";
+import { clearFilterParam, type FilterKey } from "@/lib/moodFilters";
 
 type Notice = Pick<DiscoverResponse, "suggestions" | "relatedMoods" | "relaxed" | "partial">;
 
 const NO_NOTICE: Notice = { suggestions: [], relatedMoods: [], relaxed: 0, partial: false };
 
-// Keyed by the URL param a suggestion removes.
-const SUGGESTION_LABELS: Record<RefinementKey, string> = {
+// Keyed by the filter a suggestion loosens.
+const SUGGESTION_LABELS: Record<FilterKey, string> = {
+  time: "Any length",
   era: "Any era",
-  tempo: "Any tempo",
-  runtime: "Any length",
-  language: "Any language",
-  exclude: "All genres",
+  where: "Anywhere",
 };
 
 function getMeta(moods: string[]) {
@@ -47,11 +45,12 @@ function ResultsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const mood = searchParams.get("mood");
-  const runtime = searchParams.get("runtime");
-  const language = searchParams.get("language");
-  const exclude = searchParams.get("exclude");
+  const time = searchParams.get("time");
   const era = searchParams.get("era");
+  const where = searchParams.get("where");
+  // Old shared links; the API reads both as a Time.
   const tempo = searchParams.get("tempo");
+  const runtime = searchParams.get("runtime");
   const text = searchParams.get("text");
   const seed = parseSeed(searchParams.get("seed"));
   const src = searchParams.get("src");
@@ -102,11 +101,11 @@ function ResultsContent() {
 
     const params = new URLSearchParams();
     if (mood) params.set("mood", mood);
-    if (runtime) params.set("runtime", runtime);
-    if (language) params.set("language", language);
-    if (exclude) params.set("exclude", exclude);
+    if (time) params.set("time", time);
     if (era) params.set("era", era);
+    if (where) params.set("where", where);
     if (tempo) params.set("tempo", tempo);
+    if (runtime) params.set("runtime", runtime);
     if (text) params.set("text", text);
     params.set("seed", String(seed));
 
@@ -163,7 +162,7 @@ function ResultsContent() {
       withoutSrc.delete("src");
       router.replace(`/results?${withoutSrc}`, { scroll: false });
     }
-  }, [mood, runtime, language, exclude, era, tempo, text, seed, src, router, searchParams]);
+  }, [mood, time, era, where, tempo, runtime, text, seed, src, router, searchParams]);
 
   // Fetch providers for the top pick
   const topPick = pickTopFilm(films);
@@ -193,9 +192,8 @@ function ResultsContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topPick?.id]);
 
-  const removeFilter = (param: string) => {
-    const next = new URLSearchParams(searchParams.toString());
-    next.delete(param);
+  const removeFilter = (key: FilterKey) => {
+    const next = clearFilterParam(searchParams, key);
     next.set("src", "suggestion");
     router.replace(`/results?${next}`, { scroll: false });
   };

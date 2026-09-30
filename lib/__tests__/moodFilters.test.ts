@@ -1,185 +1,227 @@
 import {
-  activeRefinementKeys,
-  applyRefinements,
-  parseRefinements,
-  removableRefinementKeys,
-  withoutRefinement,
-  EMPTY_REFINEMENTS,
+  activeFilterKeys,
+  applyFilters,
+  clearFilterParam,
+  parseFilters,
+  removableFilterKeys,
+  withoutFilter,
+  EMPTY_FILTERS,
+  TIME_OPTIONS,
+  type Filters,
 } from "@/lib/moodFilters";
 import { resolveMoodText } from "@/lib/moodResolver";
 import { buildMoodParams, RUNTIME_FLOOR } from "@/lib/moodQuery";
 
 const sp = (query: string) => new URLSearchParams(query);
+const filters = (f: Partial<Filters>): Filters => ({ ...EMPTY_FILTERS, ...f });
 
-describe("parseRefinements", () => {
-  it("returns empty refinements for an empty query", () => {
-    expect(parseRefinements(sp(""), null)).toEqual(EMPTY_REFINEMENTS);
+describe("parseFilters", () => {
+  it("defaults to no Time, no Era and Norway streaming", () => {
+    expect(parseFilters(sp(""), null)).toEqual(EMPTY_FILTERS);
+    expect(EMPTY_FILTERS).toMatchObject({ time: null, era: null, where: "norway" });
   });
 
-  it("accepts a comma-separated genre id list for exclude", () => {
-    expect(parseRefinements(sp("exclude=27"), null).exclude).toBe("27");
-    expect(parseRefinements(sp("exclude=27,99"), null).exclude).toBe("27,99");
-  });
-
-  // A free-form id list would make every request a cache miss on TMDB.
-  it("keeps only the genres the panel offers, deduped in one order", () => {
-    expect(parseRefinements(sp("exclude=27,12345"), null).exclude).toBe("27");
-    expect(parseRefinements(sp("exclude=99,27,27"), null).exclude).toBe("27,99");
-    expect(parseRefinements(sp("exclude=12345,678"), null).exclude).toBeNull();
-  });
-
-  // Anything else would earn a 400 from TMDB and surface as our 500.
-  it.each(["27,", ",27", "27;99", "abc", "27|99", "27, 99"])(
-    "drops a malformed exclude %j",
-    (raw) => {
-      expect(
-        parseRefinements(sp(`exclude=${encodeURIComponent(raw)}`), null).exclude,
-      ).toBeNull();
-    },
-  );
-
-  it("prefers explicit era/tempo over values resolved from text", () => {
-    const resolved = resolveMoodText("80s slow burn");
-    const r = parseRefinements(sp("era=fresh&tempo=fastpaced"), resolved);
-    expect(r.era).toBe("fresh");
-    expect(r.tempo).toBe("fastpaced");
-  });
-
-  it("falls back to text-resolved era/tempo/keywords", () => {
-    const resolved = resolveMoodText("80s slow burn heist");
-    const r = parseRefinements(sp(""), resolved);
-    expect(r.era).toBe("classic");
-    expect(r.tempo).toBe("slowburn");
-    expect(r.extraKeywords).toEqual(resolved.keywords);
-  });
-
-  // applyRefinements ignores anything else, so a stray value must not count as
-  // an active filter (suggestion probes) or reach search_events as raw text.
-  it("keeps only runtime and language values that apply", () => {
-    expect(parseRefinements(sp("runtime=short&language=scand"), null)).toMatchObject({
-      runtime: "short",
-      language: "scand",
+  it("reads each allowed value", () => {
+    expect(parseFilters(sp("time=medium&era=modern&where=any"), null)).toMatchObject({
+      time: "medium",
+      era: "modern",
+      where: "any",
     });
-    const r = parseRefinements(sp("runtime=forever&language=klingon"), null);
-    expect(r.runtime).toBeNull();
-    expect(r.language).toBeNull();
   });
 
-  it("ignores unknown era/tempo values", () => {
-    const r = parseRefinements(sp("era=future&tempo=warp"), null);
-    expect(r.era).toBeNull();
-    expect(r.tempo).toBeNull();
+  it("falls back to the defaults for values it doesn't know", () => {
+    expect(parseFilters(sp("time=forever&era=future&where=moon"), null)).toEqual(EMPTY_FILTERS);
+    // hasOwn-style lookups: inherited keys are client input, not values.
+    expect(parseFilters(sp("time=constructor&tempo=__proto__&runtime=toString"), null)).toEqual(
+      EMPTY_FILTERS,
+    );
+  });
+
+  // Old shared links (spec §8).
+  it.each([
+    ["runtime=short", "short"],
+    ["runtime=long", "long"],
+    ["tempo=fastpaced", "short"],
+    ["tempo=slowburn", "long"],
+  ])("maps the legacy %s to time=%s", (query, time) => {
+    expect(parseFilters(sp(query), null).time).toBe(time);
+  });
+
+  it("prefers time over tempo, and tempo over runtime", () => {
+    expect(parseFilters(sp("time=medium&tempo=slowburn&runtime=short"), null).time).toBe("medium");
+    expect(parseFilters(sp("tempo=fastpaced&runtime=long"), null).time).toBe("short");
+  });
+
+  it("ignores the retired language and exclude params", () => {
+    expect(parseFilters(sp("language=en&exclude=27"), null)).toEqual(EMPTY_FILTERS);
+  });
+
+  it("lets explicit params beat the text, and falls back to the text without them", () => {
+    const resolved = resolveMoodText("slow burn 80s noir");
+    expect(parseFilters(sp("time=short&era=fresh"), resolved)).toMatchObject({
+      time: "short",
+      era: "fresh",
+    });
+    expect(parseFilters(sp(""), resolved)).toMatchObject({
+      time: "long",
+      era: "classic",
+      extraKeywords: resolved.keywords,
+    });
   });
 });
 
-describe("applyRefinements", () => {
-  it("maps runtime short/long to a runtime bound", () => {
-    const short: Record<string, string> = {};
-    applyRefinements(short, { ...EMPTY_REFINEMENTS, runtime: "short" });
-    expect(short["with_runtime.lte"]).toBe("100");
-
-    const long: Record<string, string> = {};
-    applyRefinements(long, { ...EMPTY_REFINEMENTS, runtime: "long" });
-    expect(long["with_runtime.gte"]).toBe("150");
+describe("applyFilters", () => {
+  it("bounds each Time bucket", () => {
+    const at = (time: Filters["time"]) => {
+      const p = buildMoodParams("laugh");
+      applyFilters(p, filters({ time }));
+      return [p["with_runtime.gte"], p["with_runtime.lte"]];
+    };
+    expect(at("short")).toEqual([String(RUNTIME_FLOOR), "100"]);
+    expect(at("medium")).toEqual([String(RUNTIME_FLOOR), "120"]);
+    expect(at("long")).toEqual(["140", undefined]);
   });
 
-  it("maps language to with_original_language", () => {
-    const en: Record<string, string> = {};
-    applyRefinements(en, { ...EMPTY_REFINEMENTS, language: "en" });
-    expect(en.with_original_language).toBe("en");
-
-    const scand: Record<string, string> = {};
-    applyRefinements(scand, { ...EMPTY_REFINEMENTS, language: "scand" });
-    expect(scand.with_original_language).toBe("en|no|sv|da|fi|is");
-  });
-
-  it("appends exclude to the mood's own exclusions", () => {
-    const p: Record<string, string> = { without_genres: "27" };
-    applyRefinements(p, { ...EMPTY_REFINEMENTS, exclude: "99" });
-    expect(p.without_genres).toBe("27,99");
-  });
-
-  // Tempo is applied after runtime so it wins, never leaving both bounds set.
-  it("lets tempo override the runtime refinement", () => {
-    const p: Record<string, string> = {};
-    applyRefinements(p, {
-      ...EMPTY_REFINEMENTS,
-      runtime: "short",
-      tempo: "slowburn",
+  it("bounds each era window", () => {
+    const at = (era: Filters["era"]) => {
+      const p: Record<string, string> = {};
+      applyFilters(p, filters({ era, where: "any" }));
+      return p;
+    };
+    expect(at("classic")).toEqual({ "primary_release_date.lte": "1989-12-31" });
+    expect(at("modern")).toEqual({
+      "primary_release_date.gte": "1990-01-01",
+      "primary_release_date.lte": "2009-12-31",
     });
-    expect(p["with_runtime.lte"]).toBeUndefined();
-    expect(p["with_runtime.gte"]).toBe("120");
+    expect(at("fresh")).toEqual({ "primary_release_date.gte": "2010-01-01" });
   });
 
-  it("keeps the runtime floor under every runtime × tempo combination", () => {
-    for (const runtime of [null, "short", "long"]) {
-      for (const tempo of [null, "slowburn", "fastpaced"] as const) {
-        const p = buildMoodParams("laugh");
-        applyRefinements(p, { ...EMPTY_REFINEMENTS, runtime, tempo });
-        expect(Number(p["with_runtime.gte"])).toBeGreaterThanOrEqual(RUNTIME_FLOOR);
+  it("limits Norway to Norwegian subscription streaming and Anywhere to nothing", () => {
+    const norway: Record<string, string> = {};
+    applyFilters(norway, EMPTY_FILTERS);
+    expect(norway).toEqual({ watch_region: "NO", with_watch_monetization_types: "flatrate" });
+
+    const any: Record<string, string> = { with_genres: "35" };
+    applyFilters(any, filters({ where: "any" }));
+    expect(any).toEqual({ with_genres: "35" });
+  });
+
+  // TMDB reads "," as AND: a comma here would demand the text's keywords
+  // *and* the mood's, instead of widening to either.
+  it("ORs the text's keywords with the mood's and dedupes", () => {
+    const p: Record<string, string> = { with_keywords: "6054|180" };
+    applyFilters(p, filters({ where: "any", extraKeywords: [180, 9999] }));
+    expect(p.with_keywords).toBe("6054|180|9999");
+
+    const none: Record<string, string> = {};
+    applyFilters(none, filters({ where: "any", extraKeywords: [1, 2] }));
+    expect(none.with_keywords).toBe("1|2");
+  });
+
+  it("never adds a language or genre filter", () => {
+    const p = buildMoodParams("datenight");
+    applyFilters(p, parseFilters(sp("language=scand&exclude=10749"), null));
+    expect(p.with_original_language).toBeUndefined();
+    expect(p.without_genres).toBe(buildMoodParams("datenight").without_genres);
+  });
+
+  // One Time value means one runtime bound: the old tempo × runtime collision
+  // can't be expressed, and nothing lowers or deletes the mood's floor.
+  it("keeps one consistent runtime bound under every Time × legacy combination", () => {
+    for (const time of [null, ...TIME_OPTIONS.map((o) => o.value)]) {
+      for (const tempo of [null, "slowburn", "fastpaced"]) {
+        for (const runtime of [null, "short", "long"]) {
+          const query = new URLSearchParams();
+          if (time) query.set("time", time);
+          if (tempo) query.set("tempo", tempo);
+          if (runtime) query.set("runtime", runtime);
+
+          const p = buildMoodParams("laugh");
+          applyFilters(p, parseFilters(query, null));
+          const gte = Number(p["with_runtime.gte"]);
+          expect(gte).toBeGreaterThanOrEqual(RUNTIME_FLOOR);
+          if (p["with_runtime.lte"]) expect(Number(p["with_runtime.lte"])).toBeGreaterThan(gte);
+        }
       }
     }
   });
-
-  it("leaves params untouched with no refinements", () => {
-    const p: Record<string, string> = { with_genres: "35" };
-    applyRefinements(p, EMPTY_REFINEMENTS);
-    expect(p).toEqual({ with_genres: "35" });
-  });
 });
 
-describe("activeRefinementKeys", () => {
-  it("lists nothing for empty refinements", () => {
-    expect(activeRefinementKeys(EMPTY_REFINEMENTS)).toEqual([]);
+describe("activeFilterKeys", () => {
+  // Norway is a filter the user can loosen to Anywhere, so the default counts.
+  it("counts the default Where and nothing else", () => {
+    expect(activeFilterKeys(EMPTY_FILTERS)).toEqual(["where"]);
+    expect(activeFilterKeys(filters({ where: "any" }))).toEqual([]);
   });
 
-  // Text keywords aren't a filter the user can remove, so they're never probed.
-  it("lists every set user filter but never extraKeywords", () => {
-    expect(
-      activeRefinementKeys({
-        runtime: "short",
-        language: "en",
-        exclude: "27",
-        era: "classic",
-        tempo: "slowburn",
-        extraKeywords: [1, 2],
-      }),
-    ).toEqual(["era", "tempo", "runtime", "language", "exclude"]);
-    expect(activeRefinementKeys({ ...EMPTY_REFINEMENTS, extraKeywords: [1] })).toEqual([]);
-  });
-});
-
-describe("withoutRefinement", () => {
-  it("clears one filter and leaves the rest", () => {
-    const r = { ...EMPTY_REFINEMENTS, era: "classic" as const, runtime: "short", extraKeywords: [9] };
-    expect(withoutRefinement(r, "era")).toEqual({ ...r, era: null });
-    expect(r.era).toBe("classic");
-  });
-});
-
-// A suggestion's button deletes the URL param, so only filters that deletion
-// actually clears are worth offering.
-describe("removableRefinementKeys", () => {
-  it("offers every filter set in the URL when there is no text", () => {
-    expect(removableRefinementKeys(sp("era=classic&tempo=slowburn&runtime=short"), null)).toEqual([
+  it("lists every set filter but never the text's keywords", () => {
+    expect(activeFilterKeys(filters({ time: "long", era: "classic", extraKeywords: [1] }))).toEqual([
+      "time",
       "era",
-      "tempo",
-      "runtime",
+      "where",
     ]);
+    expect(activeFilterKeys(filters({ where: "any", extraKeywords: [1] }))).toEqual([]);
+  });
+});
+
+describe("withoutFilter", () => {
+  it("clears Time and Era, and loosens Where to Anywhere", () => {
+    const f = filters({ time: "short", era: "classic", extraKeywords: [9] });
+    expect(withoutFilter(f, "time")).toEqual({ ...f, time: null });
+    expect(withoutFilter(f, "era")).toEqual({ ...f, era: null });
+    expect(withoutFilter(f, "where")).toEqual({ ...f, where: "any" });
+    expect(f.time).toBe("short");
+  });
+});
+
+describe("clearFilterParam", () => {
+  it("deletes Time with every legacy param that sets it", () => {
+    const before = sp("mood=laugh&time=short&tempo=slowburn&runtime=long&seed=9");
+    const after = clearFilterParam(before, "time");
+    expect(after.toString()).toBe("mood=laugh&seed=9");
+    expect(before.get("tempo")).toBe("slowburn");
   });
 
-  it("skips an era the text implied, since there's no param to delete", () => {
-    const resolved = resolveMoodText("cozy 80s heist");
-    expect(parseRefinements(sp("runtime=short"), resolved).era).toBe("classic");
-    expect(removableRefinementKeys(sp("runtime=short"), resolved)).toEqual(["runtime"]);
+  it("deletes Era", () => {
+    expect(clearFilterParam(sp("mood=laugh&era=fresh&seed=9"), "era").toString()).toBe(
+      "mood=laugh&seed=9",
+    );
   });
 
-  it("skips a URL era the text would bring back", () => {
-    const resolved = resolveMoodText("80s noir");
-    expect(removableRefinementKeys(sp("era=fresh"), resolved)).toEqual([]);
+  // Norway is the default, so deleting the param would change nothing.
+  it("sets Where to Anywhere", () => {
+    expect(clearFilterParam(sp("mood=laugh&seed=9"), "where").get("where")).toBe("any");
+    expect(clearFilterParam(sp("mood=laugh&where=norway"), "where").get("where")).toBe("any");
+  });
+});
+
+// A suggestion's button applies clearFilterParam, so only filters that it
+// actually loosens are worth offering.
+describe("removableFilterKeys", () => {
+  it("offers every filter set in the URL, plus the default Where", () => {
+    expect(removableFilterKeys(sp("era=classic&time=short"), null)).toEqual(["time", "era", "where"]);
+  });
+
+  it("offers Time for a legacy tempo link", () => {
+    expect(removableFilterKeys(sp("tempo=slowburn&where=any"), null)).toEqual(["time"]);
+  });
+
+  it("skips values the text implied, since there's no param to clear", () => {
+    const resolved = resolveMoodText("slow burn 80s noir");
+    expect(parseFilters(sp("where=any"), resolved)).toMatchObject({ time: "long", era: "classic" });
+    expect(removableFilterKeys(sp("where=any"), resolved)).toEqual([]);
+  });
+
+  it("skips a URL Time the text would bring back", () => {
+    const resolved = resolveMoodText("slow burn");
+    expect(removableFilterKeys(sp("time=short&where=any"), resolved)).toEqual([]);
+  });
+
+  it("doesn't offer Anywhere when it's already Anywhere", () => {
+    expect(removableFilterKeys(sp("where=any"), null)).toEqual([]);
   });
 
   it("ignores params that don't apply", () => {
-    expect(removableRefinementKeys(sp("runtime=forever&exclude=12345"), null)).toEqual([]);
+    expect(removableFilterKeys(sp("time=forever&language=en&exclude=27&where=any"), null)).toEqual([]);
   });
 });

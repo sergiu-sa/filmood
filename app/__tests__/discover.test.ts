@@ -159,10 +159,16 @@ describe("GET /api/movies/discover", () => {
       text: "cozy 80s dragons",
       moods: ["easy"],
       era: "classic",
-      tempo: null,
+      time: null,
       unmatched: ["dragons"],
       droppedMoods: [],
     });
+  });
+
+  it("echoes a Time read from the text", async () => {
+    const { get } = await setup();
+    const { body } = await get("text=slow%20burn%20noir");
+    expect(body.interpreted).toMatchObject({ moods: ["dark"], time: "long" });
   });
 
   it("returns the discover contract with projected films", async () => {
@@ -171,9 +177,10 @@ describe("GET /api/movies/discover", () => {
 
     expect(status).toBe(200);
     expect(Object.keys(body).sort()).toEqual(
-      ["films", "interpreted", "moods", "partial", "relatedMoods", "relaxed", "seed", "suggestions"],
+      ["films", "filters", "interpreted", "moods", "partial", "relatedMoods", "relaxed", "seed", "suggestions"],
     );
     expect(body).toMatchObject({
+      filters: { time: null, era: null, where: "norway" },
       seed: 5,
       relaxed: 0,
       partial: false,
@@ -233,7 +240,7 @@ describe("GET /api/movies/discover", () => {
     const [, event] = recordSearchEvent.mock.calls[0];
     expect(event).toEqual({
       moods: ["laugh"],
-      filters: { era: "classic" },
+      filters: { era: "classic", where: "norway" },
       hasText: true,
       source: "tile",
       resultCount: 20,
@@ -242,6 +249,39 @@ describe("GET /api/movies/discover", () => {
       suggestionsShown: false,
     });
     expect(JSON.stringify(event)).not.toMatch(/user-1|secret|forever/);
+  });
+
+  it("reports the filters it applied", async () => {
+    const { get } = await setup();
+    const { body } = await get("mood=laugh&tempo=slowburn&era=modern&where=any");
+    expect(body.filters).toEqual({ time: "long", era: "modern", where: "any" });
+  });
+
+  // Old shared links: tempo/runtime become a Time, language/exclude are retired.
+  it("reads an old shared link as Time and ignores the retired params", async () => {
+    const { get, tmdbJson } = await setup();
+    const { body } = await get("mood=laugh&runtime=long&language=scand&exclude=27");
+
+    expect(body.filters).toEqual({ time: "long", era: null, where: "norway" });
+    for (const params of sentParams(tmdbJson)) {
+      expect(params["with_runtime.gte"]).toBe("140");
+      expect(params.with_original_language).toBeUndefined();
+      expect(params.without_genres).toBe("27,16");
+    }
+  });
+
+  it("searches everywhere for Anywhere and in Norway otherwise", async () => {
+    const anywhere = await setup();
+    await anywhere.get("mood=laugh&where=any");
+    for (const params of sentParams(anywhere.tmdbJson)) expect(params.watch_region).toBeUndefined();
+
+    vi.resetModules();
+    const unknown = await setup();
+    const { body } = await unknown.get("mood=laugh&where=elsewhere");
+    expect(body.filters.where).toBe("norway");
+    for (const params of sentParams(unknown.tmdbJson)) {
+      expect(params).toMatchObject({ watch_region: "NO", with_watch_monetization_types: "flatrate" });
+    }
   });
 
   it("writes mood history and the search log only after the response", async () => {
@@ -258,8 +298,8 @@ describe("GET /api/movies/discover", () => {
     expect(recordSearchEvent).toHaveBeenCalledTimes(1);
   });
 
-  // A thin result's suggestion buttons delete the URL param, so an era read
-  // from the text must not be offered: there's nothing to delete.
+  // A suggestion's button applies clearFilterParam, so a filter read from the
+  // text must not be offered: there's no param to clear.
   describe("suggestions", () => {
     const thinWithEra = (p: Params) =>
       p["primary_release_date.lte"]
@@ -268,13 +308,40 @@ describe("GET /api/movies/discover", () => {
 
     it("offers to remove an era set in the URL", async () => {
       const { get } = await setup({ tmdb: thinWithEra });
-      const { body } = await get("mood=laugh&era=classic");
+      const { body } = await get("mood=laugh&era=classic&where=any");
       expect(body.suggestions).toEqual([{ remove: "era", total: 400 }]);
+    });
+
+    const thinWithTime = (p: Params) =>
+      p["with_runtime.gte"] === "140"
+        ? { results: [rawFilm(1)], total_results: 1, total_pages: 1 }
+        : fullPage();
+
+    it("offers Time for an old tempo link", async () => {
+      const { get } = await setup({ tmdb: thinWithTime });
+      const { body } = await get("mood=laugh&tempo=slowburn&where=any");
+      expect(body.suggestions).toEqual([{ remove: "time", total: 400 }]);
+    });
+
+    it("does not offer a Time read from the text", async () => {
+      const { get } = await setup({ tmdb: thinWithTime });
+      const { body } = await get("text=slow%20burn%20comedy&where=any");
+      expect(body.interpreted.time).toBe("long");
+      expect(body.suggestions).toEqual([]);
+    });
+
+    it("offers Anywhere for a thin search with no other filter", async () => {
+      const { get } = await setup({
+        tmdb: (p) => (p.watch_region ? { results: [rawFilm(1)], total_results: 1, total_pages: 1 } : fullPage()),
+      });
+      const { body } = await get("mood=laugh");
+      expect(body.suggestions).toEqual([{ remove: "where", total: 400 }]);
     });
 
     it("does not offer to remove an era read from the text", async () => {
       const { get, tmdbJson } = await setup({ tmdb: thinWithEra });
-      const { body } = await get("text=cozy%2080s%20heist");
+      // Anywhere, so the default Where isn't a suggestion either.
+      const { body } = await get("text=cozy%2080s%20heist&where=any");
 
       expect(body.interpreted.era).toBe("classic");
       expect(body.films.length).toBeLessThan(12);

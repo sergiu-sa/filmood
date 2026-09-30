@@ -123,6 +123,7 @@ export async function mockTmdb(page: Page) {
       body: JSON.stringify({
         moods: [{ key: "laugh", label: "Need to laugh", accent: "gold" }],
         films: fakeFilms.map((f) => ({ ...f, moodKeys: ["laugh"] })),
+        filters: { time: null, era: null, where: "norway" },
         seed: Number(new URL(route.request().url()).searchParams.get("seed")),
         relaxed: 0,
         partial: false,

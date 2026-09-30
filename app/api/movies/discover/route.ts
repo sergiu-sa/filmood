@@ -1,7 +1,7 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { MAX_MOODS, moodMap, normalizeMoodKeys } from "@/lib/moodMap";
 import { resolveMoodText } from "@/lib/moodResolver";
-import { parseRefinements, removableRefinementKeys } from "@/lib/moodFilters";
+import { LEGACY_TEMPO_TIME, parseFilters, removableFilterKeys } from "@/lib/moodFilters";
 import { runMoodSearch } from "@/lib/moodSearch";
 import { mulberry32, newSeed, parseSeed } from "@/lib/seededRandom";
 import { parseSource, recordSearchEvent } from "@/lib/searchLog";
@@ -18,8 +18,8 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const text = (searchParams.get("text") ?? "").trim().slice(0, MAX_TEXT_LENGTH);
 
-  // Resolve the optional free-form text into mood keys + keywords + era/tempo.
-  // Explicit chip values for era/tempo win over anything inferred from text.
+  // Resolve the optional free-form text into mood keys + keywords + era/time.
+  // Explicit params win over anything inferred from the text.
   const resolved = text ? resolveMoodText(text) : null;
 
   const tileKeys = normalizeMoodKeys((searchParams.get("mood") ?? "").split(","));
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
   const moodKeys = allKeys.slice(0, MAX_MOODS);
 
   if (moodKeys.length === 0) {
-    // Resolver picked up era/tempo/keywords but no mood word — we need at least
+    // Resolver picked up era/time/keywords but no mood word — we need at least
     // one mood signal to build a genre query, so nudge the user toward one.
     const partialMatch =
       resolved !== null &&
@@ -53,16 +53,17 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const refinements = parseRefinements(searchParams, resolved);
+  const filters = parseFilters(searchParams, resolved);
   const seed = parseSeed(searchParams.get("seed")) ?? newSeed();
 
   try {
     const result = await runMoodSearch(
       moodKeys,
-      refinements,
+      filters,
       mulberry32(seed),
-      removableRefinementKeys(searchParams, resolved),
+      removableFilterKeys(searchParams, resolved),
     );
+    const { time, era, where } = filters;
 
     const body: DiscoverResponse = {
       moods: moodKeys.map((k) => ({
@@ -71,6 +72,7 @@ export async function GET(request: NextRequest) {
         accent: moodMap[k].accentColor,
       })),
       films: result.films.map(mapTMDBDiscoverFilm),
+      filters: { time, era, where },
       seed,
       relaxed: result.relaxed,
       partial: result.partial,
@@ -79,7 +81,7 @@ export async function GET(request: NextRequest) {
             text,
             moods: textKeys,
             era: resolved.era,
-            tempo: resolved.tempo,
+            time: resolved.tempo ? LEGACY_TEMPO_TIME[resolved.tempo] : null,
             unmatched: resolved.unmatched,
             droppedMoods: allKeys.slice(MAX_MOODS),
           }
@@ -88,16 +90,15 @@ export async function GET(request: NextRequest) {
       relatedMoods: result.relatedMoods,
     };
 
-    const { era, tempo, runtime } = refinements;
-    const filters = Object.fromEntries(
-      Object.entries({ era, tempo, runtime }).filter(([, v]) => v !== null),
+    const logged = Object.fromEntries(
+      Object.entries(body.filters).filter(([, v]) => v !== null),
     ) as Record<string, string>;
     // Async so a missing admin client rejects into the catch instead of throwing.
     after(async () => {
       try {
         await recordSearchEvent(getSupabaseAdmin(), {
           moods: moodKeys,
-          filters,
+          filters: logged,
           hasText: text.length > 0,
           source: parseSource(searchParams.get("src")),
           resultCount: body.films.length,

@@ -11,25 +11,33 @@ function discoverParams(page: Page): URLSearchParams[] {
   return params;
 }
 
-// Nothing matches while `era` is set; without it the default stub answers.
-async function stubEmptyWithEra(page: Page) {
+// Nothing matches while `empty` holds; otherwise the default stub answers.
+async function stubEmpty(
+  page: Page,
+  empty: (sp: URLSearchParams) => boolean,
+  suggestion: { remove: string; total: number },
+) {
   await page.route(/\/api\/movies\/discover(\?.*)?$/, (route) => {
     const sp = new URL(route.request().url()).searchParams;
-    if (!sp.has("era")) return route.fallback();
+    if (!empty(sp)) return route.fallback();
     return route.fulfill({
       json: {
         moods: [{ key: "laugh", label: "Need to laugh", accent: "gold" }],
         films: [],
+        filters: { time: null, era: sp.get("era"), where: sp.get("where") ?? "norway" },
         seed: Number(sp.get("seed")),
         relaxed: 2,
         partial: false,
         interpreted: null,
-        suggestions: [{ remove: "era", total: 146 }],
+        suggestions: [suggestion],
         relatedMoods: ["easy", "datenight", "family"],
       },
     });
   });
 }
+
+const stubEmptyWithEra = (page: Page) =>
+  stubEmpty(page, (sp) => sp.has("era"), { remove: "era", total: 146 });
 
 test.describe("Results empty state", () => {
   test.beforeEach(async ({ page }) => {
@@ -59,6 +67,53 @@ test.describe("Results empty state", () => {
     expect(afterClick).toHaveLength(1);
     expect(afterClick[0].get("src")).toBe("suggestion");
     expect(afterClick[0].get("seed")).toBe("4242");
+  });
+
+  // Old shared links: the page forwards tempo/runtime (the API reads them as a
+  // Time), drops the retired language/exclude, and Any length clears all three.
+  test("a Time suggestion on an old link clears every param that set it", async ({ page }) => {
+    await stubEmpty(page, (sp) => ["time", "tempo", "runtime"].some((p) => sp.has(p)), {
+      remove: "time",
+      total: 80,
+    });
+    const requests = discoverParams(page);
+
+    await page.goto("/results?mood=laugh&tempo=slowburn&runtime=short&language=en&exclude=27&seed=4242");
+    await expect(page.getByRole("heading", { level: 1, name: /nothing fits all of that/i })).toBeVisible();
+    expect(requests).toHaveLength(1);
+    expect(requests[0].get("tempo")).toBe("slowburn");
+    expect(requests[0].get("runtime")).toBe("short");
+    expect(requests[0].has("language")).toBe(false);
+    expect(requests[0].has("exclude")).toBe(false);
+
+    await page.getByRole("button", { name: "Any length · 80 films" }).click();
+    await page.waitForURL((url) => !url.searchParams.has("tempo") && !url.searchParams.has("src"));
+    const url = new URL(page.url()).searchParams;
+    for (const param of ["time", "tempo", "runtime"]) expect(url.has(param)).toBe(false);
+    expect(url.get("seed")).toBe("4242");
+    await expect(page.getByRole("heading", { level: 2, name: /midnight harvest/i })).toBeVisible();
+
+    expect(requests).toHaveLength(2);
+    expect(requests[1].get("src")).toBe("suggestion");
+    expect(requests[1].get("seed")).toBe("4242");
+    for (const param of ["time", "tempo", "runtime"]) expect(requests[1].has(param)).toBe(false);
+  });
+
+  // Norway is the default, so loosening Where writes where=any rather than deleting it.
+  test("an Anywhere suggestion sets where=any and keeps the seed", async ({ page }) => {
+    await stubEmpty(page, (sp) => sp.get("where") !== "any", { remove: "where", total: 64 });
+    const requests = discoverParams(page);
+
+    await page.goto("/results?mood=laugh&seed=4242");
+    await page.getByRole("button", { name: "Anywhere · 64 films" }).click();
+    await page.waitForURL((url) => url.searchParams.get("where") === "any" && !url.searchParams.has("src"));
+    expect(new URL(page.url()).searchParams.get("seed")).toBe("4242");
+    await expect(page.getByRole("heading", { level: 2, name: /midnight harvest/i })).toBeVisible();
+
+    const anywhere = requests.filter((p) => p.get("where") === "any");
+    expect(anywhere).toHaveLength(1);
+    expect(anywhere[0].get("src")).toBe("suggestion");
+    expect(anywhere[0].get("seed")).toBe("4242");
   });
 
   test("src leaves the URL after the first fetch, so a reload isn't credited again", async ({ page }) => {
