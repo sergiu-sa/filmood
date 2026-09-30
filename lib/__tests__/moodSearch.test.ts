@@ -169,6 +169,14 @@ describe("searchMood — ladder", () => {
     for (const params of calls()) expect(params["with_runtime.gte"]).toBe("140");
   });
 
+  it("keeps My services' providers at every tier", async () => {
+    respond(() => page([1]));
+    await searchMood("dark", withFilters({ where: "mine", providers: [8, 76] }), rng());
+
+    expect(calls()).toHaveLength(3);
+    for (const params of calls()) expect(params.with_watch_providers).toBe("8|76");
+  });
+
   it("asks for no streaming region when Where is Anywhere", async () => {
     respond(() => page([1]));
     await searchMood("dark", withFilters({ where: "any" }), rng());

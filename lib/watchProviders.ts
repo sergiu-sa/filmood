@@ -44,7 +44,7 @@ export async function savedServices(supabase: SupabaseClient, userId: string): P
 }
 
 /**
- * Settles `where=mine` (spec §8): saved services for a signed-in user, else the
+ * Settles `where=mine`: saved services for a signed-in user, else the
  * `services` param, else Norway. Any other Where passes through with no calls.
  */
 export async function resolveWhere(

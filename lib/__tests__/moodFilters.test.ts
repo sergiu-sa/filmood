@@ -193,6 +193,13 @@ describe("withoutFilter", () => {
     expect(f.time).toBe("short");
   });
 
+  // A Time or Era probe on My services still searches the user's services.
+  it("keeps My services' providers when Time or Era goes", () => {
+    const f = filters({ where: "mine", providers: [8], time: "short", era: "classic" });
+    expect(withoutFilter(f, "time").providers).toEqual([8]);
+    expect(withoutFilter(f, "era").providers).toEqual([8]);
+  });
+
   it("drops My services' providers with Where", () => {
     const f = filters({ where: "mine", providers: [8] });
     expect(withoutFilter(f, "where")).toEqual({ ...f, where: "any", providers: [] });

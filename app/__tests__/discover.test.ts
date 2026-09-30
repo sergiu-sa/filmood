@@ -326,6 +326,7 @@ describe("GET /api/movies/discover", () => {
       const { body } = await get(`mood=laugh&where=mine&services=${services}`);
 
       expect(body.filters.where).toBe("mine");
+      expect(sentParams(tmdbJson).length).toBeGreaterThan(0);
       for (const params of sentParams(tmdbJson)) expect(params.with_watch_providers).toBe("8|76");
     });
 
@@ -334,6 +335,7 @@ describe("GET /api/movies/discover", () => {
       const { body } = await get(`mood=laugh&where=mine${services}`);
 
       expect(body.filters.where).toBe("norway");
+      expect(sentParams(tmdbJson).length).toBeGreaterThan(0);
       for (const params of sentParams(tmdbJson)) {
         expect(params.with_watch_providers).toBeUndefined();
         expect(params.watch_region).toBe("NO");
@@ -343,6 +345,7 @@ describe("GET /api/movies/discover", () => {
     it("prefers saved services over the param", async () => {
       const { get, tmdbJson } = await setup({ user: { id: "user-1" }, getSupabaseAdmin: withSaved(["Netflix"]) });
       await get("mood=laugh&where=mine&services=viaplay");
+      expect(sentParams(tmdbJson).length).toBeGreaterThan(0);
       for (const params of sentParams(tmdbJson)) expect(params.with_watch_providers).toBe("8");
     });
 
