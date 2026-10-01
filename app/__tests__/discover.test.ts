@@ -162,16 +162,21 @@ describe("GET /api/movies/discover", () => {
     const { body } = await get("mood=laugh,cry&text=scary");
 
     expect(body.moods.map((m: { key: string }) => m.key)).toEqual(["laugh", "cry"]);
-    expect(body.interpreted).toMatchObject({ moods: ["unsettled"], droppedMoods: ["unsettled"] });
+    expect(body.droppedMoods).toEqual(["unsettled"]);
+    expect(body.interpreted).toMatchObject({ moods: ["unsettled"] });
+    expect(body.interpreted).not.toHaveProperty("droppedMoods");
     expect(recordMoodPicks).toHaveBeenCalledWith(admin(), "user-1", ["laugh", "cry"]);
     // unsettled's genres never reach TMDB.
     expect(sentParams(tmdbJson).some((p) => p.with_genres?.includes("9648"))).toBe(false);
   });
 
-  it("drops a third tile", async () => {
+  // Without text there's no interpreted block, so the dropped mood has to be reported beside moods.
+  it("drops a third tile and says which", async () => {
     const { get, tmdbJson } = await setup();
     const { body } = await get("mood=laugh,cry,dark");
     expect(body.moods).toHaveLength(2);
+    expect(body.droppedMoods).toEqual(["dark"]);
+    expect(body.interpreted).toBeNull();
     expect(sentParams(tmdbJson).some((p) => p.with_genres === "80")).toBe(false);
   });
 
@@ -193,8 +198,8 @@ describe("GET /api/movies/discover", () => {
       era: "classic",
       time: null,
       unmatched: ["dragons"],
-      droppedMoods: [],
     });
+    expect(body.droppedMoods).toEqual([]);
   });
 
   it("echoes a Time read from the text", async () => {
@@ -209,7 +214,7 @@ describe("GET /api/movies/discover", () => {
 
     expect(status).toBe(200);
     expect(Object.keys(body).sort()).toEqual(
-      ["films", "filters", "interpreted", "moods", "partial", "relatedMoods", "relaxed", "seed", "suggestions"],
+      ["droppedMoods", "films", "filters", "interpreted", "moods", "partial", "relatedMoods", "relaxed", "seed", "suggestions"],
     );
     expect(body).toMatchObject({
       filters: { time: null, era: null, where: "norway" },

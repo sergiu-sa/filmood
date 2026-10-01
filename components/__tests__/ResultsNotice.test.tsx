@@ -51,7 +51,9 @@ describe("ResultsNotice", () => {
       />,
     );
 
-    expect(screen.getByRole("heading", { name: /nothing fits all of that/i })).toBeInTheDocument();
+    // The page's h1 is the mood header's, so this is a level 2.
+    expect(screen.getByRole("heading", { level: 2, name: /nothing fits all of that/i })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
     expect(screen.queryByText(/only \d+ films? match/i)).not.toBeInTheDocument();
 
     const buttons = screen.getAllByRole("button").map((b) => b.textContent);

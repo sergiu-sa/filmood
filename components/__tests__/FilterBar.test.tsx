@@ -258,6 +258,16 @@ describe("FilterBar", () => {
       expect(screen.queryByRole("dialog", { name: "Which services do you have?" })).toBeNull();
     });
 
+    // Past the picker, focus would land on controls hidden under it.
+    it("closes the picker when focus leaves it, and leaves focus where it went", async () => {
+      renderBar();
+      await userEvent.click(radio("My services"));
+      screen.getByRole("button", { name: "Cancel" }).focus();
+      await userEvent.tab();
+      expect(screen.queryByRole("dialog", { name: "Which services do you have?" })).toBeNull();
+      expect(screen.getByRole("button", { name: "Shuffle" })).toHaveFocus();
+    });
+
     it("has no services line outside My services", () => {
       services.list = ["netflix"];
       renderBar({ filters: { where: "norway" } });

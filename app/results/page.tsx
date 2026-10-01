@@ -8,6 +8,7 @@ import FilmCard from "@/components/film/FilmCard";
 import TopPick from "@/components/results/TopPick";
 import ResultsNotice from "@/components/results/ResultsNotice";
 import FilterBar from "@/components/results/FilterBar";
+import MoodHeader from "@/components/results/MoodHeader";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import type { AccentColor, DiscoverResponse, Provider } from "@/lib/types";
 import { moodMap } from "@/lib/moodMap";
@@ -191,7 +192,8 @@ function ResultsContent() {
         className="flex flex-col items-center justify-center gap-4"
         style={{ minHeight: "60vh" }}
       >
-        <p style={{ fontSize: "14px", color: "var(--rose)" }}>{failed.message}</p>
+        {/* The mood header isn't rendered here, so the message is the page's heading. */}
+        <h1 style={{ fontSize: "14px", color: "var(--rose)" }}>{failed.message}</h1>
         <Link
           href="/"
           className="font-sans"
@@ -237,105 +239,28 @@ function ResultsContent() {
     );
   }
 
-  const { accent: accentKey, tagline } = getMeta(moods);
+  const { accent: accentKey } = getMeta(moods);
   const accent = ACCENT_VARS[accentKey];
   const restFilms = topPick ? films.filter((f) => f.id !== topPick.id) : films;
 
   return (
     <>
-      {/* ── Hero header ── */}
-      <div style={{ textAlign: "center", marginBottom: "36px", width: "100%" }}>
-        <div style={{ marginBottom: "16px" }}>
-          <Breadcrumb
-            items={[
-              { label: "Home", href: "/" },
-              { label: "Results" },
-            ]}
-          />
-        </div>
-
-        {films.length > 0 && (
-          <>
-            <div
-              className="font-sans"
-              style={{
-                fontSize: "10px",
-                fontWeight: 700,
-                textTransform: "uppercase",
-                letterSpacing: "2.2px",
-                color: accent.base,
-                marginBottom: "12px",
-              }}
-            >
-              {filmCount(films.length)} found
-            </div>
-
-            <h1
-              className="font-serif"
-              style={{
-                fontSize: "clamp(30px, 5vw, 44px)",
-                fontWeight: 600,
-                lineHeight: 1.1,
-                letterSpacing: "-0.6px",
-                color: "var(--t1)",
-                marginBottom: "10px",
-              }}
-            >
-              Your Matches
-            </h1>
-
-            <p
-              className="font-sans"
-              style={{
-                fontSize: "13px",
-                color: "var(--t2)",
-                lineHeight: 1.6,
-                maxWidth: "460px",
-                margin: "0 auto 16px",
-              }}
-            >
-              {tagline}
-            </p>
-          </>
-        )}
-
-        {/* Mood pills */}
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            justifyContent: "center",
-            gap: "6px",
-          }}
-        >
-          {moods.map((m) => {
-            const moodKey = m.trim().toLowerCase();
-            const moodAccentKey = moodMap[moodKey]?.accentColor ?? "gold";
-            const moodAccent = ACCENT_VARS[moodAccentKey];
-            return (
-              <span
-                key={m}
-                className="font-sans"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  padding: "5px 12px",
-                  borderRadius: "999px",
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                  color: moodAccent.base,
-                  background: moodAccent.soft,
-                  border: `1px solid ${moodAccent.soft}`,
-                }}
-              >
-                {moodMap[moodKey]?.tagLabel ?? moodMap[moodKey]?.label ?? m}
-              </span>
-            );
-          })}
-        </div>
+      <div style={{ marginBottom: "20px" }}>
+        <Breadcrumb
+          items={[
+            { label: "Home", href: "/" },
+            { label: "What to watch" },
+          ]}
+        />
       </div>
+
+      <MoodHeader
+        moods={shown.data.moods}
+        interpreted={shown.data.interpreted}
+        droppedMoods={shown.data.droppedMoods}
+        filters={shown.data.filters}
+        busy={busy}
+      />
 
       <FilterBar filters={shown.data.filters} count={films.length} busy={busy} />
 
@@ -464,34 +389,10 @@ function ResultsContent() {
           borderTop: "1px solid var(--border)",
           width: "100%",
           maxWidth: "1200px",
+          // The column no longer centres its children; this lines up with the grid above.
+          alignSelf: "center",
         }}
       >
-        <Link
-          href="/"
-          className="font-sans"
-          style={{
-            padding: "12px 28px",
-            borderRadius: "10px",
-            background: accent.base,
-            color: "var(--accent-ink)",
-            fontSize: "13px",
-            fontWeight: 700,
-            textDecoration: "none",
-            textTransform: "uppercase",
-            letterSpacing: "1px",
-            transition: "all 0.25s ease",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.filter = "brightness(1.1)";
-            e.currentTarget.style.transform = "translateY(-1px)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.filter = "brightness(1)";
-            e.currentTarget.style.transform = "translateY(0)";
-          }}
-        >
-          Try different moods
-        </Link>
         <Link
           href="/browse"
           className="font-sans"
@@ -573,7 +474,6 @@ export default function ResultsPage() {
           padding: wrapperPadding,
           display: "flex",
           flexDirection: "column",
-          alignItems: "center",
           boxSizing: "border-box",
           overflowX: "clip",
         }}

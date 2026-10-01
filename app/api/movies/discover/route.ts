@@ -80,6 +80,7 @@ export async function GET(request: NextRequest) {
         label: moodMap[k].tagLabel,
         accent: moodMap[k].accentColor,
       })),
+      droppedMoods: allKeys.slice(MAX_MOODS),
       films: result.films.map(mapTMDBDiscoverFilm),
       filters: { time, era, where },
       seed,
@@ -92,7 +93,6 @@ export async function GET(request: NextRequest) {
             era: resolved.era,
             time: resolved.tempo ? LEGACY_TEMPO_TIME[resolved.tempo] : null,
             unmatched: resolved.unmatched,
-            droppedMoods: allKeys.slice(MAX_MOODS),
           }
         : null,
       suggestions: result.suggestions,

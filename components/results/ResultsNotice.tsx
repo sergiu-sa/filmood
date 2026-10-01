@@ -111,8 +111,7 @@ export default function ResultsNotice({
             textAlign: "center",
           }}
         >
-          {/* The page drops its "Your Matches" h1 when nothing matched, so this is the page heading. */}
-          <h1
+          <h2
             className="font-serif"
             style={{
               fontSize: "clamp(26px, 4vw, 36px)",
@@ -123,7 +122,7 @@ export default function ResultsNotice({
             }}
           >
             Nothing fits all of that.
-          </h1>
+          </h2>
           {buttons}
 
           {relatedMoods.length > 0 && (

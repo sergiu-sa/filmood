@@ -71,6 +71,8 @@ export interface DiscoverFilm extends Film {
 /** Response shape for GET /api/movies/discover. */
 export interface DiscoverResponse {
   moods: { key: string; label: string; accent: AccentColor }[];
+  /** Moods past the two-mood cap, tiles first, then the text's. */
+  droppedMoods: string[];
   films: DiscoverFilm[];
   filters: AppliedFilters;
   /** The seed that ordered this list; the same URL gives the same list. */
@@ -85,7 +87,6 @@ export interface DiscoverResponse {
     era: EraKey | null;
     time: TimeKey | null;
     unmatched: string[];
-    droppedMoods: string[];
   } | null;
   /** Only when the result is thin: filters whose removal would add films, most first. */
   suggestions: { remove: FilterKey; total: number }[];

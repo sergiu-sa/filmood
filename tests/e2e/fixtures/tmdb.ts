@@ -123,6 +123,7 @@ export async function mockTmdb(page: Page) {
       contentType: "application/json",
       body: JSON.stringify({
         moods: [{ key: "laugh", label: "Need to laugh", accent: "gold" }],
+        droppedMoods: [],
         films: fakeFilms.map((f) => ({ ...f, moodKeys: ["laugh"] })),
         // Echoes what was asked, so the filter bar shows it; the route's own rules are unit-tested.
         filters: {

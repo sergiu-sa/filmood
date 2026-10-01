@@ -23,6 +23,7 @@ async function stubEmpty(
     return route.fulfill({
       json: {
         moods: [{ key: "laugh", label: "Need to laugh", accent: "gold" }],
+        droppedMoods: [],
         films: [],
         filters: { time: null, era: sp.get("era"), where: sp.get("where") ?? "norway" },
         seed: Number(sp.get("seed")),
@@ -49,7 +50,9 @@ test.describe("Results empty state", () => {
     const requests = discoverParams(page);
 
     await page.goto("/results?mood=laugh&era=classic&seed=4242");
-    await expect(page.getByRole("heading", { level: 1, name: /nothing fits all of that/i })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: /nothing fits all of that/i })).toBeVisible();
+    // The mood header keeps the page's only h1 when nothing matched.
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Need to laugh");
     await expect(page.getByText(/films found/i)).toHaveCount(0);
     await expect(page.getByRole("heading", { name: /your matches/i })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Need a hug" })).toHaveAttribute(
@@ -79,7 +82,7 @@ test.describe("Results empty state", () => {
     const requests = discoverParams(page);
 
     await page.goto("/results?mood=laugh&tempo=slowburn&runtime=short&language=en&exclude=27&seed=4242");
-    await expect(page.getByRole("heading", { level: 1, name: /nothing fits all of that/i })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: /nothing fits all of that/i })).toBeVisible();
     expect(requests).toHaveLength(1);
     expect(requests[0].get("tempo")).toBe("slowburn");
     expect(requests[0].get("runtime")).toBe("short");
@@ -181,7 +184,7 @@ test.describe("Results empty state", () => {
 
     await page.goBack();
     await page.waitForURL(/era=classic/);
-    await expect(page.getByRole("heading", { level: 1, name: /nothing fits/i })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: /nothing fits/i })).toBeVisible();
 
     const easyDone = page.waitForEvent(
       "requestfinished",
@@ -192,7 +195,7 @@ test.describe("Results empty state", () => {
     // A stale answer would render a frame or two after its body arrives.
     await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 
-    await expect(page.getByRole("heading", { level: 1, name: /nothing fits/i })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: /nothing fits/i })).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: /midnight harvest/i })).toHaveCount(0);
   });
 });

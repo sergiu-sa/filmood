@@ -119,7 +119,7 @@ export default function FilterBar({ filters, count, busy }: FilterBarProps) {
         : whereRef.current?.querySelector<HTMLElement>('[role="radio"]');
     target?.focus();
   };
-  useDismiss(whereRef, pickerOpen, closePicker);
+  useDismiss(whereRef, pickerOpen, closePicker, () => setPickerOpen(false));
 
   const choose = (key: FilterKey, value: string | null) => {
     if (key === "where" && value === "mine" && known.length === 0) {
