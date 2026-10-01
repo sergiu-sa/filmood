@@ -15,6 +15,17 @@ function discoverParams(page: Page): URLSearchParams[] {
 
 const urlParams = (page: Page) => new URL(page.url()).searchParams;
 
+/** The discover response for a request credited to `src`. */
+const answered = (page: Page, src: string) =>
+  page.waitForResponse((res) => {
+    const url = new URL(res.url());
+    return url.pathname === "/api/movies/discover" && url.searchParams.get("src") === src;
+  });
+
+// A duplicate request would come from the page's effect re-running after the answer renders.
+const settle = (page: Page) =>
+  page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+
 /** Answers every discover request with these fields over the default stub's. */
 async function stubDiscover(page: Page, fields: (sp: URLSearchParams) => Record<string, unknown>) {
   await page.route(/\/api\/movies\/discover(\?.*)?$/, (route) => {
@@ -47,14 +58,18 @@ test.describe("Results mood header", () => {
     await page.goto("/results?mood=laugh&time=short&seed=4242");
     await expect(page.getByRole("heading", { level: 1, name: "Need to laugh" })).toBeVisible();
     await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+    await settle(page);
     expect(requests).toHaveLength(1);
 
+    const added = answered(page, "tile");
     await page.getByRole("button", { name: "Add a mood" }).click();
     await page.getByRole("dialog", { name: "Add a mood" }).getByRole("link", { name: /^Go dark —/ }).click();
     await page.waitForURL((url) => url.searchParams.get("mood") === "laugh,dark" && !url.searchParams.has("src"));
     expect(urlParams(page).get("time")).toBe("short");
     expect(urlParams(page).get("seed")).toBe("4242");
 
+    await added;
+    await settle(page);
     expect(requests).toHaveLength(2);
     expect(requests[1].get("mood")).toBe("laugh,dark");
     expect(requests[1].get("src")).toBe("tile");
@@ -86,14 +101,18 @@ test.describe("Results mood header", () => {
     // The text would bring it straight back, so its chip can't remove it.
     await expect(page.getByRole("list", { name: "Moods" }).getByText("Go dark")).toBeVisible();
     await expect(page.getByRole("button", { name: "Remove Go dark" })).toHaveCount(0);
+    await settle(page);
     expect(requests).toHaveLength(1);
 
+    const edited = answered(page, "text");
     await page.getByRole("button", { name: "Edit" }).click();
     await page.getByRole("textbox", { name: "Describe your mood" }).fill("funny");
     await page.keyboard.press("Enter");
     await page.waitForURL((url) => url.searchParams.get("text") === "funny" && !url.searchParams.has("src"));
     expect(urlParams(page).get("seed")).toBe("4242");
 
+    await edited;
+    await settle(page);
     expect(requests).toHaveLength(2);
     expect(requests[1].get("text")).toBe("funny");
     expect(requests[1].get("src")).toBe("text");

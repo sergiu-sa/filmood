@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
+import { Fragment, useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import BottomSheet from "@/components/dashboard/BottomSheet";
 import MoodTile from "@/components/mood/MoodTile";
@@ -19,6 +19,8 @@ interface MoodHeaderProps {
   droppedMoods: string[];
   /** As the response applied them: a Time or Era read from the text is echoed only while it's in effect. */
   filters: AppliedFilters;
+  /** The page is fetching a newer URL than these props answer. */
+  busy: boolean;
 }
 
 const ADD_TITLE = "Add a mood";
@@ -41,12 +43,18 @@ export function withMoods(sp: URLSearchParams, keys: string[], src: SearchSource
  * and the line echoing how the free text was read. Mood and text changes push,
  * so Back returns to the previous search.
  */
-export default function MoodHeader({ moods, interpreted, droppedMoods, filters }: MoodHeaderProps) {
+export default function MoodHeader({ moods, interpreted, droppedMoods, filters, busy }: MoodHeaderProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isMobile = useMediaQuery("(max-width: 900px)");
-  const [adding, setAdding] = useState(false);
-  const [editing, setEditing] = useState(false);
+  // Open only on the URL it was opened on, so a picked tile, Back or Forward closes it. Not src: the page strips it once it has fetched.
+  const here = new URLSearchParams(searchParams);
+  here.delete("src");
+  const urlKey = here.toString();
+  const [addingAt, setAddingAt] = useState<string | null>(null);
+  const [editingAt, setEditingAt] = useState<string | null>(null);
+  const adding = addingAt === urlKey;
+  const editing = editingAt === urlKey;
   const addRef = useRef<HTMLLIElement>(null);
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const editButtonRef = useRef<HTMLButtonElement>(null);
@@ -58,20 +66,35 @@ export default function MoodHeader({ moods, interpreted, droppedMoods, filters }
   const others = Object.keys(moodMap).filter((k) => !moods.some((m) => m.key === k));
 
   const closeAdd = () => {
-    setAdding(false);
+    setAddingAt(null);
     addButtonRef.current?.focus();
   };
-  useDismiss(addRef, adding && !isMobile, closeAdd);
+  useDismiss(addRef, adding && !isMobile, closeAdd, () => setAddingAt(null));
 
+  const closeEdit = () => {
+    setEditingAt(null);
+    // The Edit button is back only after this render.
+    requestAnimationFrame(() => editButtonRef.current?.focus());
+  };
+
+  // While busy these props are the last answer, not the URL's, so acting on them would undo or repeat a change.
   const remove = (key: string) => {
+    if (busy) return;
     const rest = tileMoods.filter((k) => k !== key);
-    if (rest.length === 0 && !interpreted) router.push("/");
-    else router.push(`/results?${withMoods(searchParams, rest, "filter")}`);
+    // Text with no mood word of its own is a 400 from the route.
+    if (rest.length === 0 && textMoods.length === 0) {
+      router.push("/");
+      return;
+    }
+    router.push(`/results?${withMoods(searchParams, rest, "filter")}`);
+    // This chip goes when the answer lands.
+    addButtonRef.current?.focus();
   };
 
   const submitText = (value: string) => {
+    // The same query fetches nothing, and the page strips src only when it fetches, so src=text would stick.
     if (value === interpreted?.text) {
-      setEditing(false);
+      closeEdit();
       return;
     }
     const next = new URLSearchParams(searchParams);
@@ -84,14 +107,12 @@ export default function MoodHeader({ moods, interpreted, droppedMoods, filters }
       return;
     }
     next.set("src", "text");
-    setEditing(false);
     router.push(`/results?${next}`);
+    closeEdit();
   };
 
   const tiles = (
-    // Picking a tile navigates, and the popover or sheet goes with it.
     <div
-      onClick={(e: MouseEvent) => (e.target as Element).closest("a") && setAdding(false)}
       style={{
         display: "grid",
         gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(3, minmax(0, 1fr))",
@@ -158,7 +179,7 @@ export default function MoodHeader({ moods, interpreted, droppedMoods, filters }
               </Fragment>
             ))}
           </h1>
-          {moods.length === 1 && Object.hasOwn(moodMap, moods[0].key) && (
+          {moods.length === 1 && !isMobile && Object.hasOwn(moodMap, moods[0].key) && (
             <p className="font-sans" style={{ margin: 0, fontSize: "15px", color: "var(--t2)" }}>
               {moodMap[moods[0].key].description}.
             </p>
@@ -189,7 +210,8 @@ export default function MoodHeader({ moods, interpreted, droppedMoods, filters }
                     borderRadius: "999px",
                     background: accent.soft,
                     border: `1px solid ${accent.border}`,
-                    color: accent.base,
+                    // Accent text on its own soft fill is under 4.5:1 in light mode; the dot, border and fill carry the mood.
+                    color: "var(--t1)",
                     fontSize: chipFont,
                     fontWeight: 600,
                   }}
@@ -203,6 +225,7 @@ export default function MoodHeader({ moods, interpreted, droppedMoods, filters }
                     <button
                       type="button"
                       aria-label={`Remove ${m.label}`}
+                      aria-disabled={busy || undefined}
                       onClick={() => remove(m.key)}
                       style={{
                         display: "inline-flex",
@@ -215,7 +238,7 @@ export default function MoodHeader({ moods, interpreted, droppedMoods, filters }
                         border: "none",
                         background: "transparent",
                         color: "inherit",
-                        cursor: "pointer",
+                        cursor: busy ? "progress" : "pointer",
                       }}
                     >
                       <Icon name="close" size={isMobile ? 13 : 14} />
@@ -228,10 +251,15 @@ export default function MoodHeader({ moods, interpreted, droppedMoods, filters }
               <button
                 ref={addButtonRef}
                 type="button"
-                disabled={full}
+                // aria-disabled, not disabled: it stays focusable, so a remove can hand focus to it.
+                aria-disabled={full || busy || undefined}
                 aria-haspopup={full ? undefined : "dialog"}
                 aria-expanded={full ? undefined : adding}
-                onClick={() => (adding ? closeAdd() : setAdding(true))}
+                onClick={() => {
+                  if (full || busy) return;
+                  if (adding) closeAdd();
+                  else setAddingAt(urlKey);
+                }}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -246,7 +274,7 @@ export default function MoodHeader({ moods, interpreted, droppedMoods, filters }
                   font: "inherit",
                   fontSize: chipFont,
                   fontWeight: 600,
-                  cursor: full ? "default" : "pointer",
+                  cursor: full ? "default" : busy ? "progress" : "pointer",
                 }}
               >
                 {full ? (
@@ -312,7 +340,8 @@ export default function MoodHeader({ moods, interpreted, droppedMoods, filters }
               <button
                 ref={editButtonRef}
                 type="button"
-                onClick={() => setEditing(true)}
+                aria-disabled={busy || undefined}
+                onClick={() => !busy && setEditingAt(urlKey)}
                 style={{
                   // A 44px target: the margins take back the padding, so the line doesn't grow.
                   padding: "12px 10px",
@@ -322,7 +351,7 @@ export default function MoodHeader({ moods, interpreted, droppedMoods, filters }
                   color: "var(--gold)",
                   font: "inherit",
                   fontWeight: 700,
-                  cursor: "pointer",
+                  cursor: busy ? "progress" : "pointer",
                 }}
               >
                 Edit
@@ -338,11 +367,7 @@ export default function MoodHeader({ moods, interpreted, droppedMoods, filters }
             <EditForm
               initial={interpreted.text}
               onSubmit={submitText}
-              onCancel={() => {
-                setEditing(false);
-                // The Edit button is back only after this render.
-                requestAnimationFrame(() => editButtonRef.current?.focus());
-              }}
+              onCancel={closeEdit}
             />
           )}
         </div>

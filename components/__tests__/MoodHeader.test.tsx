@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import MoodHeader, { withMoods } from "@/components/results/MoodHeader";
 import { moodMap } from "@/lib/moodMap";
@@ -36,22 +36,30 @@ const reading = (r: Partial<Interpreted> & { text: string }): Interpreted => ({
   ...r,
 });
 
-function renderHeader(
-  props: {
-    moods?: string[];
-    interpreted?: Interpreted | null;
-    droppedMoods?: string[];
-    filters?: Partial<AppliedFilters>;
-  } = {},
-) {
-  return render(
-    <MoodHeader
-      moods={(props.moods ?? ["laugh"]).map(mood)}
-      interpreted={props.interpreted ?? null}
-      droppedMoods={props.droppedMoods ?? []}
-      filters={{ ...NONE, ...props.filters }}
-    />,
+interface Props {
+  moods?: string[];
+  interpreted?: Interpreted | null;
+  droppedMoods?: string[];
+  filters?: Partial<AppliedFilters>;
+  busy?: boolean;
+}
+
+function renderHeader(props: Props = {}) {
+  const el = (p: Props) => (
+    <>
+      <MoodHeader
+        moods={(p.moods ?? ["laugh"]).map(mood)}
+        interpreted={p.interpreted ?? null}
+        droppedMoods={p.droppedMoods ?? []}
+        filters={{ ...NONE, ...p.filters }}
+        busy={p.busy ?? false}
+      />
+      {/* Somewhere for focus to go after the header. */}
+      <button type="button">After</button>
+    </>
   );
+  const view = render(el(props));
+  return { ...view, rerender: (p: Props) => view.rerender(el(p)) };
 }
 
 /** The params of the last URL pushed. */
@@ -80,6 +88,13 @@ describe("MoodHeader", () => {
       expect(screen.getByText("Big laughs, zero homework.")).toBeInTheDocument();
     });
 
+    it("mobile: no one-liner, as drawn", () => {
+      mobile = true;
+      renderHeader();
+      expect(screen.getByRole("heading", { level: 1, name: "Need to laugh" })).toBeInTheDocument();
+      expect(screen.queryByText(/big laughs/i)).toBeNull();
+    });
+
     it("two moods: both titles, blended, no one-liner", () => {
       search = "mood=laugh,dark&seed=9";
       renderHeader({ moods: ["laugh", "dark"] });
@@ -97,6 +112,14 @@ describe("MoodHeader", () => {
       expect(push).toHaveBeenCalledExactlyOnceWith("/results?mood=laugh&time=short&seed=9&src=filter");
     });
 
+    // The chip goes when the answer lands; focus would fall to <body>.
+    it("moves focus to the add chip", async () => {
+      search = "mood=laugh,dark&seed=9";
+      renderHeader({ moods: ["laugh", "dark"] });
+      await userEvent.click(screen.getByRole("button", { name: "Remove Go dark" }));
+      expect(screen.getByRole("button", { name: "2 of 2 moods" })).toHaveFocus();
+    });
+
     it("goes home when the last mood goes and there's no text", async () => {
       renderHeader();
       await userEvent.click(screen.getByRole("button", { name: "Remove Need to laugh" }));
@@ -111,6 +134,15 @@ describe("MoodHeader", () => {
       expect(url.has("mood")).toBe(false);
       expect(url.get("text")).toBe("noir");
       expect(url.get("seed")).toBe("9");
+      expect(url.get("src")).toBe("filter");
+    });
+
+    // Text with no mood word is a 400 from the route, so there's nothing left to search.
+    it("goes home when the text has no mood of its own", async () => {
+      search = "mood=laugh&text=80s&seed=9";
+      renderHeader({ interpreted: reading({ text: "80s", era: "classic" }) });
+      await userEvent.click(screen.getByRole("button", { name: "Remove Need to laugh" }));
+      expect(push).toHaveBeenCalledExactlyOnceWith("/");
     });
 
     // The text would bring it straight back (Q6).
@@ -118,6 +150,12 @@ describe("MoodHeader", () => {
       search = "text=noir&seed=9";
       renderHeader({ moods: ["dark"], interpreted: reading({ text: "noir", moods: ["dark"] }) });
       expect(screen.getByText("Go dark", { selector: "li *" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Remove Go dark" })).toBeNull();
+    });
+
+    it("offers no remove on a tile mood the text also reads", () => {
+      search = "mood=dark&text=noir&seed=9";
+      renderHeader({ moods: ["dark"], interpreted: reading({ text: "noir", moods: ["dark"] }) });
       expect(screen.queryByRole("button", { name: "Remove Go dark" })).toBeNull();
     });
   });
@@ -150,10 +188,31 @@ describe("MoodHeader", () => {
       expect(chip).toHaveFocus();
     });
 
-    it("stops at two moods", () => {
+    it("closes on a click outside", async () => {
+      renderHeader();
+      await userEvent.click(screen.getByRole("button", { name: "Add a mood" }));
+      await userEvent.click(screen.getByRole("heading", { level: 1 }));
+      expect(screen.queryByRole("dialog", { name: "Add a mood" })).toBeNull();
+    });
+
+    // Past the last tile, focus would land on filter radios hidden under the popover.
+    it("closes when focus leaves it, and leaves focus where it went", async () => {
+      renderHeader();
+      await userEvent.click(screen.getByRole("button", { name: "Add a mood" }));
+      screen.getAllByRole("link").at(-1)!.focus();
+      await userEvent.tab();
+      expect(screen.queryByRole("dialog", { name: "Add a mood" })).toBeNull();
+      expect(screen.getByRole("button", { name: "After" })).toHaveFocus();
+    });
+
+    // aria-disabled, not disabled: it stays focusable, so a remove can hand focus to it.
+    it("stops at two moods", async () => {
       search = "mood=laugh,dark&seed=9";
       renderHeader({ moods: ["laugh", "dark"] });
-      expect(screen.getByRole("button", { name: "2 of 2 moods" })).toBeDisabled();
+      const full = screen.getByRole("button", { name: "2 of 2 moods" });
+      expect(full).toHaveAttribute("aria-disabled", "true");
+      await userEvent.click(full);
+      expect(screen.queryByRole("dialog")).toBeNull();
       expect(screen.queryByRole("button", { name: "Add a mood" })).toBeNull();
     });
 
@@ -173,11 +232,51 @@ describe("MoodHeader", () => {
       expect(chip).toHaveFocus();
     });
 
-    it("closes once a mood is picked", async () => {
-      renderHeader();
+    it("closes once the URL moves on (a mood picked, Back, Forward)", async () => {
+      const { rerender } = renderHeader();
       await userEvent.click(screen.getByRole("button", { name: "Add a mood" }));
-      await userEvent.click(screen.getByRole("link", { name: /^Go dark —/ }));
+      search = "mood=laugh,dark&seed=9";
+      rerender({});
       expect(screen.queryByRole("dialog", { name: "Add a mood" })).toBeNull();
+    });
+
+    // The page strips src once it has fetched; that's the same search.
+    it("stays open while only src leaves the URL", async () => {
+      search = "mood=laugh&seed=9&src=tile";
+      const { rerender } = renderHeader();
+      await userEvent.click(screen.getByRole("button", { name: "Add a mood" }));
+      search = "mood=laugh&seed=9";
+      rerender({});
+      expect(screen.getByRole("dialog", { name: "Add a mood" })).toBeInTheDocument();
+    });
+  });
+
+  // The header shows the last answer while a new one loads, but acts on the URL; acting then would undo or repeat a change.
+  describe("while a search is loading", () => {
+    it("ignores a remove", async () => {
+      search = "mood=laugh,dark&seed=9";
+      renderHeader({ moods: ["laugh", "dark"], busy: true });
+      const remove = screen.getByRole("button", { name: "Remove Go dark" });
+      expect(remove).toHaveAttribute("aria-disabled", "true");
+      await userEvent.click(remove);
+      expect(push).not.toHaveBeenCalled();
+    });
+
+    it("doesn't open the add popover", async () => {
+      renderHeader({ busy: true });
+      const add = screen.getByRole("button", { name: "Add a mood" });
+      expect(add).toHaveAttribute("aria-disabled", "true");
+      await userEvent.click(add);
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+
+    it("doesn't open the text field", async () => {
+      search = "mood=laugh&text=noir&seed=9";
+      renderHeader({ moods: ["laugh", "dark"], interpreted: reading({ text: "noir", moods: ["dark"] }), busy: true });
+      const edit = screen.getByRole("button", { name: "Edit" });
+      expect(edit).toHaveAttribute("aria-disabled", "true");
+      await userEvent.click(edit);
+      expect(screen.queryByRole("textbox")).toBeNull();
     });
   });
 
@@ -265,6 +364,8 @@ describe("MoodHeader", () => {
       expect(url.get("seed")).toBe("9");
       expect(url.get("src")).toBe("text");
       expect(url.has("era")).toBe(false);
+      // The field goes; focus would fall to <body>.
+      await waitFor(() => expect(screen.getByRole("button", { name: "Edit" })).toHaveFocus());
     });
 
     it("an empty text removes it and keeps the tile moods", async () => {
@@ -275,6 +376,8 @@ describe("MoodHeader", () => {
       expect(url.has("text")).toBe(false);
       expect(url.has("time")).toBe(false);
       expect(url.get("mood")).toBe("laugh");
+      expect(url.get("seed")).toBe("9");
+      expect(url.get("src")).toBe("text");
     });
 
     it("an empty text with no tile moods goes home", async () => {
@@ -289,6 +392,16 @@ describe("MoodHeader", () => {
       renderHeader({ moods: ["laugh", "dark"], interpreted: reading({ text: "noir", moods: ["dark"] }) });
       await edit("noir");
       expect(push).not.toHaveBeenCalled();
+      expect(screen.queryByRole("textbox")).toBeNull();
+    });
+
+    it("an open field closes when the URL moves on (Back, Forward)", async () => {
+      search = "mood=laugh&text=noir&seed=9";
+      const props = { moods: ["laugh", "dark"], interpreted: reading({ text: "noir", moods: ["dark"] }) };
+      const { rerender } = renderHeader(props);
+      await userEvent.click(screen.getByRole("button", { name: "Edit" }));
+      search = "mood=laugh&text=gloomy&seed=9";
+      rerender({ ...props, interpreted: reading({ text: "gloomy", moods: ["dark"] }) });
       expect(screen.queryByRole("textbox")).toBeNull();
     });
   });

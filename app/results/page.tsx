@@ -259,6 +259,7 @@ function ResultsContent() {
         interpreted={shown.data.interpreted}
         droppedMoods={shown.data.droppedMoods}
         filters={shown.data.filters}
+        busy={busy}
       />
 
       <FilterBar filters={shown.data.filters} count={films.length} busy={busy} />
@@ -388,6 +389,8 @@ function ResultsContent() {
           borderTop: "1px solid var(--border)",
           width: "100%",
           maxWidth: "1200px",
+          // The column no longer centres its children; this lines up with the grid above.
+          alignSelf: "center",
         }}
       >
         <Link
