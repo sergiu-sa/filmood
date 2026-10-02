@@ -1,6 +1,6 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { MAX_MOODS, moodMap, normalizeMoodKeys } from "@/lib/moodMap";
-import { resolveMoodText } from "@/lib/moodResolver";
+import { MAX_TEXT_LENGTH, resolveMoodText } from "@/lib/moodResolver";
 import { isWhereKey, LEGACY_TEMPO_TIME, parseFilters, removableFilterKeys } from "@/lib/moodFilters";
 import { runMoodSearch } from "@/lib/moodSearch";
 import { resolveWhere } from "@/lib/watchProviders";
@@ -12,11 +12,9 @@ import { getAuthUser, getSupabaseAdmin } from "@/lib/supabase-server";
 import { recordMoodPicks } from "@/lib/mood-history";
 import type { DiscoverResponse } from "@/lib/types";
 
-// The input's maxLength is not a security boundary.
-const MAX_TEXT_LENGTH = 120;
-
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
+  // The input's maxLength is not a security boundary.
   const text = (searchParams.get("text") ?? "").trim().slice(0, MAX_TEXT_LENGTH);
 
   // Resolve the optional free-form text into mood keys + keywords + era/time.

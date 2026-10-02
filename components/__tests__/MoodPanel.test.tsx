@@ -1,183 +1,104 @@
 /**
  * @vitest-environment jsdom
  */
-import { render, screen, fireEvent } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import MoodPanel from "@/components/dashboard/MoodPanel";
 import { allMoods } from "@/lib/moodMap";
 
-// ── Module mocks ───────────────────────────────────────────────────────────
-const mockPush = vi.fn();
-
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mockPush, replace: vi.fn(), back: vi.fn() }),
-  usePathname: () => "/",
-  useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
 }));
 
-// ── Helpers ───────────────────────────────────────────────────────────────
-const defaultProps = {
-  isOpen: true,
-  embedded: true, // skip animation wrapper for simpler assertions
-  selectedMoods: new Set<string>(),
-  onSelectMood: vi.fn(),
-  onClose: vi.fn(),
-};
+vi.mock("next/link", () => ({
+  default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
+}));
+
+// The viewport width the mocked media queries answer for.
+let width = 1440;
+vi.mock("@/lib/useMediaQuery", () => ({
+  useMediaQuery: (query: string) => {
+    const max = Number(/max-width: (\d+)px/.exec(query)?.[1]);
+    return Number.isFinite(max) && width <= max;
+  },
+}));
+
+const onClose = vi.fn();
+const tileName = (m: (typeof allMoods)[number]) => `${m.tagLabel} — ${m.description}`;
+const grid = () => screen.getAllByRole("link")[0].parentElement!;
 
 describe("MoodPanel", () => {
-  afterEach(() => vi.clearAllMocks());
-
-  // ── Mood grid rendering ───────────────────────────────────────────────────
-  it(`renders all ${allMoods.length} mood cards`, () => {
-    render(<MoodPanel {...defaultProps} />);
-    // Each mood renders a button; plus Refine/Close buttons — just assert mood labels appear
-    for (const mood of allMoods) {
-      expect(screen.getByText(mood.label)).toBeInTheDocument();
-    }
+  afterEach(() => {
+    width = 1440;
+    vi.clearAllMocks();
   });
 
-  it("renders each mood's tag label", () => {
-    render(<MoodPanel {...defaultProps} />);
-    for (const mood of allMoods) {
-      expect(screen.getByText(mood.tagLabel)).toBeInTheDocument();
-    }
+  it("links every mood straight to its results, in mood order", () => {
+    render(<MoodPanel isOpen onClose={onClose} />);
+    const links = screen.getAllByRole("link");
+    expect(links).toHaveLength(allMoods.length);
+    allMoods.forEach((m, i) => {
+      expect(links[i]).toHaveAccessibleName(tileName(m));
+      expect(links[i]).toHaveAttribute("href", `/results?mood=${m.key}&src=tile`);
+    });
   });
 
-  // ── Selection callbacks ───────────────────────────────────────────────────
-  it("calls onSelectMood with the moodKey when a mood card is clicked", () => {
-    render(<MoodPanel {...defaultProps} />);
-    // Click the first mood in the grid
-    const firstMood = allMoods[0];
-    // Each MoodCard renders a <button>; find by the mood label text
-    fireEvent.click(screen.getByText(firstMood.label).closest("button")!);
-    expect(defaultProps.onSelectMood).toHaveBeenCalledWith(firstMood.key);
+  it("desktop: asks how you want to feel and explains the next page, with no eyebrow or Close", () => {
+    render(<MoodPanel isOpen onClose={onClose} />);
+    expect(screen.getByRole("heading", { level: 2, name: "How do you want to feel?" })).toBeInTheDocument();
+    expect(screen.getByText(/On the next page you can add a second mood/)).toBeInTheDocument();
+    expect(screen.queryByText("What to watch")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Close" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: tileName(allMoods[0]) })).toHaveTextContent(/like /);
   });
 
-  it("calls onSelectMood again when clicking a selected mood (parent handles deselect)", () => {
-    const firstMood = allMoods[0];
-    render(
-      <MoodPanel {...defaultProps} selectedMoods={new Set([firstMood.key])} />,
-    );
-    fireEvent.click(screen.getByText(firstMood.label).closest("button")!);
-    expect(defaultProps.onSelectMood).toHaveBeenCalledWith(firstMood.key);
+  it("in the sheet: eyebrow, compact tiles and a Close that closes", () => {
+    width = 390;
+    render(<MoodPanel isOpen embedded onClose={onClose} />);
+    expect(screen.getByText("What to watch")).toBeInTheDocument();
+    expect(screen.queryByText(/On the next page/)).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: tileName(allMoods[0]) })).not.toHaveTextContent(/like /);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(onClose).toHaveBeenCalledOnce();
   });
 
-  // ── Two-mood cap ──────────────────────────────────────────────────────────
-  const card = (label: string) => screen.getByText(label).closest("button")!;
-
-  it("says how many moods can be picked", () => {
-    render(<MoodPanel {...defaultProps} />);
-    expect(screen.getByText(/pick up to 2/i)).toBeInTheDocument();
+  it("has no selection, submit, counter or Era/Tempo controls", () => {
+    render(<MoodPanel isOpen onClose={onClose} />);
+    expect(screen.queryByRole("button", { name: /find films/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/pick up to/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/selected/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Slow-burn" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Before 1990" })).not.toBeInTheDocument();
   });
 
-  it("disables the other moods once two are picked, but not the picked ones", () => {
-    const [a, b, ...rest] = allMoods;
-    render(<MoodPanel {...defaultProps} selectedMoods={new Set([a.key, b.key])} />);
-
-    expect(card(a.label)).toBeEnabled();
-    expect(card(b.label)).toBeEnabled();
-    for (const mood of rest) expect(card(mood.label), mood.key).toBeDisabled();
-
-    fireEvent.click(card(rest[0].label));
-    expect(defaultProps.onSelectMood).not.toHaveBeenCalled();
-    // Deselecting stays possible, so a pick can be swapped.
-    fireEvent.click(card(a.label));
-    expect(defaultProps.onSelectMood).toHaveBeenCalledWith(a.key);
+  it.each([
+    [1440, 4],
+    [900, 4],
+    [899, 3],
+    [640, 3],
+    [639, 2],
+    [390, 2],
+  ])("at %ipx the grid has %i columns", (w, columns) => {
+    width = w;
+    render(<MoodPanel isOpen onClose={onClose} />);
+    expect(grid().style.gridTemplateColumns).toBe(`repeat(${columns}, minmax(0, 1fr))`);
   });
 
-  it("leaves every mood enabled below the cap", () => {
-    render(<MoodPanel {...defaultProps} selectedMoods={new Set([allMoods[0].key])} />);
-    for (const mood of allMoods) expect(card(mood.label), mood.key).toBeEnabled();
-  });
-
-  // ── "Find films" button visibility ───────────────────────────────────────
-  it('does NOT render "Find films" button when no moods are selected', () => {
-    render(<MoodPanel {...defaultProps} selectedMoods={new Set()} />);
-    // Use role query to avoid matching the hint text "Select your moods, then find films"
-    expect(
-      screen.queryByRole("button", { name: /find films/i }),
-    ).not.toBeInTheDocument();
-  });
-
-  it('renders "Find films" button when at least one mood is selected', () => {
-    render(<MoodPanel {...defaultProps} selectedMoods={new Set(["laugh"])} />);
-    expect(screen.getByText(/find films/i)).toBeInTheDocument();
-  });
-
-  // ── "Find films" navigation ───────────────────────────────────────────────
-  it('calls router.push with /results?mood=... when "Find films" is clicked', () => {
-    render(<MoodPanel {...defaultProps} selectedMoods={new Set(["laugh"])} />);
-    fireEvent.click(screen.getByText(/find films/i));
-    expect(mockPush).toHaveBeenCalledOnce();
-    const [url] = mockPush.mock.calls[0];
-    expect(url).toMatch(/^\/results\?/);
-    expect(url).toContain("mood=laugh");
-  });
-
-  it("includes all selected moods in the router push URL", () => {
-    render(
-      <MoodPanel
-        {...defaultProps}
-        selectedMoods={new Set(["laugh", "thrilling", "escape"])}
-      />,
-    );
-    fireEvent.click(screen.getByText(/find films/i));
-    const [url] = mockPush.mock.calls[0];
-    expect(url).toContain("laugh");
-    expect(url).toContain("thrilling");
-    expect(url).toContain("escape");
-  });
-
-  // ── Selection count label ─────────────────────────────────────────────────
-  it('shows "Select your moods" hint when nothing is selected', () => {
-    render(<MoodPanel {...defaultProps} selectedMoods={new Set()} />);
-    expect(screen.getByText(/select your moods/i)).toBeInTheDocument();
-  });
-
-  it("shows selection count label when moods are selected", () => {
-    render(
-      <MoodPanel
-        {...defaultProps}
-        selectedMoods={new Set(["laugh", "escape"])}
-      />,
-    );
-    expect(screen.getByText(/2 moods selected/i)).toBeInTheDocument();
-  });
-
-  // ── Close button ──────────────────────────────────────────────────────────
-  it("calls onClose when the Close button is clicked", () => {
-    render(<MoodPanel {...defaultProps} />);
-    fireEvent.click(screen.getByText(/^close$/i));
-    expect(defaultProps.onClose).toHaveBeenCalledOnce();
-  });
-
-  // ── Filters ───────────────────────────────────────────────────────────────
-  // Language and genre exclusions are retired, and "How long" would set the
-  // same Time as the Tempo chips, so the Refine block is gone.
-  it("offers no Refine block", () => {
-    render(<MoodPanel {...defaultProps} />);
-    expect(screen.queryByText(/refine results/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/subtitles okay/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/not in the mood for/i)).not.toBeInTheDocument();
-  });
-
-  it("sends a Slow-burn tempo as time=long", () => {
-    render(<MoodPanel {...defaultProps} selectedMoods={new Set(["laugh"])} />);
-    fireEvent.click(screen.getByRole("button", { name: "Slow-burn" }));
-    fireEvent.click(screen.getByText(/find films/i));
-
-    const params = new URL(mockPush.mock.calls[0][0], "http://localhost").searchParams;
-    expect(params.get("time")).toBe("long");
-    for (const retired of ["tempo", "runtime", "language", "exclude"]) {
-      expect(params.has(retired)).toBe(false);
-    }
-  });
-
-  // ── Animation wrapper (non-embedded) ─────────────────────────────────────
-  it("collapses via maxHeight when isOpen=false and not embedded", () => {
-    const { container } = render(
-      <MoodPanel {...defaultProps} embedded={false} isOpen={false} />,
-    );
+  // Collapsed, it's only hidden visually; inert takes its tiles out of the Tab order.
+  it("takes a closed desktop panel out of the Tab order", () => {
+    const { container, rerender } = render(<MoodPanel isOpen={false} onClose={onClose} />);
     const wrapper = container.firstChild as HTMLElement;
     expect(wrapper.style.maxHeight).toBe("0");
+    expect(wrapper).toHaveAttribute("inert");
+    rerender(<MoodPanel isOpen onClose={onClose} />);
+    expect(wrapper).not.toHaveAttribute("inert");
+  });
+
+  it.each([false, true])("has the describe field (embedded: %s)", (embedded) => {
+    render(<MoodPanel isOpen embedded={embedded} onClose={onClose} />);
+    expect(screen.getByLabelText("Or describe it in your own words")).toBeInTheDocument();
   });
 });

@@ -8,6 +8,7 @@ import Icon from "@/components/ui/Icon";
 import { ACCENT_VARS } from "@/lib/constants";
 import { ERA_OPTIONS, TIME_OPTIONS } from "@/lib/moodFilters";
 import { MAX_MOODS, moodMap, normalizeMoodKeys } from "@/lib/moodMap";
+import { MAX_TEXT_LENGTH } from "@/lib/moodResolver";
 import { useDismiss } from "@/lib/useDismiss";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import type { SearchSource } from "@/lib/searchLog";
@@ -24,7 +25,6 @@ interface MoodHeaderProps {
 }
 
 const ADD_TITLE = "Add a mood";
-const MAX_TEXT_LENGTH = 120;
 
 const moodList = new Intl.ListFormat("en-GB", { type: "conjunction" });
 const tagLabel = (key: string) => (Object.hasOwn(moodMap, key) ? moodMap[key].tagLabel : key);

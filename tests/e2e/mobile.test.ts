@@ -16,20 +16,48 @@ test.describe("Mobile — BottomSheet dashboard panel", () => {
 
     // MoodBox's featured-mood reel stops propagation and can swallow a tap on
     // the box, so use the CTA, which calls onExpand directly.
-    await page.getByRole("button", { name: /open the mood board/i }).tap();
+    const opener = page.getByRole("button", { name: /open the mood board/i });
+    await opener.tap();
 
-    const sheet = page.getByRole("dialog", { name: /panel/i });
+    const sheet = page.getByRole("dialog", { name: "How do you want to feel?" });
     await expect(sheet).toBeVisible();
+    await expect(sheet.getByRole("heading", { level: 2, name: "How do you want to feel?" })).toBeVisible();
 
-    // Sanity check that the mood panel (not search/explore) is embedded.
-    await expect(sheet.getByText(/all moods/i)).toBeVisible();
+    // §9.5: every touch target in the sheet is at least 44px.
+    for (const target of [
+      sheet.getByRole("link", { name: "Need a hug — Warm, gentle, comforting" }),
+      sheet.getByRole("button", { name: "Close" }),
+      sheet.getByRole("button", { name: "Show films" }),
+    ]) {
+      expect((await target.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    }
 
     // Close detection via body scroll lock: BottomSheet slides off-screen via
     // transform, so toBeHidden() is unreliable. Body `overflow: hidden` is set
     // on open and cleared on close — a direct readout of sheet state.
-    await sheet.getByRole("button", { name: /^close$/i }).tap();
+    await sheet.getByRole("button", { name: "Close" }).tap();
 
     await expect(page.locator("body")).not.toHaveCSS("overflow", "hidden");
+    await expect(opener).toBeFocused();
+  });
+
+  test("tapping a mood in the sheet opens its results", async ({ page }) => {
+    const requests: URLSearchParams[] = [];
+    page.on("request", (req) => {
+      const url = new URL(req.url());
+      if (url.pathname === "/api/movies/discover") requests.push(url.searchParams);
+    });
+    await page.goto("/");
+    await page.getByRole("button", { name: /open the mood board/i }).tap();
+    await page
+      .getByRole("dialog", { name: "How do you want to feel?" })
+      .getByRole("link", { name: "Need a hug — Warm, gentle, comforting" })
+      .tap();
+
+    await page.waitForURL((url) => url.searchParams.get("mood") === "easy" && url.searchParams.has("seed"));
+    await expect(page.getByRole("heading", { level: 2, name: /midnight harvest/i })).toBeVisible();
+    expect(requests).toHaveLength(1);
+    expect(requests[0].get("src")).toBe("tile");
   });
 
   test("a Time sheet applies a pick at once and closes", async ({ page }) => {

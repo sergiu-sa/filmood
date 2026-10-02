@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import { getAuthHeaders } from "@/lib/getAuthToken";
 import { getHeroMode } from "@/lib/heroMode";
-import { allMoods } from "@/lib/moodMap";
+import { allMoods, moodMap } from "@/lib/moodMap";
+import { ACCENT_VARS } from "@/lib/constants";
 import FilmoodLogo from "./FilmoodLogo";
 import HeroDateline from "./HeroDateline";
 import HeroCornerMarks from "./HeroCornerMarks";
@@ -25,15 +27,15 @@ const MOOD_REEL: { key: string; word: string }[] = [
   { key: "unsettled",   word: "Unsettled" },
 ];
 
-interface HeroSectionProps {
-  /** Fired when user clicks the cycling mood word — parent pre-selects that mood + scrolls. */
-  onPreselectMood?: (key: string) => void;
-}
+/** Guest shortcuts under the headline; the rest of the moods are in the dashboard's panel. */
+const HERO_CHIPS = ["laugh", "escape", "unsettled"];
+
+const resultsHref = (key: string) => `/results?mood=${key}&src=tile`;
 
 interface GroupSession { code: string; waiting: number; status: string }
 interface WatchlistItem { movie_id: number; title: string; poster_path: string | null }
 
-export default function HeroSection({ onPreselectMood }: HeroSectionProps) {
+export default function HeroSection() {
   const isMobile = useMediaQuery("(max-width: 820px)");
   const prefersReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const { user, loading: authLoading } = useAuth();
@@ -41,6 +43,8 @@ export default function HeroSection({ onPreselectMood }: HeroSectionProps) {
   // Cycling mood
   const [moodIndex, setMoodIndex] = useState(0);
   const [fading, setFading] = useState(false);
+  // The word is a link: hold it still while it's pointed at or focused, so it can't change under the click (WCAG 2.2.2).
+  const [paused, setPaused] = useState(false);
 
   // Personalization data
   const [lastMood, setLastMood] = useState<string | null>(null);
@@ -49,7 +53,7 @@ export default function HeroSection({ onPreselectMood }: HeroSectionProps) {
 
   // Cycle the mood reel every 3s
   useEffect(() => {
-    if (prefersReducedMotion) return;
+    if (prefersReducedMotion || paused) return;
     let t: ReturnType<typeof setTimeout>;
     const id = setInterval(() => {
       setFading(true);
@@ -62,7 +66,7 @@ export default function HeroSection({ onPreselectMood }: HeroSectionProps) {
       clearInterval(id);
       clearTimeout(t);
     };
-  }, [prefersReducedMotion]);
+  }, [prefersReducedMotion, paused]);
 
   // Fetch personalization data once user is loaded
   useEffect(() => {
@@ -94,6 +98,13 @@ export default function HeroSection({ onPreselectMood }: HeroSectionProps) {
   const cyclerAccent = currentMoodCfg ? `var(--${currentMoodCfg.accentColor})` : "var(--gold)";
   const cyclerAccentRgb = currentMoodCfg ? `var(--${currentMoodCfg.accentColor}-rgb)` : "var(--gold-rgb)";
   const lastMoodCfg = lastMood ? allMoods.find((m) => m.key === lastMood) : null;
+  // Pausing mid-fade cancels the pending swap, so bring the held word back into view.
+  const hold = () => {
+    setPaused(true);
+    setFading(false);
+  };
+  // Only rendered in the history modes, where lastMood is set.
+  const againHref = lastMood ? resultsHref(lastMood) : "/";
 
   const mode = getHeroMode({
     isAuthed: !!user,
@@ -101,14 +112,6 @@ export default function HeroSection({ onPreselectMood }: HeroSectionProps) {
     hasWatchlist: watchlist.length > 0,
     hasActiveGroup: !!group,
   });
-
-  const handleCyclerClick = useCallback(() => {
-    onPreselectMood?.(current.key);
-  }, [onPreselectMood, current.key]);
-
-  const handleContinueClick = useCallback(() => {
-    if (lastMood) onPreselectMood?.(lastMood);
-  }, [onPreselectMood, lastMood]);
 
   // Pick the accent for this render — gold normally, teal in authed-full mode
   const accentVar = mode !== "guest" ? "--teal" : "--gold";
@@ -197,35 +200,34 @@ export default function HeroSection({ onPreselectMood }: HeroSectionProps) {
         >
           {mode === "authed-full" || mode === "authed-history-only" ? (
             <>
-              Still in the mood to{" "}
-              <button
-                type="button"
-                onClick={handleContinueClick}
-                aria-label={`Continue with mood ${lastMoodCfg?.tagLabel ?? "your last pick"}`}
+              <Link
+                href={againHref}
                 style={{
-                  background: "transparent", border: "none", cursor: "pointer",
-                  fontFamily: "inherit", fontSize: "inherit", fontWeight: "inherit",
                   fontStyle: "italic",
                   color: "var(--teal)",
+                  textDecoration: "none",
                   borderBottom: "1.5px dashed rgba(var(--teal-rgb), 0.45)",
                   padding: "0 3px",
                 }}
               >
-                {lastMoodCfg?.label.split(/[ ,.]/)[0].toLowerCase() ?? "continue"}?
-              </button>
+                {lastMoodCfg?.tagLabel}
+              </Link>{" "}
+              again?
             </>
           ) : (
             <>
               Play Your{" "}
-              <button
-                type="button"
-                onClick={handleCyclerClick}
+              <Link
+                href={resultsHref(current.key)}
                 aria-label={`Start with mood ${current.word}`}
-                aria-live="polite"
+                onMouseEnter={hold}
+                onMouseLeave={() => setPaused(false)}
+                onFocus={hold}
+                onBlur={() => setPaused(false)}
                 style={{
-                  background: "transparent", border: "none", cursor: "pointer",
-                  fontFamily: "inherit", fontSize: "inherit", fontWeight: "inherit",
+                  display: "inline-block",
                   fontStyle: "italic",
+                  textDecoration: "none",
                   color: cyclerAccent,
                   borderBottom: `1.5px dashed rgba(${cyclerAccentRgb}, 0.45)`,
                   padding: "0 3px",
@@ -235,7 +237,7 @@ export default function HeroSection({ onPreselectMood }: HeroSectionProps) {
                 }}
               >
                 {current.word}.
-              </button>
+              </Link>
             </>
           )}
         </h1>
@@ -259,21 +261,23 @@ export default function HeroSection({ onPreselectMood }: HeroSectionProps) {
         <div style={{ display: "flex", gap: 7, alignItems: "center", flexWrap: "wrap" }}>
           {mode === "authed-full" || mode === "authed-history-only" ? (
             <>
-              <button
-                type="button"
-                onClick={handleContinueClick}
+              <Link
+                href={againHref}
                 style={{
+                  display: "inline-flex", alignItems: "center",
+                  minHeight: isMobile ? 44 : undefined,
                   background: "var(--gold)", color: "var(--accent-ink)",
-                  border: "none", padding: "8px 14px", borderRadius: 999,
-                  fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  textDecoration: "none", padding: "8px 14px", borderRadius: 999,
+                  fontSize: 12, fontWeight: 600,
                 }}
               >
                 Continue →
-              </button>
+              </Link>
               <button
                 type="button"
                 onClick={() => document.getElementById("dashboard")?.scrollIntoView({ behavior: "smooth" })}
                 style={{
+                  minHeight: isMobile ? 44 : undefined,
                   background: "transparent", color: "var(--t2)",
                   border: "1px solid var(--border)",
                   padding: "8px 14px", borderRadius: 999,
@@ -285,35 +289,39 @@ export default function HeroSection({ onPreselectMood }: HeroSectionProps) {
             </>
           ) : (
             <>
-              {["laugh", "escape", "unsettled"].map((key) => {
-                const mood = allMoods.find((m) => m.key === key)!;
+              {HERO_CHIPS.map((key) => {
+                const mood = moodMap[key];
+                const accent = ACCENT_VARS[mood.accentColor];
                 return (
-                  <button
+                  <Link
                     key={key}
-                    type="button"
-                    onClick={() => onPreselectMood?.(key)}
+                    href={resultsHref(key)}
                     style={{
-                      background: `rgba(var(--${mood.accentColor}-rgb), 0.1)`,
-                      color: `var(--${mood.accentColor})`,
-                      border: `1px solid rgba(var(--${mood.accentColor}-rgb), 0.28)`,
+                      display: "inline-flex", alignItems: "center",
+                      minHeight: isMobile ? 44 : undefined,
+                      background: accent.soft,
+                      color: "var(--t1)",
+                      border: `1px solid ${accent.border}`,
+                      textDecoration: "none",
                       padding: "6px 12px", borderRadius: 999,
-                      fontSize: 11.5, fontWeight: 500, cursor: "pointer",
+                      fontSize: 11.5, fontWeight: 500,
                     }}
                   >
-                    {mood.label.split(/[ ,.]/)[0]}
-                  </button>
+                    {mood.tagLabel}
+                  </Link>
                 );
               })}
               <button
                 type="button"
                 onClick={() => document.getElementById("dashboard")?.scrollIntoView({ behavior: "smooth" })}
                 style={{
-                  background: "transparent", color: "var(--gold)",
+                  minHeight: isMobile ? 44 : undefined,
+                  background: "transparent", color: "var(--t2)",
                   border: "none", padding: "6px 4px",
                   fontSize: 12, fontWeight: 500, cursor: "pointer",
                 }}
               >
-                + 12 more →
+                + {allMoods.length - HERO_CHIPS.length} more →
               </button>
             </>
           )}

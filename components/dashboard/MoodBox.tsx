@@ -172,7 +172,7 @@ export default function MoodBox({
             transition: "opacity 0.4s, transform 0.4s",
           }}
         >
-          {featured.label}.
+          {featured.tagLabel}.
         </div>
         <div
           style={{

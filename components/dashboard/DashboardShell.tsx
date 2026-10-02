@@ -12,26 +12,7 @@ import ExplorePanel from "./ExplorePanel";
 import BottomSheet from "./BottomSheet";
 import type { Film } from "@/lib/types";
 
-export default function DashboardShell({
-  selectedMoods: selectedMoodsProp,
-  onSelectMood: onSelectMoodProp,
-}: {
-  selectedMoods?: Set<string>;
-  onSelectMood?: (key: string) => void;
-} = {}) {
-  const [localSelectedMoods, setLocalSelectedMoods] = useState<Set<string>>(new Set());
-  const selectedMoods = selectedMoodsProp ?? localSelectedMoods;
-  const handleSelectMood =
-    onSelectMoodProp ??
-    ((key: string) => {
-      setLocalSelectedMoods((prev) => {
-        const next = new Set(prev);
-        if (next.has(key)) next.delete(key);
-        else next.add(key);
-        return next;
-      });
-    });
-
+export default function DashboardShell() {
   const [openPanel, setOpenPanel] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<Film[]>([]);
   const [defaultResults, setDefaultResults] = useState<Film[]>([]);
@@ -142,13 +123,7 @@ export default function DashboardShell({
 
   // Panel content for bottom sheet (embedded mode, no animation wrapper)
   const moodPanelContent = (
-    <MoodPanel
-      isOpen={true}
-      embedded
-      selectedMoods={selectedMoods}
-      onSelectMood={handleSelectMood}
-      onClose={closePanel}
-    />
+    <MoodPanel isOpen={true} embedded onClose={closePanel} />
   );
 
   const searchPanelContent = (
@@ -219,12 +194,7 @@ export default function DashboardShell({
       {/* Desktop: inline panels below the grid */}
       {!isMobile && (
         <div ref={searchResultsRef} style={{ padding: "0 28px" }}>
-          <MoodPanel
-            isOpen={openPanel === "mood"}
-            selectedMoods={selectedMoods}
-            onSelectMood={handleSelectMood}
-            onClose={closePanel}
-          />
+          <MoodPanel isOpen={openPanel === "mood"} onClose={closePanel} />
           <SearchPanel
             isOpen={openPanel === "search"}
             films={searchResults}
@@ -243,6 +213,7 @@ export default function DashboardShell({
         <BottomSheet
           isOpen={openPanel !== null}
           onClose={closePanel}
+          label={openPanel === "mood" ? "How do you want to feel?" : "Panel"}
           accentColor={
             openPanel === "mood" ? "var(--gold)"
             : openPanel === "explore" ? "var(--teal)"

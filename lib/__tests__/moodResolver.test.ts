@@ -1,5 +1,5 @@
 import { moodMap } from "@/lib/moodMap";
-import { resolveMoodText, SYNONYMS } from "@/lib/moodResolver";
+import { MAX_TEXT_LENGTH, resolveMoodText, SYNONYMS } from "@/lib/moodResolver";
 import { TMDB_KEYWORDS } from "@/lib/tmdbKeywords";
 
 describe("resolveMoodText", () => {
@@ -84,6 +84,25 @@ describe("resolveMoodText", () => {
   it("empty input returns no matches", () => {
     const r = resolveMoodText("   ");
     expect(r.matched).toBe(false);
+  });
+
+  // The home field echoes unmatched words live, so an inherited property name
+  // must not vanish as if it had matched.
+  it("reports a word that names an inherited property as unmatched", () => {
+    const r = resolveMoodText("constructor");
+    expect(r.moodKeys).toEqual([]);
+    expect(r.unmatched).toEqual(["constructor"]);
+    expect(r.matched).toBe(false);
+  });
+
+  it("still reads the known words beside an inherited property name", () => {
+    const r = resolveMoodText("funny constructor");
+    expect(r.moodKeys).toEqual(["laugh"]);
+    expect(r.unmatched).toEqual(["constructor"]);
+  });
+
+  it("shares one text limit with the inputs and the route", () => {
+    expect(MAX_TEXT_LENGTH).toBe(120);
   });
 
   // resolveMoodText silently drops a mood that no longer exists, so a stale
