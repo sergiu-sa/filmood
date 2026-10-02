@@ -10,7 +10,13 @@ interface FilmCardProps {
   voteAverage: number;
   overview: string;
   accentBase?: string;
+  /** Why it's here: genre names, the first one emphasised. */
+  reason?: string[];
+  /** A blend only: one dot per mood the film came from. */
+  moodDots?: { color: string; label: string }[];
 }
+
+const moodList = new Intl.ListFormat("en-GB", { type: "conjunction" });
 
 export default function FilmCard({
   id,
@@ -20,6 +26,8 @@ export default function FilmCard({
   voteAverage,
   overview,
   accentBase,
+  reason,
+  moodDots,
 }: FilmCardProps) {
   const year = releaseDate ? new Date(releaseDate).getFullYear() : "N/A";
   const rating = voteAverage?.toFixed(1) ?? "N/A";
@@ -92,6 +100,30 @@ export default function FilmCard({
           >
             ★ {rating}
           </div>
+
+          {moodDots && moodDots.length > 0 && (
+            <div
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                top: "10px",
+                left: "10px",
+                display: "flex",
+                gap: "3px",
+                padding: "4px 6px",
+                borderRadius: "999px",
+                background: "var(--surface)",
+                zIndex: 2,
+              }}
+            >
+              {moodDots.map((d) => (
+                <span
+                  key={d.label}
+                  style={{ width: "8px", height: "8px", borderRadius: "50%", background: d.color }}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
         <div style={{ padding: "10px 12px 12px", minHeight: "90px" }}>
@@ -109,10 +141,24 @@ export default function FilmCard({
           >
             {title}
           </h3>
+          {moodDots && moodDots.length > 0 && (
+            <span className="sr-only">
+              {moodDots.length > 1
+                ? `Fits ${moodList.format(moodDots.map((d) => d.label))}`
+                : `From ${moodDots[0].label}`}
+            </span>
+          )}
 
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <span style={{ fontSize: "11px", color: "var(--t3)" }}>{year}</span>
           </div>
+
+          {reason && reason.length > 0 && (
+            <p style={{ fontSize: "12px", color: "var(--t2)", margin: "4px 0 0" }}>
+              <span style={{ color: "var(--t1)", fontWeight: 600 }}>{reason[0]}</span>
+              {reason.slice(1).map((g) => ` · ${g}`).join("")}
+            </p>
+          )}
 
           <p
             style={{

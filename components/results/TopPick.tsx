@@ -1,12 +1,14 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useMediaQuery } from "@/lib/useMediaQuery";
-import type { Film, Provider } from "@/lib/types";
+import type { DiscoverFilm, DiscoverResponse, Film, Keyword, Provider } from "@/lib/types";
 import { moodMap } from "@/lib/moodMap";
 import { ACCENT_VARS } from "@/lib/constants";
 import { tmdbImageUrl } from "@/lib/tmdb";
+import { matchedKeywords, reasonGenres } from "@/lib/whyLine";
 import Icon from "@/components/ui/Icon";
 
 interface TopPickProps {
@@ -15,6 +17,8 @@ interface TopPickProps {
   accent: { base: string; soft: string; glow: string };
   providers: Provider[] | null;
   providersLoading: boolean;
+  /** Mood keywords TMDB tagged the film with, and its genres, moods' own first. */
+  why: { keywords: string[]; genres: string[] };
 }
 
 /**
@@ -29,8 +33,10 @@ export default function TopPick({
   accent,
   providers,
   providersLoading,
+  why,
 }: TopPickProps) {
   const isMobile = useMediaQuery("(max-width: 820px)");
+  const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const year = film.release_date
     ? new Date(film.release_date).getFullYear()
     : "";
@@ -45,7 +51,7 @@ export default function TopPick({
         position: "relative",
         width: "100%",
         maxWidth: "820px",
-        margin: isMobile ? "0 auto 28px" : "0 auto 40px",
+        margin: isMobile ? "0 0 28px" : "0 0 40px",
       }}
     >
       {/* Accent glow aura */}
@@ -59,7 +65,8 @@ export default function TopPick({
           opacity: 0.9,
           pointerEvents: "none",
           zIndex: 0,
-          animation: "breathe 5s ease-in-out infinite",
+          // Inline, so globals.css's reduced-motion rules can't reach it.
+          animation: reduceMotion ? "none" : "breathe 5s ease-in-out infinite",
         }}
       />
 
@@ -185,6 +192,41 @@ export default function TopPick({
             </div>
           </div>
 
+          {why.genres.length + why.keywords.length > 0 && (
+            <p
+              className="font-sans"
+              style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "0 8px", margin: 0, fontSize: "13px", color: "var(--t2)" }}
+            >
+              <span
+                style={{
+                  fontSize: "10.5px",
+                  fontWeight: 700,
+                  letterSpacing: "1.4px",
+                  textTransform: "uppercase",
+                  // --t2, not gold: light-mode gold text is under 4.5:1 until the accent tokens are fixed.
+                  color: "var(--t2)",
+                }}
+              >
+                Why
+              </span>
+              <span>
+                {why.keywords.length > 0 && (
+                  <>
+                    {"tagged "}
+                    <em style={{ color: "var(--t1)" }}>{why.keywords.join(" · ")}</em>
+                    {why.genres.length > 0 && " — "}
+                  </>
+                )}
+                {why.genres.length > 0 && (
+                  <>
+                    <span style={{ color: "var(--t1)", fontWeight: 600 }}>{why.genres[0]}</span>
+                    {why.genres.slice(1).map((g) => ` · ${g}`).join("")}
+                  </>
+                )}
+              </span>
+            </p>
+          )}
+
           {/* Mood chips */}
           {moods.length > 0 && (
             <div style={{ display: "flex", gap: "5px", flexWrap: "wrap" }}>
@@ -238,7 +280,7 @@ export default function TopPick({
                 fontWeight: 700,
                 textTransform: "uppercase",
                 letterSpacing: "1.5px",
-                color: "var(--t3)",
+                color: "var(--t2)",
                 marginBottom: "8px",
               }}
             >
@@ -247,7 +289,7 @@ export default function TopPick({
             {providersLoading ? (
               <div
                 className="font-sans"
-                style={{ fontSize: "11px", color: "var(--t3)" }}
+                style={{ fontSize: "11px", color: "var(--t2)" }}
               >
                 Loading...
               </div>
@@ -282,7 +324,7 @@ export default function TopPick({
             ) : (
               <div
                 className="font-sans"
-                style={{ fontSize: "11px", color: "var(--t3)" }}
+                style={{ fontSize: "11px", color: "var(--t2)" }}
               >
                 Not currently streaming in Norway
               </div>
@@ -325,5 +367,45 @@ export default function TopPick({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * The results page's top pick: fetches the film's providers and keywords
+ * (both cached 24 h) and builds its Why line. Key it by film id, so a new
+ * pick starts empty instead of showing the last one's.
+ */
+export function ResultsTopPick({ film, mood }: { film: DiscoverFilm; mood: DiscoverResponse["moods"][number] }) {
+  const [providers, setProviders] = useState<Provider[] | null>(null);
+  const [keywords, setKeywords] = useState<Keyword[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    // A failure reads as none: "Not currently streaming in Norway", or a Why of genres only.
+    fetch(`/api/movies/${film.id}/providers`)
+      .then((r) => r.json())
+      .then((body) => !cancelled && setProviders(body.providers ?? []))
+      .catch(() => !cancelled && setProviders([]));
+    fetch(`/api/movies/${film.id}/keywords`)
+      .then((r) => r.json())
+      .then((body) => !cancelled && setKeywords(body.keywords ?? []))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [film.id]);
+
+  return (
+    <TopPick
+      film={film}
+      moods={[mood.key]}
+      accent={ACCENT_VARS[mood.accent]}
+      providers={providers}
+      providersLoading={providers === null}
+      why={{
+        keywords: matchedKeywords(keywords, film.moodKeys),
+        genres: reasonGenres(film.genre_ids, film.moodKeys),
+      }}
+    />
   );
 }
