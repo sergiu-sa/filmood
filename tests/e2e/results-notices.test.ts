@@ -51,6 +51,33 @@ test.describe("Results notices", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Need to laugh");
   });
 
+  test("a query that failed earlier shows its answer when Back and Forward refetch it", async ({ page }) => {
+    let failedOnce = false;
+    await page.route(DISCOVER, (route) => {
+      const blend = new URL(route.request().url()).searchParams.get("mood") === "laugh,dark";
+      if (!blend || failedOnce) return route.fallback();
+      failedOnce = true;
+      return route.fulfill({ status: 500, json: { error: "Failed to discover films" } });
+    });
+
+    await page.goto("/results?mood=laugh&seed=4242");
+    await expect(topPick(page)).toBeVisible();
+    await page.getByRole("button", { name: "Add a mood" }).click();
+    await page.getByRole("dialog", { name: "Add a mood" }).getByRole("link", { name: /^Go dark —/ }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Couldn't reach the film database." })).toBeVisible();
+
+    await page.goBack();
+    await expect(topPick(page)).toBeVisible();
+    const refetched = page.waitForResponse(
+      (res) => isDiscover(res.url()) && new URL(res.url()).searchParams.get("mood") === "laugh,dark",
+    );
+    await page.goForward();
+    await refetched;
+    await settle(page);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Need to laugh");
+    await expect(topPick(page)).toBeVisible();
+  });
+
   test("a 400 shows the route's message, no retry, and the text to edit", async ({ page }) => {
     await page.route(DISCOVER, (route) => {
       const sp = new URL(route.request().url()).searchParams;

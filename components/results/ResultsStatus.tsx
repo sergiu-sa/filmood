@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { EditForm, withText } from "@/components/results/MoodHeader";
@@ -49,6 +50,13 @@ export function ResultsError({
   const router = useRouter();
   const searchParams = useSearchParams();
   const text = searchParams.get("text");
+  const heading = useRef<HTMLHeadingElement>(null);
+
+  // The control that failed (a filter, Edit, Try again) is gone, so focus would fall to <body>.
+  // Effects run after EditForm's autoFocus, so the message is read before the field.
+  useEffect(() => {
+    heading.current?.focus();
+  }, []);
 
   const action = {
     display: "inline-flex",
@@ -66,8 +74,18 @@ export function ResultsError({
     <div className="font-sans" style={{ ...column, gap: "18px" }}>
       {/* The mood header isn't rendered here, so the message is the page's heading. */}
       <h1
+        ref={heading}
+        tabIndex={-1}
         className="font-serif"
-        style={{ margin: 0, maxWidth: "560px", fontSize: "26px", fontWeight: 600, lineHeight: 1.25, color: "var(--t1)" }}
+        style={{
+          margin: 0,
+          maxWidth: "560px",
+          fontSize: "26px",
+          fontWeight: 600,
+          lineHeight: 1.25,
+          color: "var(--t1)",
+          outline: "none",
+        }}
       >
         {retryable ? "Couldn't reach the film database." : message}
       </h1>

@@ -77,6 +77,8 @@ function ResultsContent() {
 
         if (res.ok && !data.error) {
           setShown({ query, data });
+          // Back then Forward refetches a query that failed earlier; its old error mustn't hide the answer.
+          setFailed(null);
           return;
         }
         // A 4xx describes the request (text with no mood word); retrying can't change it.
@@ -171,7 +173,11 @@ function ResultsContent() {
           href="/browse"
           className="font-sans"
           style={{
-            padding: "12px 28px",
+            display: "inline-flex",
+            alignItems: "center",
+            minHeight: "44px",
+            boxSizing: "border-box",
+            padding: "0 28px",
             borderRadius: "10px",
             color: "var(--t1)",
             fontSize: "13px",

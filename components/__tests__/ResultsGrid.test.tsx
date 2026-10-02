@@ -72,6 +72,21 @@ describe("ResultsGrid", () => {
     expect(section).toHaveTextContent("Need to laugh");
   });
 
+  it("names the row after the one mood that found films, with only that mood in the legend", () => {
+    render(<ResultsGrid films={[film(2, ["dark"]), film(3, ["dark"])]} moods={[LAUGH, DARK]} />);
+    expect(headings()).toEqual(["From Go dark"]);
+    expect(screen.getByText("2 films")).toBeInTheDocument();
+    const section = screen.getByRole("heading", { name: "From Go dark" }).closest("section")!;
+    expect(section).not.toHaveTextContent("Need to laugh");
+  });
+
+  it("keeps the shared row's legend when the rest come from one mood", () => {
+    render(<ResultsGrid films={[film(1, ["laugh", "dark"]), film(2, ["laugh"])]} moods={[LAUGH, DARK]} />);
+    expect(headings()).toEqual(["Fits both moods", "From Need to laugh"]);
+    const both = screen.getByRole("heading", { name: "Fits both moods" }).closest("section")!;
+    expect(both).toHaveTextContent("Go dark");
+  });
+
   it("puts the film's moods' genres first in its why line", () => {
     render(<ResultsGrid films={[film(1, ["dark"], [35, 80])]} moods={[LAUGH, DARK]} />);
     expect(screen.getByRole("link")).toHaveTextContent("Crime · Comedy");

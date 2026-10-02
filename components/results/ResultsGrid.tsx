@@ -77,9 +77,9 @@ export default function ResultsGrid({ films, moods }: ResultsGridProps) {
     </div>
   );
 
-  const legend = (
+  const legend = (shown: DiscoverResponse["moods"]) => (
     <div className="font-sans" style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px", fontSize: "12px", color: "var(--t2)" }}>
-      {moods.map((m) => (
+      {shown.map((m) => (
         <span key={m.key} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
           <span
             aria-hidden="true"
@@ -102,21 +102,24 @@ export default function ResultsGrid({ films, moods }: ResultsGridProps) {
 
   const both = films.filter((f) => moods.every((m) => f.moodKeys.includes(m.key)));
   const each = films.filter((f) => !both.includes(f));
+  // One mood failed (partial) or found nothing beyond the shared films: the row is that mood's alone.
+  const sources = moods.filter((m) => each.some((f) => f.moodKeys.includes(m.key)));
+  const single = sources.length === 1 ? sources[0] : null;
 
   return (
     <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "30px" }}>
       {both.length > 0 && (
         <section>
-          <Heading title="Fits both moods" note={filmCount(both.length)} legend={legend} />
+          <Heading title="Fits both moods" note={filmCount(both.length)} legend={legend(moods)} />
           {grid(both)}
         </section>
       )}
       {each.length > 0 && (
         <section>
           <Heading
-            title="From each mood"
-            note={`${filmCount(each.length)}, alternating`}
-            legend={both.length > 0 ? undefined : legend}
+            title={single ? `From ${single.label}` : "From each mood"}
+            note={single ? filmCount(each.length) : `${filmCount(each.length)}, alternating`}
+            legend={both.length > 0 ? undefined : legend(sources)}
           />
           {grid(each)}
         </section>

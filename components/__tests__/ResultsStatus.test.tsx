@@ -36,6 +36,8 @@ describe("ResultsError", () => {
     expect(screen.queryByText(/unexpected token/i)).toBeNull();
     expect(screen.queryByRole("link")).toBeNull();
 
+    expect(screen.getByRole("heading", { level: 1 })).toHaveFocus();
+
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
@@ -53,6 +55,8 @@ describe("ResultsError", () => {
     render(<ResultsError message={MESSAGE} retryable={false} onRetry={vi.fn()} />);
     const field = screen.getByRole("textbox", { name: "Describe your mood" });
     expect(field).toHaveValue("80s");
+    // The message, not the field, is what a screen reader hears first.
+    expect(screen.getByRole("heading", { level: 1, name: MESSAGE })).toHaveFocus();
     expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
 
     await userEvent.click(screen.getByRole("button", { name: "Search" }));
