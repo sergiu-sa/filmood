@@ -166,6 +166,15 @@ export async function mockTmdb(page: Page) {
     }),
   );
 
+  // The top pick's Why line; none of the stub moods match, so it shows genres only.
+  await page.route(/\/api\/movies\/\d+\/keywords$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ keywords: [] }),
+    }),
+  );
+
   // Film detail — the `$` anchor keeps /providers from matching here.
   await page.route(/\/api\/movies\/\d+$/, (route) =>
     route.fulfill({

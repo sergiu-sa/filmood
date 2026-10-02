@@ -38,6 +38,18 @@ export function withMoods(sp: URLSearchParams, keys: string[], src: SearchSource
   return next;
 }
 
+/** Where a new free text goes: the results URL with it (empty: `text` removed), or home when no mood would be left. */
+export function withText(sp: URLSearchParams, value: string): string {
+  const next = new URLSearchParams(sp);
+  // `any` only cancelled the old text's Time or Era; a new text is read afresh.
+  for (const key of ["time", "era"]) if (next.get(key) === "any") next.delete(key);
+  if (value) next.set("text", value);
+  else next.delete("text");
+  if (!value && normalizeMoodKeys((next.get("mood") ?? "").split(",")).length === 0) return "/";
+  next.set("src", "text");
+  return `/results?${next}`;
+}
+
 /**
  * The results page's title, mood chips, add-mood popover (a sheet on mobile)
  * and the line echoing how the free text was read. Mood and text changes push,
@@ -97,18 +109,9 @@ export default function MoodHeader({ moods, interpreted, droppedMoods, filters, 
       closeEdit();
       return;
     }
-    const next = new URLSearchParams(searchParams);
-    // `any` only cancelled the old text's Time or Era; a new text is read afresh.
-    for (const key of ["time", "era"]) if (next.get(key) === "any") next.delete(key);
-    if (value) next.set("text", value);
-    else next.delete("text");
-    if (!value && normalizeMoodKeys((next.get("mood") ?? "").split(",")).length === 0) {
-      router.push("/");
-      return;
-    }
-    next.set("src", "text");
-    router.push(`/results?${next}`);
-    closeEdit();
+    const href = withText(searchParams, value);
+    router.push(href);
+    if (href !== "/") closeEdit();
   };
 
   const tiles = (
@@ -454,15 +457,15 @@ function Reading({
   );
 }
 
-/** Mounted per open, so a cancelled draft doesn't come back. */
-function EditForm({
+/** Mounted per open, so a cancelled draft doesn't come back. Without onCancel there's no Cancel. */
+export function EditForm({
   initial,
   onSubmit,
   onCancel,
 }: {
   initial: string;
   onSubmit: (text: string) => void;
-  onCancel: () => void;
+  onCancel?: () => void;
 }) {
   const [draft, setDraft] = useState(initial);
 
@@ -490,7 +493,7 @@ function EditForm({
         value={draft}
         maxLength={MAX_TEXT_LENGTH}
         onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => e.key === "Escape" && onCancel()}
+        onKeyDown={(e) => e.key === "Escape" && onCancel?.()}
         style={{
           flex: "1 1 240px",
           maxWidth: "480px",
@@ -511,13 +514,15 @@ function EditForm({
       >
         Search
       </button>
-      <button
-        type="button"
-        onClick={onCancel}
-        style={{ ...button, padding: "0 16px", border: "1px solid var(--border-h)", background: "transparent", color: "var(--t1)", fontWeight: 600 }}
-      >
-        Cancel
-      </button>
+      {onCancel && (
+        <button
+          type="button"
+          onClick={onCancel}
+          style={{ ...button, padding: "0 16px", border: "1px solid var(--border-h)", background: "transparent", color: "var(--t1)", fontWeight: 600 }}
+        >
+          Cancel
+        </button>
+      )}
     </form>
   );
 }

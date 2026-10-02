@@ -33,6 +33,7 @@ export type IconName =
   | "home"
   | "shuffle"
   | "plus"
+  | "clapper"
   | "star-burst";
 
 interface IconProps {
@@ -319,6 +320,20 @@ export default function Icon({ name, size = 16, className }: IconProps) {
       return (
         <svg {...common} fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
           <path d="M12 5v14M5 12h14" />
+        </svg>
+      );
+    case "clapper":
+      return (
+        <svg
+          {...common}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <rect x="3" y="5" width="18" height="14" rx="2" />
+          <path d="M3 9h18M8 5l2 4M13 5l2 4" />
         </svg>
       );
     case "star-burst":

@@ -96,4 +96,36 @@ describe("FilmCard", () => {
     const p = document.querySelector("p:last-of-type");
     expect(p).toBeInTheDocument();
   });
+
+  // Browse and the rails pass neither prop; their cards must not change.
+  it("renders only the old text without reason or moodDots", () => {
+    const { container } = render(<FilmCard {...baseFilm} />);
+    expect(container.textContent).toBe(
+      "★ 8.8Inception2010A thief who steals corporate secrets through the dream world.",
+    );
+    expect(container.querySelector(".sr-only")).toBeNull();
+  });
+
+  it("renders the reason with a separator", () => {
+    render(<FilmCard {...baseFilm} reason={["Comedy", "Crime"]} />);
+    expect(screen.getByText("Comedy")).toBeInTheDocument();
+    expect(screen.getByText("Comedy").parentElement).toHaveTextContent("Comedy · Crime");
+  });
+
+  it("names the moods in the link, not with the dots", () => {
+    const { container, rerender } = render(
+      <FilmCard
+        {...baseFilm}
+        moodDots={[
+          { color: "var(--gold)", label: "Need to laugh" },
+          { color: "var(--ember)", label: "Go dark" },
+        ]}
+      />,
+    );
+    expect(screen.getByRole("link", { name: /Fits Need to laugh and Go dark/ })).toBeInTheDocument();
+    expect(container.querySelector('[aria-hidden="true"]')?.children).toHaveLength(2);
+
+    rerender(<FilmCard {...baseFilm} moodDots={[{ color: "var(--ember)", label: "Go dark" }]} />);
+    expect(screen.getByRole("link", { name: /From Go dark/ })).toBeInTheDocument();
+  });
 });

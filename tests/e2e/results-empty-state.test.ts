@@ -55,7 +55,7 @@ test.describe("Results empty state", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Need to laugh");
     await expect(page.getByText(/films found/i)).toHaveCount(0);
     await expect(page.getByRole("heading", { name: /your matches/i })).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "Need a hug" })).toHaveAttribute(
+    await expect(page.getByRole("link", { name: /^Need a hug/ })).toHaveAttribute(
       "href",
       "/results?mood=easy&src=related",
     );
@@ -156,7 +156,7 @@ test.describe("Results empty state", () => {
     const requests = discoverParams(page);
 
     await page.goto("/results?mood=laugh&era=classic&seed=4242");
-    await page.getByRole("link", { name: "Need a hug" }).click();
+    await page.getByRole("link", { name: /^Need a hug/ }).click();
     await page.waitForURL(
       (url) => url.searchParams.get("mood") === "easy" && url.searchParams.has("seed") && !url.searchParams.has("src"),
     );
@@ -179,7 +179,7 @@ test.describe("Results empty state", () => {
     });
 
     await page.goto("/results?mood=laugh&era=classic&seed=4242");
-    await page.getByRole("link", { name: "Need a hug" }).click();
+    await page.getByRole("link", { name: /^Need a hug/ }).click();
     await page.waitForURL((url) => url.searchParams.get("mood") === "easy" && !url.searchParams.has("src"));
 
     await page.goBack();
