@@ -28,6 +28,34 @@ describe("MoodTile", () => {
     expect(dot?.getAttribute("style")).toContain(ACCENT_VARS.teal.base);
   });
 
+  it("full: keeps the same name and adds the signature film as a hint", () => {
+    render(<MoodTile moodKey="easy" href="/results?mood=easy&src=tile" variant="full" />);
+    const link = screen.getByRole("link", { name: "Need a hug — Warm, gentle, comforting" });
+    expect(link).toHaveTextContent("like The Holdovers");
+    const icons = link.querySelectorAll("svg");
+    expect(icons).toHaveLength(1);
+    expect(icons[0]).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("full: shows a long signature title whole", () => {
+    render(<MoodTile moodKey="thrilling" href="/results?mood=thrilling" variant="full" />);
+    expect(screen.getByRole("link")).toHaveTextContent("like Mission: Impossible - Dead Reckoning Part One");
+  });
+
+  it("compact has no hint and no arrow", () => {
+    render(<MoodTile moodKey="easy" href="/results?mood=easy" />);
+    const link = screen.getByRole("link");
+    expect(link).not.toHaveTextContent(/like /);
+    expect(link.querySelector("svg")).toBeNull();
+  });
+
+  it.each(["compact", "full"] as const)("%s hands its accent to the shared hover state", (variant) => {
+    render(<MoodTile moodKey="easy" href="/results?mood=easy" variant={variant} />);
+    const link = screen.getByRole("link");
+    expect(link).toHaveClass("mood-tile");
+    expect(link.style.getPropertyValue("--tile-accent")).toBe(ACCENT_VARS.teal.base);
+  });
+
   // An inherited property name must not read as a mood.
   it("renders nothing for a key that isn't a mood", () => {
     const { container } = render(<MoodTile moodKey="constructor" href="/results?mood=constructor" />);

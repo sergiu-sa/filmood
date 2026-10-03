@@ -1,167 +1,135 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { allMoods, MAX_MOODS } from "@/lib/moodMap";
-import type { EraKey, TempoKey } from "@/lib/types";
-import MoodCard from "./MoodCard";
-import MoodExtras from "@/components/mood/MoodExtras";
-import { LEGACY_TEMPO_TIME } from "@/lib/moodFilters";
+import { useEffect, useRef } from "react";
+import { allMoods } from "@/lib/moodMap";
+import { useMediaQuery } from "@/lib/useMediaQuery";
+import MoodTile from "@/components/mood/MoodTile";
+import MoodDescribe from "@/components/mood/MoodDescribe";
+import Icon from "@/components/ui/Icon";
 
 interface MoodPanelProps {
   isOpen: boolean;
-  selectedMoods: Set<string>;
-  onSelectMood: (key: string) => void;
   onClose: () => void;
+  /** In the mobile BottomSheet: compact tiles, eyebrow, Close, describe field pinned below the grid. */
   embedded?: boolean;
 }
 
-export default function MoodPanel({
-  isOpen,
-  selectedMoods,
-  onSelectMood,
-  onClose,
-  embedded,
-}: MoodPanelProps) {
-  const router = useRouter();
-  const count = selectedMoods.size;
+export default function MoodPanel({ isOpen, onClose, embedded }: MoodPanelProps) {
+  // 899, not 900: DashboardShell swaps to the sheet at the same width.
+  const narrow = useMediaQuery("(max-width: 639px)");
+  const medium = useMediaQuery("(max-width: 899px)");
+  const columns = narrow ? 2 : medium ? 3 : 4;
+  const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
+  const rootRef = useRef<HTMLDivElement>(null);
+  const footerRef = useRef<HTMLDivElement>(null);
 
-  const [era, setEra] = useState<EraKey | null>(null);
-  const [tempo, setTempo] = useState<TempoKey | null>(null);
-  const [moodText, setMoodText] = useState("");
-
-  const trimmedText = moodText.trim();
-  const canSubmit = count > 0 || trimmedText.length > 0;
-
-  const handleFindFilms = () => {
-    if (!canSubmit) return;
-
-    const params = new URLSearchParams();
-    if (count > 0) params.set("mood", Array.from(selectedMoods).join(","));
-
-    if (era) params.set("era", era);
-    // Tempo was always runtime; send the Time it stands for.
-    if (tempo) params.set("time", LEGACY_TEMPO_TIME[tempo]);
-    if (trimmedText) params.set("text", trimmedText);
-
-    router.push(`/results?${params.toString()}`);
-  };
+  // A tile that focus scrolls into view must clear the pinned footer (WCAG 2.4.11).
+  // The footer grows with the reading, so its live height feeds the tiles' scroll-margin.
+  useEffect(() => {
+    const root = rootRef.current;
+    const footer = footerRef.current;
+    if (!embedded || !root || !footer) return;
+    const observer = new ResizeObserver(() => {
+      root.style.setProperty("--sheet-footer-h", `${footer.offsetHeight}px`);
+    });
+    observer.observe(footer);
+    return () => observer.disconnect();
+  }, [embedded]);
 
   const content = (
     <>
-      {/* Panel label */}
-      <div
-        style={{
-          fontSize: "10px",
-          fontWeight: 600,
-          textTransform: "uppercase",
-          letterSpacing: "1.8px",
-          color: "var(--gold)",
-          marginBottom: "16px",
-        }}
-      >
-        All moods · pick up to {MAX_MOODS}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: "12px", marginBottom: embedded ? "14px" : "24px" }}>
+        <div style={{ flexGrow: 1, display: "flex", flexDirection: "column", gap: embedded ? "6px" : "8px" }}>
+          {embedded && (
+            <div
+              style={{
+                fontSize: "10.5px",
+                fontWeight: 700,
+                letterSpacing: "1.6px",
+                textTransform: "uppercase",
+                color: "var(--t2)",
+              }}
+            >
+              What to watch
+            </div>
+          )}
+          <h2
+            className="font-serif"
+            style={{ margin: 0, fontSize: embedded ? "24px" : "32px", fontWeight: 600, lineHeight: 1.15, color: "var(--t1)" }}
+          >
+            How do you want to feel?
+          </h2>
+          {!embedded && (
+            <p style={{ margin: 0, fontSize: "14px", lineHeight: 1.55, color: "var(--t2)", maxWidth: "620px" }}>
+              Tap a mood to see films. On the next page you can add a second mood and set time, era and where to watch.
+            </p>
+          )}
+        </div>
+        {embedded && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              width: "44px",
+              height: "44px",
+              border: "1px solid var(--border-h)",
+              borderRadius: "12px",
+              background: "none",
+              color: "var(--t1)",
+              cursor: "pointer",
+            }}
+          >
+            <Icon name="close" size={18} />
+          </button>
+        )}
       </div>
 
-      {/* Full mood grid */}
-      <div className="grid grid-cols-2 gap-2 mb-4 sm:grid-cols-3 min-[900px]:grid-cols-4">
-        {allMoods.map((mood) => (
-          <MoodCard
-            key={mood.key}
-            moodKey={mood.key}
-            tagLabel={mood.tagLabel}
-            label={mood.label}
-            description={mood.description}
-            accentColor={mood.accentColor}
-            isSelected={selectedMoods.has(mood.key)}
-            onSelect={onSelectMood}
-            disabled={count >= MAX_MOODS && !selectedMoods.has(mood.key)}
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: embedded ? "10px" : "12px" }}>
+        {allMoods.map((m) => (
+          <MoodTile
+            key={m.key}
+            moodKey={m.key}
+            href={`/results?mood=${m.key}&src=tile`}
+            variant={embedded ? "compact" : "full"}
           />
         ))}
       </div>
 
-      {/* Era + tempo + free-form text */}
-      <div style={{ marginBottom: "14px" }}>
-        <MoodExtras
-          era={era}
-          tempo={tempo}
-          text={moodText}
-          onEraChange={setEra}
-          onTempoChange={setTempo}
-          onTextChange={setMoodText}
-        />
-      </div>
-
-      {/* Action row */}
       <div
-        className="flex items-center gap-2.5 flex-wrap"
-        style={{ borderTop: "1px solid var(--border)", paddingTop: "14px", marginTop: "10px" }}
+        ref={footerRef}
+        style={{
+          borderTop: "1px solid var(--border)",
+          marginTop: embedded ? "12px" : "24px",
+          paddingTop: embedded ? "12px" : "22px",
+          // Pinned below the grid while the sheet's tiles scroll; -24px cancels BottomSheet's bottom padding.
+          ...(embedded && { position: "sticky", bottom: "-24px", paddingBottom: "24px", background: "var(--surface)" }),
+        }}
       >
-        {canSubmit && (
-          <button
-            onClick={handleFindFilms}
-            className="cursor-pointer"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              padding: "10px 20px",
-              borderRadius: "10px",
-              background: "var(--gold)",
-              color: "var(--accent-ink)",
-              fontSize: "13px",
-              fontWeight: 600,
-              lineHeight: 1,
-              border: "none",
-              transition: "all 0.25s",
-            }}
-          >
-            Find films →
-          </button>
-        )}
-
-        <button
-          onClick={onClose}
-          className="btn-panel-outline cursor-pointer"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            padding: "9px 18px",
-            borderRadius: "10px",
-            background: "none",
-            color: "var(--t1)",
-            fontSize: "13px",
-            fontWeight: 500,
-            lineHeight: 1,
-            border: "1px solid var(--border-h)",
-            transition: "all 0.25s",
-          }}
-        >
-          Close
-        </button>
-
-        <span className="ml-auto" style={{ fontSize: "12px", color: "var(--t3)" }}>
-          {count > 0
-            ? `${count} mood${count > 1 ? "s" : ""} selected${trimmedText ? " + description" : ""}`
-            : trimmedText
-              ? "Describing your mood"
-              : "Select your moods, then find films"}
-        </span>
+        <MoodDescribe compact={embedded} />
       </div>
     </>
   );
 
   if (embedded) {
-    return <div>{content}</div>;
+    return <div ref={rootRef}>{content}</div>;
   }
 
   return (
     <div
+      // Collapsed, the panel is only hidden visually; inert keeps its tiles out of the Tab order.
+      inert={!isOpen}
       style={{
         maxHeight: isOpen ? "1200px" : "0",
         opacity: isOpen ? 1 : 0,
         overflow: "hidden",
-        transition: "max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s, padding 0.4s",
+        transition: reducedMotion
+          ? "none"
+          : "max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s, padding 0.4s",
         paddingBottom: isOpen ? "10px" : "0",
       }}
     >
@@ -170,7 +138,7 @@ export default function MoodPanel({
           background: "var(--surface)",
           border: "1px solid var(--border)",
           borderRadius: "16px",
-          padding: "22px",
+          padding: "30px 32px 28px",
         }}
       >
         {content}

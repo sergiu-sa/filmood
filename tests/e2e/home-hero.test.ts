@@ -1,37 +1,60 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+import { mockTmdb } from "./fixtures/tmdb";
+
+function discoverParams(page: Page): URLSearchParams[] {
+  const params: URLSearchParams[] = [];
+  page.on("request", (req) => {
+    const url = new URL(req.url());
+    if (url.pathname === "/api/movies/discover") params.push(url.searchParams);
+  });
+  return params;
+}
 
 test.describe("Home hero — guest", () => {
-  test("renders headline + cycling mood word + chips", async ({ page }) => {
-    await page.goto("/");
-    await expect(page.getByRole("button", { name: /Start with mood/i })).toBeVisible();
-    await expect(page.getByText(/Play Your/i)).toBeVisible();
-    await expect(page.getByText(/\+ 12 more/)).toBeVisible();
+  test.beforeEach(async ({ page }) => {
+    // The hero links to /results, whose discover call must never reach the real route.
+    await mockTmdb(page);
+    // Reduced motion stops the reel, so the word stays on its first mood, Laugh.
+    await page.emulateMedia({ reducedMotion: "reduce" });
   });
 
-  test("clicking a chip scrolls to dashboard and MoodBox", async ({ page }) => {
+  test("renders headline + cycling mood link + chips", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("link", { name: "Start with mood Laugh" })).toBeVisible();
+    await expect(page.getByText(/Play Your/i)).toBeVisible();
+    await expect(page.getByText(/\+ 9 more/)).toBeVisible();
+  });
+
+  test("a chip opens its mood's results", async ({ page }) => {
+    const requests = discoverParams(page);
     await page.goto("/");
     const hero = page.getByRole("region", { name: /Filmood — Play Your Mood/i });
-    await hero.getByRole("button", { name: "Laugh", exact: true }).click();
-    await expect(page.locator("#dashboard")).toBeInViewport();
+    await hero.getByRole("link", { name: "Need to laugh" }).click();
+    await page.waitForURL((url) => url.searchParams.get("mood") === "laugh" && url.searchParams.has("seed"));
+    await expect(page.getByRole("heading", { level: 1, name: "Need to laugh" })).toBeVisible();
+    expect(requests).toHaveLength(1);
+    expect(requests[0].get("src")).toBe("tile");
   });
 
-  test("cycling mood word is keyboard-accessible", async ({ page }) => {
+  test("cycling mood word is a keyboard-reachable link", async ({ page }) => {
     await page.goto("/");
-    const cycler = page.getByRole("button", { name: /Start with mood/i });
+    const cycler = page.getByRole("link", { name: "Start with mood Laugh" });
     await cycler.focus();
     await expect(cycler).toBeFocused();
     await cycler.press("Enter");
-    await expect(page.locator("#dashboard")).toBeInViewport();
+    await page.waitForURL((url) => url.pathname === "/results" && url.searchParams.get("mood") === "laugh");
   });
 });
 
 test.describe("Home hero — light mode", () => {
-  test("renders without hydration errors", async ({ page }) => {
+  test("renders without hydration errors", async ({ page, context, baseURL }) => {
     const errors: string[] = [];
     page.on("pageerror", (err) => errors.push(String(err)));
-    await page.addInitScript(() => localStorage.setItem("theme", "light"));
+    // The server reads the theme from this cookie; localStorage is only a fallback copy.
+    await context.addCookies([{ name: "theme", value: "light", url: baseURL! }]);
     await page.goto("/");
     await page.waitForLoadState("networkidle");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
     expect(errors).toEqual([]);
     await expect(page.getByText(/Play Your/i)).toBeVisible();
   });

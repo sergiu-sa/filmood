@@ -1,10 +1,14 @@
 // Resolves a free-form user description into structured mood signals.
-// Runs server-side. Deterministic, no network or LLM — a static synonym table
-// matches unigrams and bigrams against mood keys, TMDB keyword IDs, era, and tempo.
+// Pure: the discover route and the home describe field both run it. Deterministic,
+// no network or LLM — a static synonym table matches unigrams and bigrams against
+// mood keys, TMDB keyword IDs, era, and tempo.
 
 import { moodMap } from "@/lib/moodMap";
 import { TMDB_KEYWORDS } from "@/lib/tmdbKeywords";
 import type { EraKey, TempoKey } from "@/lib/types";
+
+/** Longest free text the search reads; the inputs' maxLength and the route's slice share it. */
+export const MAX_TEXT_LENGTH = 120;
 
 interface SynonymEntry {
   moods?: string[];
@@ -156,8 +160,9 @@ export function resolveMoodText(text: string): ResolvedMoodText {
   const matchedBigrams = new Set<number>();
 
   const consume = (key: string, bigramStart?: number): boolean => {
+    // hasOwn: a plain lookup would find Object.prototype's "constructor".
+    if (!Object.hasOwn(SYNONYMS, key)) return false;
     const entry = SYNONYMS[key];
-    if (!entry) return false;
     entry.moods?.forEach((m) => {
       if (m in moodMap) moodSet.add(m);
     });
