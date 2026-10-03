@@ -23,7 +23,7 @@ test.describe("Mobile — BottomSheet dashboard panel", () => {
     await expect(sheet).toBeVisible();
     await expect(sheet.getByRole("heading", { level: 2, name: "How do you want to feel?" })).toBeVisible();
 
-    // §9.5: every touch target in the sheet is at least 44px.
+    // Every touch target in the sheet is at least 44px.
     for (const target of [
       sheet.getByRole("link", { name: "Need a hug — Warm, gentle, comforting" }),
       sheet.getByRole("button", { name: "Close" }),
@@ -39,6 +39,33 @@ test.describe("Mobile — BottomSheet dashboard panel", () => {
 
     await expect(page.locator("body")).not.toHaveCSS("overflow", "hidden");
     await expect(opener).toBeFocused();
+  });
+
+  // WCAG 2.4.11: a tile scrolled into view by focus must not sit under the pinned describe field.
+  test("tabbing through the sheet never hides a tile behind the describe field", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: /open the mood board/i }).tap();
+    const sheet = page.getByRole("dialog", { name: "How do you want to feel?" });
+    await expect(sheet).toBeVisible();
+    // Type first: the reading makes the pinned footer as tall as it gets.
+    await sheet.getByLabel("Or describe it in your own words").fill("cozy 80s heist with robots");
+    await expect(page.getByRole("status")).toContainText("Didn't recognise");
+    await sheet.getByRole("button", { name: "Close" }).focus();
+
+    const tiles = await sheet.getByRole("link").count();
+    for (let i = 0; i < tiles; i++) {
+      await page.keyboard.press("Tab");
+      const { name, tileBottom, footerTop } = await page.evaluate(() => {
+        const tile = document.activeElement as HTMLElement;
+        const footer = document.querySelector('[role="dialog"] form')!.parentElement!;
+        return {
+          name: tile.getAttribute("aria-label"),
+          tileBottom: tile.getBoundingClientRect().bottom,
+          footerTop: footer.getBoundingClientRect().top,
+        };
+      });
+      expect(tileBottom, name ?? "").toBeLessThanOrEqual(footerTop + 1);
+    }
   });
 
   test("tapping a mood in the sheet opens its results", async ({ page }) => {

@@ -37,6 +37,8 @@ interface WatchlistItem { movie_id: number; title: string; poster_path: string |
 
 export default function HeroSection() {
   const isMobile = useMediaQuery("(max-width: 820px)");
+  // 44px targets follow the dashboard's sheet breakpoint, not the hero's layout one.
+  const touch = useMediaQuery("(max-width: 899px)");
   const prefersReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const { user, loading: authLoading } = useAuth();
 
@@ -44,7 +46,10 @@ export default function HeroSection() {
   const [moodIndex, setMoodIndex] = useState(0);
   const [fading, setFading] = useState(false);
   // The word is a link: hold it still while it's pointed at or focused, so it can't change under the click (WCAG 2.2.2).
-  const [paused, setPaused] = useState(false);
+  // Two flags, so leaving one way doesn't release a hold the other still has.
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const paused = hovered || focused;
 
   // Personalization data
   const [lastMood, setLastMood] = useState<string | null>(null);
@@ -99,8 +104,8 @@ export default function HeroSection() {
   const cyclerAccentRgb = currentMoodCfg ? `var(--${currentMoodCfg.accentColor}-rgb)` : "var(--gold-rgb)";
   const lastMoodCfg = lastMood ? allMoods.find((m) => m.key === lastMood) : null;
   // Pausing mid-fade cancels the pending swap, so bring the held word back into view.
-  const hold = () => {
-    setPaused(true);
+  const hold = (setHeld: (held: boolean) => void) => () => {
+    setHeld(true);
     setFading(false);
   };
   // Only rendered in the history modes, where lastMood is set.
@@ -220,10 +225,10 @@ export default function HeroSection() {
               <Link
                 href={resultsHref(current.key)}
                 aria-label={`Start with mood ${current.word}`}
-                onMouseEnter={hold}
-                onMouseLeave={() => setPaused(false)}
-                onFocus={hold}
-                onBlur={() => setPaused(false)}
+                onMouseEnter={hold(setHovered)}
+                onMouseLeave={() => setHovered(false)}
+                onFocus={hold(setFocused)}
+                onBlur={() => setFocused(false)}
                 style={{
                   display: "inline-block",
                   fontStyle: "italic",
@@ -265,7 +270,7 @@ export default function HeroSection() {
                 href={againHref}
                 style={{
                   display: "inline-flex", alignItems: "center",
-                  minHeight: isMobile ? 44 : undefined,
+                  minHeight: touch ? 44 : undefined,
                   background: "var(--gold)", color: "var(--accent-ink)",
                   textDecoration: "none", padding: "8px 14px", borderRadius: 999,
                   fontSize: 12, fontWeight: 600,
@@ -277,7 +282,7 @@ export default function HeroSection() {
                 type="button"
                 onClick={() => document.getElementById("dashboard")?.scrollIntoView({ behavior: "smooth" })}
                 style={{
-                  minHeight: isMobile ? 44 : undefined,
+                  minHeight: touch ? 44 : undefined,
                   background: "transparent", color: "var(--t2)",
                   border: "1px solid var(--border)",
                   padding: "8px 14px", borderRadius: 999,
@@ -298,7 +303,7 @@ export default function HeroSection() {
                     href={resultsHref(key)}
                     style={{
                       display: "inline-flex", alignItems: "center",
-                      minHeight: isMobile ? 44 : undefined,
+                      minHeight: touch ? 44 : undefined,
                       background: accent.soft,
                       color: "var(--t1)",
                       border: `1px solid ${accent.border}`,
@@ -315,7 +320,7 @@ export default function HeroSection() {
                 type="button"
                 onClick={() => document.getElementById("dashboard")?.scrollIntoView({ behavior: "smooth" })}
                 style={{
-                  minHeight: isMobile ? 44 : undefined,
+                  minHeight: touch ? 44 : undefined,
                   background: "transparent", color: "var(--t2)",
                   border: "none", padding: "6px 4px",
                   fontSize: 12, fontWeight: 500, cursor: "pointer",

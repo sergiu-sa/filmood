@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { allMoods } from "@/lib/moodMap";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import MoodTile from "@/components/mood/MoodTile";
@@ -18,6 +19,22 @@ export default function MoodPanel({ isOpen, onClose, embedded }: MoodPanelProps)
   const narrow = useMediaQuery("(max-width: 639px)");
   const medium = useMediaQuery("(max-width: 899px)");
   const columns = narrow ? 2 : medium ? 3 : 4;
+  const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
+  const rootRef = useRef<HTMLDivElement>(null);
+  const footerRef = useRef<HTMLDivElement>(null);
+
+  // A tile that focus scrolls into view must clear the pinned footer (WCAG 2.4.11).
+  // The footer grows with the reading, so its live height feeds the tiles' scroll-margin.
+  useEffect(() => {
+    const root = rootRef.current;
+    const footer = footerRef.current;
+    if (!embedded || !root || !footer) return;
+    const observer = new ResizeObserver(() => {
+      root.style.setProperty("--sheet-footer-h", `${footer.offsetHeight}px`);
+    });
+    observer.observe(footer);
+    return () => observer.disconnect();
+  }, [embedded]);
 
   const content = (
     <>
@@ -84,11 +101,12 @@ export default function MoodPanel({ isOpen, onClose, embedded }: MoodPanelProps)
       </div>
 
       <div
+        ref={footerRef}
         style={{
           borderTop: "1px solid var(--border)",
           marginTop: embedded ? "12px" : "24px",
           paddingTop: embedded ? "12px" : "22px",
-          // Pinned below the grid while the sheet's tiles scroll (§9.5).
+          // Pinned below the grid while the sheet's tiles scroll; -24px cancels BottomSheet's bottom padding.
           ...(embedded && { position: "sticky", bottom: "-24px", paddingBottom: "24px", background: "var(--surface)" }),
         }}
       >
@@ -98,7 +116,7 @@ export default function MoodPanel({ isOpen, onClose, embedded }: MoodPanelProps)
   );
 
   if (embedded) {
-    return <div>{content}</div>;
+    return <div ref={rootRef}>{content}</div>;
   }
 
   return (
@@ -109,7 +127,9 @@ export default function MoodPanel({ isOpen, onClose, embedded }: MoodPanelProps)
         maxHeight: isOpen ? "1200px" : "0",
         opacity: isOpen ? 1 : 0,
         overflow: "hidden",
-        transition: "max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s, padding 0.4s",
+        transition: reducedMotion
+          ? "none"
+          : "max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s, padding 0.4s",
         paddingBottom: isOpen ? "10px" : "0",
       }}
     >

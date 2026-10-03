@@ -39,6 +39,17 @@ describe("MoodDescribe", () => {
     expect(echo()).toHaveTextContent("Didn't recognise: robots");
   });
 
+  it("waits for a pause, not for each key", () => {
+    render(<MoodDescribe />);
+    type("fun");
+    act(() => vi.advanceTimersByTime(200));
+    type("funny");
+    act(() => vi.advanceTimersByTime(200));
+    expect(echo()).toBeEmptyDOMElement();
+    act(() => vi.advanceTimersByTime(100));
+    expect(echo()).toHaveTextContent("Need to laugh");
+  });
+
   it("says which mood a third one left out", () => {
     render(<MoodDescribe />);
     type("funny dark scary");

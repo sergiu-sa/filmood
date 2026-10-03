@@ -666,6 +666,9 @@ svg.logo-static { overflow: visible; }
 
 /* MoodTile sets --tile-*. The resting background and border are inline, hence !important. */
 .mood-tile {
+  /* --sheet-footer-h is set only in the mobile sheet; elsewhere it's unset and this computes to 0.
+     No var() fallback: the CSS build drops this declaration when it has one. */
+  scroll-margin-bottom: var(--sheet-footer-h);
   transition:
     background-color var(--t-fast),
     border-color var(--t-fast),

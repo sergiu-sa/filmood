@@ -47,12 +47,14 @@ test.describe("Home hero — guest", () => {
 });
 
 test.describe("Home hero — light mode", () => {
-  test("renders without hydration errors", async ({ page }) => {
+  test("renders without hydration errors", async ({ page, context, baseURL }) => {
     const errors: string[] = [];
     page.on("pageerror", (err) => errors.push(String(err)));
-    await page.addInitScript(() => localStorage.setItem("theme", "light"));
+    // The server reads the theme from this cookie; localStorage is only a fallback copy.
+    await context.addCookies([{ name: "theme", value: "light", url: baseURL! }]);
     await page.goto("/");
     await page.waitForLoadState("networkidle");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
     expect(errors).toEqual([]);
     await expect(page.getByText(/Play Your/i)).toBeVisible();
   });

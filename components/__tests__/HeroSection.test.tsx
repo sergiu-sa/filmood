@@ -11,8 +11,13 @@ vi.mock("@/components/AuthProvider", () => ({
 vi.mock("@/lib/getAuthToken", () => ({ getAuthHeaders: async () => ({}) }));
 
 let reducedMotion = false;
+let width = 1440;
 vi.mock("@/lib/useMediaQuery", () => ({
-  useMediaQuery: (query: string) => query.includes("reduced-motion") && reducedMotion,
+  useMediaQuery: (query: string) => {
+    if (query.includes("reduced-motion")) return reducedMotion;
+    const max = Number(/max-width: (\d+)px/.exec(query)?.[1]);
+    return width <= max;
+  },
 }));
 
 vi.mock("next/link", () => ({
@@ -55,6 +60,7 @@ describe("HeroSection", () => {
     vi.clearAllMocks();
     user = null;
     reducedMotion = false;
+    width = 1440;
   });
 
   it("links the cycling word straight to its mood's results, without announcing every swap", () => {
@@ -74,6 +80,14 @@ describe("HeroSection", () => {
       expect(screen.getByRole("link", { name })).toHaveAttribute("href", `/results?mood=${key}&src=tile`);
     }
     expect(screen.getByText(/\+ 9 more/)).toBeInTheDocument();
+  });
+
+  // Touch targets follow the dashboard's sheet breakpoint (899), though the hero's layout switches at 820.
+  it("gives the chips 44px targets below 900, not only below 820", () => {
+    width = 860;
+    render(<HeroSection />);
+    expect(screen.getByRole("link", { name: "Need to laugh" }).style.minHeight).toBe("44px");
+    expect(screen.getByRole("button", { name: /\+ 9 more/ }).style.minHeight).toBe("44px");
   });
 
   it("moves the word on, and its link with it", () => {
@@ -106,6 +120,24 @@ describe("HeroSection", () => {
   it("holds the word while it has focus", () => {
     render(<HeroSection />);
     fireEvent.focus(cycler());
+    act(() => vi.advanceTimersByTime(10_000));
+    expect(moodOf(cycler())).toBe("laugh");
+  });
+
+  it("stays held while focused after the pointer leaves", () => {
+    render(<HeroSection />);
+    fireEvent.focus(cycler());
+    fireEvent.mouseEnter(cycler());
+    fireEvent.mouseLeave(cycler());
+    act(() => vi.advanceTimersByTime(10_000));
+    expect(moodOf(cycler())).toBe("laugh");
+  });
+
+  it("stays held while pointed at after focus leaves", () => {
+    render(<HeroSection />);
+    fireEvent.mouseEnter(cycler());
+    fireEvent.focus(cycler());
+    fireEvent.blur(cycler());
     act(() => vi.advanceTimersByTime(10_000));
     expect(moodOf(cycler())).toBe("laugh");
   });

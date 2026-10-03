@@ -40,6 +40,9 @@ test.describe("Home describe field", () => {
 
   test("text with no mood word asks for one and doesn't search", async ({ page }) => {
     const requests = discoverParams(page);
+    // A push fetches the route's payload with its query at once, even if a later push supersedes it.
+    const texts: (string | null)[] = [];
+    page.on("request", (req) => texts.push(new URL(req.url()).searchParams.get("text")));
     const field = page.getByLabel("Or describe it in your own words");
     await field.fill("80s");
     await expect(page.getByRole("status")).toContainText("Add a feeling word");
@@ -47,9 +50,14 @@ test.describe("Home describe field", () => {
     await field.press("Enter");
     // aria-disabled, so Playwright won't click it unforced; a person still can.
     await page.getByRole("button", { name: "Show films" }).click({ force: true });
-    // A push would have changed the URL by the next frames.
-    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-    await expect(page).toHaveURL(/\/$/);
-    expect(requests).toHaveLength(0);
+
+    // Then search for real: nothing, not even a superseded navigation, may have asked for "80s".
+    await field.fill("funny");
+    await field.press("Enter");
+    await page.waitForURL((url) => url.pathname === "/results" && url.searchParams.has("seed"));
+    await expect(page.getByRole("heading", { level: 1, name: "Need to laugh" })).toBeVisible();
+    expect(texts).not.toContain("80s");
+    expect(requests).toHaveLength(1);
+    expect(requests[0].get("text")).toBe("funny");
   });
 });
