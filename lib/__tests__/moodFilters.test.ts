@@ -130,6 +130,18 @@ describe("applyFilters", () => {
     });
   });
 
+  // An empty with_watch_providers is not "no limit": every caller must get plain Norway instead.
+  it("never sends an empty provider list for My services with no ids", () => {
+    const p: Record<string, string> = {};
+    applyFilters(p, filters({ where: "mine", providers: [] }));
+    expect(p).toEqual({ watch_region: "NO", with_watch_monetization_types: "flatrate" });
+  });
+
+  it("reads the text's pace word as a Time", () => {
+    expect(parseFilters(sp(""), resolveMoodText("slow noir")).time).toBe("long");
+    expect(parseFilters(sp(""), resolveMoodText("quick laugh")).time).toBe("short");
+  });
+
   // TMDB reads "," as AND: a comma here would demand the text's keywords
   // *and* the mood's, instead of widening to either.
   it("ORs the text's keywords with the mood's and dedupes", () => {

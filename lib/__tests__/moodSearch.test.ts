@@ -11,6 +11,7 @@ import {
   MOOD_DISCOVER_REVALIDATE,
   RESULT_LIMIT,
   runMoodSearch,
+  searchCap,
   searchMood,
 } from "@/lib/moodSearch";
 import {
@@ -329,6 +330,14 @@ describe("runMoodSearch — blend", () => {
     });
     const result = await search(["laugh", "dark"], EMPTY_FILTERS, rng());
     expect(result.relaxed).toBe(1);
+  });
+});
+
+describe("searchCap", () => {
+  // The deck and the blend share it: one family pick caps every pool.
+  it("is family's cap when any searched mood is family, and none otherwise", () => {
+    expect(searchCap(["laugh", "family"])).toEqual({ country: "US", lte: "PG" });
+    expect(searchCap(["laugh", "dark"])).toBeUndefined();
   });
 });
 

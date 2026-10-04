@@ -39,7 +39,11 @@ export async function GET(
         status: session.status,
         created_at: session.created_at,
       },
-      participants: participants ?? [],
+      // Who has locked in, never what they picked: anyone with the code can call this.
+      participants: (participants ?? []).map(({ mood_selections, ...p }) => ({
+        ...p,
+        has_submitted: (mood_selections?.length ?? 0) > 0,
+      })),
     });
   } catch (error) {
     return internalError(error, "Failed to load session");

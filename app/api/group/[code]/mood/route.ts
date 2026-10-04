@@ -1,18 +1,19 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
-import { normalizeMoodKeys } from "@/lib/moodMap";
-import { resolveMoodText } from "@/lib/moodResolver";
-import { isEraKey, isTempoKey } from "@/lib/moodFilters";
+import { MAX_MOODS, normalizeMoodKeys } from "@/lib/moodMap";
+import { MAX_TEXT_LENGTH, resolveMoodText } from "@/lib/moodResolver";
+import { isEraKey, isTempoKey, isTimeKey, LEGACY_TEMPO_TIME } from "@/lib/moodFilters";
 import { resolveSession, resolveParticipant } from "@/lib/group-api";
 import { buildSharedDeck } from "@/lib/deck";
-import { internalError } from "@/lib/api-errors";
+import { groupProviders } from "@/lib/watchProviders";
+import { badRequest, internalError } from "@/lib/api-errors";
 import { recordMoodPicks } from "@/lib/mood-history";
-import type { EraKey, TempoKey } from "@/lib/types";
+import type { EraKey, TimeKey } from "@/lib/types";
 
 // POST /api/group/[code]/mood
-// Save a participant's private mood selections + optional free-form text,
-// era, and tempo. When all participants have submitted, build the shared
-// movie deck and transition the session to "swiping".
+// Save a participant's private mood selections (two at most) + optional
+// free-form text, era, and time. When all participants have submitted, build
+// the shared movie deck and transition the session to "swiping".
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ code: string }> },
@@ -25,50 +26,53 @@ export async function POST(
     participantId?: string;
     text?: string;
     era?: string;
+    time?: string;
+    /** Sent by the mood page before it had Time. */
     tempo?: string;
   };
 
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return badRequest("Invalid JSON");
   }
 
-  const { moods, participantId, text, era, tempo } = body;
+  const { moods, participantId, text, era, time, tempo } = body;
 
   // Validate + coerce
   const tileMoods = Array.isArray(moods)
     ? normalizeMoodKeys(moods.filter((m): m is string => typeof m === "string"))
     : [];
-  const trimmedText = typeof text === "string" ? text.trim() : "";
+  // A lock-in can't be undone, so a third tile is refused rather than dropped.
+  if (tileMoods.length > MAX_MOODS) return badRequest("Pick up to two moods.");
+  // The input's maxLength is not a security boundary.
+  const trimmedText = typeof text === "string" ? text.trim().slice(0, MAX_TEXT_LENGTH) : "";
 
-  // Resolve text → additional mood keys, keywords, era, tempo (chip values win).
+  // Resolve text → additional mood keys, keywords, era, time (explicit values win).
   const resolved = trimmedText ? resolveMoodText(trimmedText) : null;
 
-  const mergedMoodSet = new Set<string>(tileMoods);
-  resolved?.moodKeys.forEach((k) => mergedMoodSet.add(k));
-  const mergedMoods = [...mergedMoodSet];
+  // Tiles first, then the text's moods, two in all: the order discover uses.
+  const mergedMoods = [...new Set([...tileMoods, ...(resolved?.moodKeys ?? [])])].slice(0, MAX_MOODS);
 
   if (mergedMoods.length === 0) {
     const partialMatch =
       resolved !== null &&
       (resolved.era !== null ||
-        resolved.tempo !== null ||
+        resolved.time !== null ||
         resolved.keywords.length > 0);
-    return NextResponse.json(
-      {
-        error: partialMatch
-          ? "Add a feeling word — like 'funny', 'dark', or 'cozy'. Era or tempo alone isn't enough."
-          : "Pick at least one mood tile or describe your mood",
-      },
-      { status: 400 },
+    return badRequest(
+      partialMatch
+        ? "Add a feeling word — like 'funny', 'dark', or 'cozy'. A length or an era alone isn't enough."
+        : "Pick at least one mood tile or describe your mood",
     );
   }
 
   const finalEra: EraKey | null = isEraKey(era) ? era : resolved?.era ?? null;
-  const finalTempo: TempoKey | null = isTempoKey(tempo)
-    ? tempo
-    : resolved?.tempo ?? null;
+  const finalTime: TimeKey | null = isTimeKey(time)
+    ? time
+    : isTempoKey(tempo)
+      ? LEGACY_TEMPO_TIME[tempo]
+      : resolved?.time ?? null;
   const extraKeywords = resolved?.keywords ?? [];
 
   try {
@@ -104,7 +108,7 @@ export async function POST(
         mood_selections: mergedMoods,
         mood_text: trimmedText || null,
         era: finalEra,
-        tempo: finalTempo,
+        time: finalTime,
         extra_keywords: extraKeywords,
       })
       .eq("id", participant.id);
@@ -117,7 +121,7 @@ export async function POST(
     // payload for deck-building in one round-trip.
     const { data: allParticipants, error: loadErr } = await supabase
       .from("session_participants")
-      .select("mood_selections, era, tempo, extra_keywords")
+      .select("mood_selections, era, time, tempo, extra_keywords, user_id")
       .eq("session_id", session.id);
 
     // Without this guard a failed query (allParticipants === null) would slip
@@ -126,14 +130,16 @@ export async function POST(
       return internalError(loadErr, "Failed to load participants");
     }
 
-    // Record this participant's mood picks for signed-in users (guests
-    // skipped). Fire-and-forget — serverless waits for pending promises
-    // before exit, so the insert completes reliably without blocking.
-    if (user) {
-      recordMoodPicks(supabase, user.id, mergedMoods).catch((err) =>
-        console.error("mood_history insert failed", err),
+    // Signed-in users only. after() also runs when the handler fails, so it's
+    // scheduled only once the submission stands: a rolled-back pick isn't one.
+    const recordPicks = () => {
+      if (!user) return;
+      after(() =>
+        recordMoodPicks(supabase, user.id, mergedMoods).catch((err) =>
+          console.error("mood_history insert failed", err),
+        ),
       );
-    }
+    };
 
     const total = allParticipants.length;
     const submitted = allParticipants.filter(
@@ -141,6 +147,7 @@ export async function POST(
     ).length;
 
     if (submitted < total) {
+      recordPicks();
       return NextResponse.json({
         submitted: true,
         allDone: false,
@@ -151,7 +158,8 @@ export async function POST(
     // All done — build the shared deck using mood_selections plus refinements.
     let deck;
     try {
-      deck = await buildSharedDeck(allParticipants);
+      const userIds = allParticipants.flatMap((p) => p.user_id ?? []);
+      deck = await buildSharedDeck(allParticipants, await groupProviders(supabase, userIds));
     } catch (deckError) {
       // The moods above are already committed and the "already submitted"
       // guard would reject every retry, so a TMDB outage here would wedge the
@@ -195,6 +203,7 @@ export async function POST(
       return internalError(deckError, "Failed to build deck");
     }
 
+    recordPicks();
     return NextResponse.json({
       submitted: true,
       allDone: true,

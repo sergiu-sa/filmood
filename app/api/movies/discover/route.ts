@@ -1,7 +1,7 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { MAX_MOODS, moodMap, normalizeMoodKeys } from "@/lib/moodMap";
 import { MAX_TEXT_LENGTH, resolveMoodText } from "@/lib/moodResolver";
-import { isWhereKey, LEGACY_TEMPO_TIME, parseFilters, removableFilterKeys } from "@/lib/moodFilters";
+import { isWhereKey, parseFilters, removableFilterKeys } from "@/lib/moodFilters";
 import { runMoodSearch } from "@/lib/moodSearch";
 import { resolveWhere } from "@/lib/watchProviders";
 import { mulberry32, newSeed, parseSeed } from "@/lib/seededRandom";
@@ -32,11 +32,11 @@ export async function GET(request: NextRequest) {
     const partialMatch =
       resolved !== null &&
       (resolved.era !== null ||
-        resolved.tempo !== null ||
+        resolved.time !== null ||
         resolved.keywords.length > 0);
     return badRequest(
       partialMatch
-        ? "Add a feeling word — like 'funny', 'dark', or 'cozy'. Era or tempo alone isn't enough."
+        ? "Add a feeling word — like 'funny', 'dark', or 'cozy'. A length or an era alone isn't enough."
         : "Provide a mood tile or describe your mood",
     );
   }
@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
             text,
             moods: textKeys,
             era: resolved.era,
-            time: resolved.tempo ? LEGACY_TEMPO_TIME[resolved.tempo] : null,
+            time: resolved.time,
             unmatched: resolved.unmatched,
           }
         : null,

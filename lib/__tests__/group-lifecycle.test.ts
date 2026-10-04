@@ -209,6 +209,28 @@ describe("GET /api/group/[code]", () => {
     expect(json.session.code).toBe("ABC123");
     expect(json.participants).toHaveLength(1);
   });
+
+  // Anyone with the code can call this, and the mood page promises picks are private.
+  it("says who has locked in, never what they picked", async () => {
+    const session = { id: "s-1", code: "ABC123", host_id: "user-1", status: "mood", created_at: new Date().toISOString() };
+    const participants = [
+      { id: "p-1", nickname: "Sergiu", user_id: "user-1", mood_selections: ["laugh"] },
+      { id: "p-2", nickname: "Guest", user_id: null, mood_selections: null },
+      { id: "p-3", nickname: "Late", user_id: null, mood_selections: [] },
+    ];
+    mockGetSupabaseAdmin.mockReturnValue(
+      createMockSupabase([
+        { data: session, error: null },
+        { data: participants, error: null },
+      ]),
+    );
+
+    const req = mockRequest("GET", "/api/group/ABC123");
+    const { json } = await readResponse(await getSession(req, routeParams("ABC123")));
+    expect(json.participants.map((p: { has_submitted: boolean }) => p.has_submitted)).toEqual([true, false, false]);
+    for (const p of json.participants) expect(p).not.toHaveProperty("mood_selections");
+    expect(json.participants[0]).toMatchObject({ id: "p-1", nickname: "Sergiu", user_id: "user-1" });
+  });
 });
 
 // ─── POST /api/group/[code]/ready ───────────────────

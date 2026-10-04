@@ -47,7 +47,7 @@ export interface MoodConfig {
 }
 
 export type EraKey = "classic" | "modern" | "fresh";
-/** Legacy: old links and the group flow still send it; both are read as a Time (`LEGACY_TEMPO_TIME`). */
+/** Legacy: old shared links, and participants who locked in before migration 010; both are read as a Time (`LEGACY_TEMPO_TIME`). */
 export type TempoKey = "slowburn" | "fastpaced";
 export type TimeKey = "short" | "medium" | "long";
 export type WhereKey = "mine" | "norway" | "any";
@@ -246,8 +246,10 @@ export interface SessionParticipant {
   mood_text: string | null;
   /** "classic" | "modern" | "fresh" — see EraKey. Nullable. */
   era: EraKey | null;
-  /** "slowburn" | "fastpaced" — see TempoKey. Nullable. */
+  /** "slowburn" | "fastpaced" — see TempoKey. No longer written; set only on pre-010 rows. */
   tempo: TempoKey | null;
+  /** "short" | "medium" | "long" — see TimeKey. Nullable. */
+  time: TimeKey | null;
   /** TMDB keyword IDs resolved from mood_text. Default []. */
   extra_keywords: number[];
 }

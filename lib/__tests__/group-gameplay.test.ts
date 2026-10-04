@@ -20,6 +20,28 @@ vi.mock("@/lib/deck", () => ({
   buildSharedDeck: (...args: unknown[]) => mockBuildSharedDeck(...args),
 }));
 
+const mockGroupProviders = vi.fn();
+
+vi.mock("@/lib/watchProviders", () => ({
+  groupProviders: (...args: unknown[]) => mockGroupProviders(...args),
+}));
+
+const mockRecordMoodPicks = vi.fn();
+
+vi.mock("@/lib/mood-history", () => ({
+  recordMoodPicks: (...args: unknown[]) => mockRecordMoodPicks(...args),
+}));
+
+// Next runs after() callbacks once the response is sent; tests run them by hand.
+const afterCallbacks: (() => unknown)[] = [];
+
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  after: (callback: () => unknown) => {
+    afterCallbacks.push(callback);
+  },
+}));
+
 const defaultDeck = [
   { id: 1, title: "Film 1", poster_path: "/p1.jpg", release_date: "2025-01-01", vote_average: 7.5, overview: "Overview", genre_ids: [35], mood_keys: ["laugh"] },
   { id: 2, title: "Film 2", poster_path: "/p2.jpg", release_date: "2025-01-01", vote_average: 8.0, overview: "Overview", genre_ids: [18], mood_keys: ["cry"] },
@@ -43,7 +65,119 @@ const fakeDeck = [
 describe("POST /api/group/[code]/mood", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    afterCallbacks.length = 0;
     mockBuildSharedDeck.mockResolvedValue(defaultDeck);
+    mockGroupProviders.mockResolvedValue([]);
+    mockRecordMoodPicks.mockResolvedValue(1);
+  });
+
+  const inMood = { data: { id: "s-1", status: "mood", created_at: new Date().toISOString() }, error: null };
+  const notSubmitted = { data: { id: "p-1", mood_selections: null }, error: null };
+  const ok = { data: null, error: null };
+
+  // Session, participant, the update, everyone's picks; then, if the deck fails, the status re-read and the rollback.
+  async function lockIn(body: Record<string, unknown>, everyone: unknown[] = [{ mood_selections: ["laugh"] }, { mood_selections: null }]) {
+    const supabase = createMockSupabase([inMood, notSubmitted, ok, { data: everyone, error: null }, { data: { status: "mood" }, error: null }, ok]);
+    mockGetSupabaseAdmin.mockReturnValue(supabase);
+    const req = mockRequest("POST", "/api/group/ABC123/mood", body);
+    const res = await readResponse(await submitMood(req, routeParams("ABC123")));
+    const update = supabase.from.mock.results[2].value.update.mock.calls[0]?.[0];
+    return { ...res, supabase, update };
+  }
+
+  it("refuses more than two tile moods, before touching the database", async () => {
+    mockGetAuthUser.mockResolvedValue(mockUser);
+    const supabase = createMockSupabase([]);
+    mockGetSupabaseAdmin.mockReturnValue(supabase);
+    const req = mockRequest("POST", "/api/group/ABC123/mood", { moods: ["laugh", "cry", "dark"] });
+    expect(await readResponse(await submitMood(req, routeParams("ABC123")))).toEqual({
+      status: 400,
+      json: { error: "Pick up to two moods." },
+    });
+    expect(supabase.from).not.toHaveBeenCalled();
+  });
+
+  // Discover's order: tiles first, then the text's moods, two in all.
+  it("keeps the tile first when the text adds more moods", async () => {
+    mockGetAuthUser.mockResolvedValue(mockUser);
+    const { status, update } = await lockIn({ moods: ["cry"], text: "funny dark" });
+    expect(status).toBe(200);
+    expect(update.mood_selections).toEqual(["cry", "laugh"]);
+  });
+
+  it.each([
+    [{ time: "medium" }, "medium"],
+    [{ tempo: "slowburn" }, "long"],
+    [{ tempo: "fastpaced" }, "short"],
+    [{ time: "short", tempo: "slowburn" }, "short"],
+    [{ text: "slow burn" }, "long"],
+    [{ time: "medium", text: "slow burn" }, "medium"],
+    [{ time: "constructor" }, null],
+    [{}, null],
+  ])("stores time %o as %s, and never a tempo", async (extra, time) => {
+    mockGetAuthUser.mockResolvedValue(mockUser);
+    const { update } = await lockIn({ moods: ["laugh"], ...extra });
+    expect(update.time).toBe(time);
+    expect(update).not.toHaveProperty("tempo");
+  });
+
+  it("stores at most 120 characters of text", async () => {
+    mockGetAuthUser.mockResolvedValue(mockUser);
+    const { update } = await lockIn({ moods: ["laugh"], text: `funny ${"x".repeat(200)}` });
+    expect(update.mood_text).toHaveLength(120);
+  });
+
+  it("asks for a feeling word when the text only set a length or an era", async () => {
+    mockGetAuthUser.mockResolvedValue(mockUser);
+    const req = mockRequest("POST", "/api/group/ABC123/mood", { text: "80s" });
+    expect(await readResponse(await submitMood(req, routeParams("ABC123")))).toEqual({
+      status: 400,
+      json: { error: "Add a feeling word — like 'funny', 'dark', or 'cozy'. A length or an era alone isn't enough." },
+    });
+  });
+
+  it("records a signed-in participant's stored moods after the response", async () => {
+    mockGetAuthUser.mockResolvedValue(mockUser);
+    const { json, supabase } = await lockIn({ moods: ["cry"], text: "funny dark" });
+    expect(json.allDone).toBe(false);
+    expect(mockRecordMoodPicks).not.toHaveBeenCalled();
+    expect(afterCallbacks).toHaveLength(1);
+    await afterCallbacks[0]();
+    expect(mockRecordMoodPicks).toHaveBeenCalledWith(supabase, "user-1", ["cry", "laugh"]);
+  });
+
+  it("records nothing for a guest", async () => {
+    mockGetAuthUser.mockResolvedValue(null);
+    const { status } = await lockIn({ moods: ["laugh"], participantId: "p-1" });
+    expect(status).toBe(200);
+    expect(afterCallbacks).toHaveLength(0);
+  });
+
+  it("builds the deck on the signed-in participants' services", async () => {
+    mockGetAuthUser.mockResolvedValue(mockUser);
+    mockGroupProviders.mockResolvedValue([8, 76]);
+    const everyone = [
+      { mood_selections: ["laugh"], user_id: "user-1" },
+      { mood_selections: ["cry"], user_id: null },
+      { mood_selections: ["dark"], user_id: "user-2" },
+    ];
+    const { json, supabase } = await lockIn({ moods: ["laugh"] }, everyone);
+    expect(json.allDone).toBe(true);
+    expect(mockGroupProviders).toHaveBeenCalledWith(supabase, ["user-1", "user-2"]);
+    expect(mockBuildSharedDeck).toHaveBeenCalledWith(everyone, [8, 76]);
+    expect(afterCallbacks).toHaveLength(1);
+  });
+
+  // Like a TMDB outage: the form comes back and a retry reads the services again.
+  it("rolls the submission back when the services can't be read", async () => {
+    mockGetAuthUser.mockResolvedValue(mockUser);
+    mockGroupProviders.mockRejectedValue(new Error("permission denied"));
+    const { status, supabase } = await lockIn({ moods: ["laugh"] }, [{ mood_selections: ["laugh"] }, { mood_selections: ["cry"] }]);
+    expect(status).toBe(500);
+    expect(mockBuildSharedDeck).not.toHaveBeenCalled();
+    const rollback = supabase.from.mock.results[5].value.update.mock.calls[0][0];
+    expect(rollback).toEqual({ mood_selections: null });
+    expect(afterCallbacks).toHaveLength(0);
   });
 
   it("returns 400 when moods array is empty", async () => {
@@ -131,8 +265,6 @@ describe("POST /api/group/[code]/mood", () => {
       { data: { id: "p-1", mood_selections: null }, error: null },
       { data: null, error: null },
       { data: [{ mood_selections: ["laugh"] }, { mood_selections: ["cry"] }], error: null },
-      // recordMoodPicks fires here (authenticated caller) and consumes a slot.
-      { data: null, error: null },
       // The rollback re-reads the session first, so it only fires while the
       // session is still in "mood" and a concurrent submitter hasn't moved on.
       { data: { status: "mood" }, error: null },
@@ -151,6 +283,8 @@ describe("POST /api/group/[code]/mood", () => {
       (c: unknown[]) => c[0] === "session_participants",
     );
     expect(participantWrites).toHaveLength(4);
+    // A rolled-back submission isn't a pick; the retry would record it twice.
+    expect(afterCallbacks).toHaveLength(0);
   });
 });
 

@@ -1,9 +1,9 @@
 import { normalizeMoodKeys } from "@/lib/moodMap";
 import { EMPTY_FILTERS, LEGACY_TEMPO_TIME, type Filters } from "@/lib/moodFilters";
-import { searchMood } from "@/lib/moodSearch";
+import { searchCap, searchMood } from "@/lib/moodSearch";
 import { mulberry32, newSeed } from "@/lib/seededRandom";
 import { settleTMDB } from "@/lib/tmdb-fetch";
-import type { DeckFilm, EraKey, TempoKey } from "@/lib/types";
+import type { DeckFilm, EraKey, TempoKey, TimeKey } from "@/lib/types";
 
 const DECK_SIZE = 15;
 // Cap how many text-derived keyword IDs we union across the group: they're ORed
@@ -13,6 +13,8 @@ const MAX_SHARED_EXTRA_KEYWORDS = 3;
 interface ParticipantInput {
   mood_selections: string[] | null;
   era?: EraKey | null;
+  time?: TimeKey | null;
+  /** Participants who locked in before migration 010. */
   tempo?: TempoKey | null;
   extra_keywords?: number[] | null;
 }
@@ -47,11 +49,14 @@ function topKeywords(participants: ParticipantInput[], limit: number): number[] 
 /**
  * Aggregate all participants' moods with weighted frequency, fetch films
  * from TMDB, and build a balanced deck. Each film is tagged with genre_ids
- * and the mood(s) it was sourced from. Era, tempo, and text-derived keywords
- * are applied on top via majority vote (era/tempo) and capped union (keywords).
+ * and the mood(s) it was sourced from. Era and Time are majority votes,
+ * text-derived keywords a capped union, Where the group's saved services
+ * (else Norway), and one family pick caps every pool.
  */
 export async function buildSharedDeck(
   participants: ParticipantInput[],
+  /** The group's saved services as TMDB ids (`groupProviders`); none means Norway. */
+  providers: number[] = [],
 ): Promise<DeckFilm[]> {
   // Looks redundant with tmdbJson's own check, but isn't: a participant list with no moods never reaches a fetch, so without this a keyless deploy would return an empty deck instead of failing.
   if (!process.env.TMDB_API_KEY) {
@@ -104,20 +109,21 @@ export async function buildSharedDeck(
     allocated++;
   }
 
-  // Aggregate group filters. Participants still store a tempo, read as a Time.
-  const tempo = majorityVote(participants.map((p) => p.tempo ?? null));
   const groupFilters: Filters = {
     ...EMPTY_FILTERS,
     era: majorityVote(participants.map((p) => p.era ?? null)),
-    time: tempo ? LEGACY_TEMPO_TIME[tempo] : null,
+    time: majorityVote(participants.map((p) => p.time ?? (p.tempo ? LEGACY_TEMPO_TIME[p.tempo] : null))),
+    where: providers.length > 0 ? "mine" : "norway",
+    providers,
     extraKeywords: topKeywords(participants, MAX_SHARED_EXTRA_KEYWORDS),
   };
+  const cap = searchCap(Object.keys(moodCounts));
   // A deck is built once and stored, so it needs no reproducible seed.
   const rng = mulberry32(newSeed());
 
   // Search each unique mood in parallel, on the same ladder as solo results.
   const fetchResults = allocations.map(async ({ mood, count }) => {
-    const pool = await searchMood(mood, groupFilters, rng);
+    const pool = await searchMood(mood, groupFilters, rng, cap);
     const results: DeckFilm[] = pool.films.map(
       (r) => ({
         id: r.id,
@@ -191,6 +197,9 @@ export async function buildSharedDeck(
       }
     }
   }
+
+  // An empty deck rolls the last lock-in back, and every retry would hit the same one.
+  if (deck.length === 0 && providers.length > 0 && !firstRejection) return buildSharedDeck(participants);
 
   // The guard that matters is emptiness, not rejection count. An over-
   // constrained query answers 200 {results: []} for every mood, so nothing

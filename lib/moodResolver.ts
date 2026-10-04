@@ -1,11 +1,11 @@
 // Resolves a free-form user description into structured mood signals.
 // Pure: the discover route and the home describe field both run it. Deterministic,
 // no network or LLM — a static synonym table matches unigrams and bigrams against
-// mood keys, TMDB keyword IDs, era, and tempo.
+// mood keys, TMDB keyword IDs, era, and time.
 
 import { moodMap } from "@/lib/moodMap";
 import { TMDB_KEYWORDS } from "@/lib/tmdbKeywords";
-import type { EraKey, TempoKey } from "@/lib/types";
+import type { EraKey, TimeKey } from "@/lib/types";
 
 /** Longest free text the search reads; the inputs' maxLength and the route's slice share it. */
 export const MAX_TEXT_LENGTH = 120;
@@ -14,7 +14,7 @@ interface SynonymEntry {
   moods?: string[];
   keywords?: number[];
   era?: EraKey;
-  tempo?: TempoKey;
+  time?: TimeKey;
 }
 
 // Keyed by lowercase unigram or bigram. Kept compact and curated — for long-tail
@@ -114,16 +114,16 @@ export const SYNONYMS: Record<string, SynonymEntry> = {
   new: { era: "fresh" },
   fresh: { era: "fresh" },
 
-  // Tempo
-  slow: { tempo: "slowburn" },
-  slowburn: { tempo: "slowburn" },
-  "slow burn": { tempo: "slowburn" },
-  meditative: { tempo: "slowburn", moods: ["mindbending"] },
+  // Time
+  slow: { time: "long" },
+  slowburn: { time: "long" },
+  "slow burn": { time: "long" },
+  meditative: { time: "long", moods: ["mindbending"] },
 
-  fast: { tempo: "fastpaced" },
-  "fast paced": { tempo: "fastpaced" },
-  quick: { tempo: "fastpaced" },
-  snappy: { tempo: "fastpaced" },
+  fast: { time: "short" },
+  "fast paced": { time: "short" },
+  quick: { time: "short" },
+  snappy: { time: "short" },
 };
 
 // Filler words that carry no mood, so they never count as unmatched.
@@ -136,7 +136,7 @@ export interface ResolvedMoodText {
   moodKeys: string[];
   keywords: number[];
   era: EraKey | null;
-  tempo: TempoKey | null;
+  time: TimeKey | null;
   /** Meaningful words that matched nothing, so the echo can say what it couldn't read. */
   unmatched: string[];
   /** True if anything matched. Callers can show a "couldn't find a match" nudge otherwise. */
@@ -156,7 +156,7 @@ export function resolveMoodText(text: string): ResolvedMoodText {
   const moodSet = new Set<string>();
   const kwSet = new Set<number>();
   let era: EraKey | null = null;
-  let tempo: TempoKey | null = null;
+  let time: TimeKey | null = null;
   const matchedBigrams = new Set<number>();
 
   const consume = (key: string, bigramStart?: number): boolean => {
@@ -168,7 +168,7 @@ export function resolveMoodText(text: string): ResolvedMoodText {
     });
     entry.keywords?.forEach((k) => kwSet.add(k));
     if (entry.era && !era) era = entry.era;
-    if (entry.tempo && !tempo) tempo = entry.tempo;
+    if (entry.time && !time) time = entry.time;
     if (bigramStart !== undefined) {
       matchedBigrams.add(bigramStart);
       matchedBigrams.add(bigramStart + 1);
@@ -190,9 +190,9 @@ export function resolveMoodText(text: string): ResolvedMoodText {
     moodKeys,
     keywords,
     era,
-    tempo,
+    time,
     unmatched: [...unmatched],
     matched:
-      moodKeys.length > 0 || keywords.length > 0 || era !== null || tempo !== null,
+      moodKeys.length > 0 || keywords.length > 0 || era !== null || time !== null,
   };
 }

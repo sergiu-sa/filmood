@@ -232,6 +232,125 @@ describe("buildSharedDeck", () => {
     expect(sent.get("with_runtime.gte")).toBe("60");
   });
 
+  const sentParams = (spy: ReturnType<typeof vi.fn>) =>
+    spy.mock.calls.map(([url]) => new URL(url as string).searchParams);
+  const fullTMDB = () =>
+    vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(fakeTMDBResponse(20)) });
+
+  describe("Time", () => {
+    // Participants who locked in before migration 010 only stored a tempo.
+    it("votes over time, reading a stored tempo as a Time", async () => {
+      const spy = fullTMDB();
+      global.fetch = spy;
+      await buildSharedDeck([
+        { mood_selections: ["laugh"], time: "long" },
+        { mood_selections: ["laugh"], time: "long" },
+        { mood_selections: ["laugh"], tempo: "fastpaced" },
+      ]);
+      expect(sentParams(spy)[0].get("with_runtime.gte")).toBe("140");
+      expect(sentParams(spy)[0].has("with_runtime.lte")).toBe(false);
+    });
+
+    it("lets a participant's time beat their own stored tempo", async () => {
+      const spy = fullTMDB();
+      global.fetch = spy;
+      await buildSharedDeck([{ mood_selections: ["laugh"], time: "short", tempo: "slowburn" }]);
+      expect(sentParams(spy)[0].get("with_runtime.lte")).toBe("100");
+      expect(sentParams(spy)[0].get("with_runtime.gte")).toBe("60");
+    });
+
+    it("sets no length on a tie", async () => {
+      const spy = fullTMDB();
+      global.fetch = spy;
+      await buildSharedDeck([
+        { mood_selections: ["laugh"], time: "long" },
+        { mood_selections: ["laugh"], tempo: "fastpaced" },
+      ]);
+      expect(sentParams(spy)[0].get("with_runtime.gte")).toBe("60");
+      expect(sentParams(spy)[0].has("with_runtime.lte")).toBe(false);
+    });
+
+    it("reads medium as Under 2 hours", async () => {
+      const spy = fullTMDB();
+      global.fetch = spy;
+      await buildSharedDeck([{ mood_selections: ["laugh"], time: "medium" }]);
+      expect(sentParams(spy)[0].get("with_runtime.lte")).toBe("120");
+    });
+  });
+
+  describe("Where", () => {
+    it("limits every call to the group's services in Norway", async () => {
+      const spy = fullTMDB();
+      global.fetch = spy;
+      await buildSharedDeck([{ mood_selections: ["laugh"] }, { mood_selections: ["cry"] }], [8, 76]);
+      for (const sent of sentParams(spy)) {
+        expect(sent.get("with_watch_providers")).toBe("8|76");
+        expect(sent.get("watch_region")).toBe("NO");
+        expect(sent.get("with_watch_monetization_types")).toBe("flatrate");
+      }
+    });
+
+    it("uses plain Norway streaming when nobody saved a service", async () => {
+      const spy = fullTMDB();
+      global.fetch = spy;
+      await buildSharedDeck([{ mood_selections: ["laugh"] }], []);
+      for (const sent of sentParams(spy)) {
+        expect(sent.has("with_watch_providers")).toBe(false);
+        expect(sent.get("watch_region")).toBe("NO");
+      }
+    });
+
+    // An empty deck rolls the last lock-in back, and a retry would hit the same one.
+    it("falls back to Norway streaming when the group's services hold nothing", async () => {
+      const spy = vi.fn().mockImplementation((url: string) => {
+        const onServices = new URL(url).searchParams.has("with_watch_providers");
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(onServices ? { results: [] } : fakeTMDBResponse(20)),
+        });
+      });
+      global.fetch = spy;
+
+      const result = await buildSharedDeck([{ mood_selections: ["laugh"] }], [431]);
+
+      expect(result).toHaveLength(15);
+      const sent = sentParams(spy);
+      expect(sent[0].get("with_watch_providers")).toBe("431");
+      expect(sent.at(-1)!.has("with_watch_providers")).toBe(false);
+    });
+
+    it("doesn't retry an outage on Norway", async () => {
+      const spy = vi.fn().mockResolvedValue({ ok: false, status: 429, json: () => Promise.reject(new Error("x")) });
+      global.fetch = spy;
+
+      await expect(buildSharedDeck([{ mood_selections: ["laugh"] }], [8])).rejects.toThrow();
+      for (const sent of sentParams(spy)) expect(sent.get("with_watch_providers")).toBe("8");
+    });
+  });
+
+  describe("certification cap", () => {
+    // Picking "Everyone's watching" means kids are watching, so it caps the whole deck.
+    it("caps every mood's pool when anyone picks family", async () => {
+      const spy = fullTMDB();
+      global.fetch = spy;
+      await buildSharedDeck([{ mood_selections: ["laugh"] }, { mood_selections: ["dark", "family"] }]);
+      const sent = sentParams(spy);
+      expect(sent.some((p) => p.get("with_genres") === "35")).toBe(true);
+      for (const p of sent) {
+        expect(p.get("certification_country")).toBe("US");
+        expect(p.get("certification.gte")).toBe("G");
+        expect(p.get("certification.lte")).toBe("PG");
+      }
+    });
+
+    it("caps nothing when nobody picks family", async () => {
+      const spy = fullTMDB();
+      global.fetch = spy;
+      await buildSharedDeck([{ mood_selections: ["laugh"] }, { mood_selections: ["cry"] }]);
+      for (const p of sentParams(spy)) expect(p.has("certification_country")).toBe(false);
+    });
+  });
+
   // The deck shares the solo ladder: a thin mood loosens instead of starving its slots.
   it("climbs a tier for a thin mood, on hour-cached calls", async () => {
     const spy = vi.fn().mockImplementation((url: string) => {

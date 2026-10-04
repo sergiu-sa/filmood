@@ -4,7 +4,7 @@ import { useId, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/ui/Icon";
 import { ACCENT_VARS } from "@/lib/constants";
-import { ERA_OPTIONS, LEGACY_TEMPO_TIME, TIME_OPTIONS } from "@/lib/moodFilters";
+import { ERA_OPTIONS, TIME_OPTIONS } from "@/lib/moodFilters";
 import { MAX_MOODS, moodMap } from "@/lib/moodMap";
 import { MAX_TEXT_LENGTH, resolveMoodText } from "@/lib/moodResolver";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
@@ -106,11 +106,9 @@ function Reading({ text }: { text: string }) {
   const r = resolveMoodText(text);
   const moods = r.moodKeys.slice(0, MAX_MOODS);
   const dropped = r.moodKeys.slice(MAX_MOODS);
-  // The resolver still says tempo; the route reads it as a Time the same way.
-  const time = r.tempo ? LEGACY_TEMPO_TIME[r.tempo] : null;
   const filters = [
     r.era && ERA_OPTIONS.find((o) => o.value === r.era)?.label,
-    time && TIME_OPTIONS.find((o) => o.value === time)?.label,
+    r.time && TIME_OPTIONS.find((o) => o.value === r.time)?.label,
   ].filter((l): l is string => !!l);
 
   if (moods.length === 0) {

@@ -89,23 +89,23 @@ export default function GroupMoodPage() {
 
       // Map participants to progress
       const progress: ParticipantProgress[] = data.participants.map(
-        (p: { id: string; nickname: string; mood_selections: string[] | null }) => ({
+        (p: { id: string; nickname: string; has_submitted: boolean }) => ({
           id: p.id,
           nickname: p.nickname,
-          hasSubmitted: p.mood_selections !== null && p.mood_selections.length > 0,
+          hasSubmitted: p.has_submitted,
         }),
       );
       setParticipants(progress);
 
       // Check if current user already submitted
       const self = data.participants.find(
-        (p: { user_id: string | null; id: string; mood_selections: string[] | null }) => {
+        (p: { user_id: string | null; id: string; has_submitted: boolean }) => {
           if (user) return p.user_id === user.id;
           return p.id === participantId;
         },
       );
 
-      if (self?.mood_selections && self.mood_selections.length > 0) {
+      if (self?.has_submitted) {
         setPhase((prev) => prev === "building" ? prev : "waiting");
       }
     } catch {

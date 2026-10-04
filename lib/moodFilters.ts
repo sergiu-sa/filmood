@@ -96,7 +96,7 @@ export function parseFilters(sp: URLSearchParams, resolved: ResolvedMoodText | n
     time:
       sp.get("time") === ANY
         ? null
-        : timeFromParams(sp) ?? (resolved?.tempo ? LEGACY_TEMPO_TIME[resolved.tempo] : null),
+        : timeFromParams(sp) ?? resolved?.time ?? null,
     era: era === ANY ? null : isEraKey(era) ? era : resolved?.era ?? null,
     where: isWhereKey(where) ? where : EMPTY_FILTERS.where,
     extraKeywords: resolved?.keywords ?? [],
@@ -169,7 +169,8 @@ export function applyFilters(params: Record<string, string>, f: Filters): void {
     params.with_watch_monetization_types = "flatrate";
   }
   // Pipe-joined: TMDB reads "," as AND, which would demand every service at once.
-  if (f.where === "mine") params.with_watch_providers = f.providers.join("|");
+  // With no ids, "mine" is plain Norway: an empty param isn't "no limit".
+  if (f.where === "mine" && f.providers.length > 0) params.with_watch_providers = f.providers.join("|");
 
   mergeExtraKeywords(params, f.extraKeywords);
 }
