@@ -10,7 +10,6 @@ export const moodMap: Record<string, MoodConfig> = {
   laugh: {
     key: "laugh",
     tagLabel: "Need to laugh",
-    label: "Laugh until it hurts",
     description: "Big laughs, zero homework",
     accentColor: "gold",
     genres: [35],
@@ -25,7 +24,6 @@ export const moodMap: Record<string, MoodConfig> = {
   easy: {
     key: "easy",
     tagLabel: "Need a hug",
-    label: "Warm & familiar",
     description: "Warm, gentle, comforting",
     accentColor: "teal",
     genres: [35, 18, 10749],
@@ -43,7 +41,6 @@ export const moodMap: Record<string, MoodConfig> = {
   family: {
     key: "family",
     tagLabel: "Everyone's watching",
-    label: "Watch with family",
     description: "Works for kids and grown-ups",
     accentColor: "teal",
     genres: [10751],
@@ -57,7 +54,6 @@ export const moodMap: Record<string, MoodConfig> = {
   datenight: {
     key: "datenight",
     tagLabel: "Date night",
-    label: "Easy-watch together",
     description: "Romance with a light touch",
     accentColor: "rose",
     genres: [10749],
@@ -72,7 +68,6 @@ export const moodMap: Record<string, MoodConfig> = {
   cry: {
     key: "cry",
     tagLabel: "Need to let it out",
-    label: "A good cry",
     description: "Moving, cathartic, beautiful",
     accentColor: "blue",
     genres: [18],
@@ -90,7 +85,6 @@ export const moodMap: Record<string, MoodConfig> = {
   nostalgic: {
     key: "nostalgic",
     tagLabel: "Take me back",
-    label: "Wistful & nostalgic",
     description: "Coming-of-age, tender memories",
     accentColor: "rose",
     genres: [],
@@ -107,7 +101,6 @@ export const moodMap: Record<string, MoodConfig> = {
   inspiring: {
     key: "inspiring",
     tagLabel: "Want to dream",
-    label: "Something inspiring",
     description: "Stories that lift you up",
     accentColor: "gold",
     genres: [18, 36],
@@ -122,7 +115,6 @@ export const moodMap: Record<string, MoodConfig> = {
   thrilling: {
     key: "thrilling",
     tagLabel: "Need a rush",
-    label: "Pure adrenaline",
     description: "Non-stop, high octane",
     accentColor: "ember",
     genres: [28],
@@ -136,7 +128,6 @@ export const moodMap: Record<string, MoodConfig> = {
   unsettled: {
     key: "unsettled",
     tagLabel: "Feel uneasy",
-    label: "Slow-burn tension",
     description: "Slow tension under the skin",
     accentColor: "violet",
     genres: [53, 27, 9648],
@@ -151,7 +142,6 @@ export const moodMap: Record<string, MoodConfig> = {
   dark: {
     key: "dark",
     tagLabel: "Go dark",
-    label: "Cold, gritty, bleak",
     description: "Crime, noir, moral grey",
     accentColor: "ember",
     genres: [80],
@@ -167,7 +157,6 @@ export const moodMap: Record<string, MoodConfig> = {
   mindbending: {
     key: "mindbending",
     tagLabel: "Bend my mind",
-    label: "Reality-shifting puzzles",
     description: "Twists, puzzles, the surreal",
     accentColor: "violet",
     genres: [878, 9648, 53, 14],
@@ -188,7 +177,6 @@ export const moodMap: Record<string, MoodConfig> = {
   escape: {
     key: "escape",
     tagLabel: "Want to disappear",
-    label: "Sweeping visuals await",
     description: "Other worlds, sweeping scale",
     accentColor: "blue",
     genres: [14, 12, 878],

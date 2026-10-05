@@ -7,7 +7,7 @@ import FilterGroup from "@/components/mood/FilterGroup";
 import ServicesPicker, { PICKER_TITLE } from "@/components/results/ServicesPicker";
 import Icon from "@/components/ui/Icon";
 import { filmCount, filmWord } from "@/lib/filmCount";
-import { ANY_LABELS, ERA_OPTIONS, setFilterParam, TIME_OPTIONS, WHERE_OPTIONS, type FilterKey } from "@/lib/moodFilters";
+import { LONG_OPTIONS, SHORT_OPTIONS, setFilterParam, type FilterKey } from "@/lib/moodFilters";
 import { parseServices, platformsFor, type PlatformSlug } from "@/lib/platforms";
 import { newSeed } from "@/lib/seededRandom";
 import { useDismiss } from "@/lib/useDismiss";
@@ -31,21 +31,6 @@ const SHEET_TITLES: Record<FilterKey, string> = {
   time: "How much time?",
   era: "Which era?",
   where: "Where can you watch?",
-};
-
-const SHORT = {
-  time: [{ value: null, label: "Any" }, ...TIME_OPTIONS.map((o) => ({ value: o.value, label: o.short }))],
-  era: [{ value: null, label: "Any" }, ...ERA_OPTIONS.map((o) => ({ value: o.value, label: o.short }))],
-  where: WHERE_OPTIONS.map((o) => ({ value: o.value, label: o.short })),
-};
-
-const LONG = {
-  time: [
-    { value: null, label: ANY_LABELS.time },
-    ...TIME_OPTIONS.map((o) => ({ value: o.value, label: o.label, hint: o.hint })),
-  ],
-  era: [{ value: null, label: ANY_LABELS.era }, ...ERA_OPTIONS.map((o) => ({ value: o.value, label: o.label }))],
-  where: WHERE_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
 };
 
 const serviceList = new Intl.ListFormat("en-GB", { type: "conjunction" });
@@ -169,7 +154,7 @@ export default function FilterBar({ filters, count, busy }: FilterBarProps) {
     const closeSheet = () => setSheet((s) => ({ ...s, open: false }));
     const chip = (key: FilterKey) => {
       const value = shown(key);
-      const label = SHORT[key].find((o) => o.value === value)?.label ?? "Any";
+      const label = SHORT_OPTIONS[key].find((o) => o.value === value)?.label ?? "Any";
       return (
         <button
           key={key}
@@ -312,7 +297,7 @@ export default function FilterBar({ filters, count, busy }: FilterBarProps) {
                 label={SHEET_TITLES[kind]}
                 hideLabel
                 orientation="vertical"
-                options={LONG[kind]}
+                options={LONG_OPTIONS[kind]}
                 value={shown(kind)}
                 onChange={(value) => choose(kind, value)}
               />
@@ -362,12 +347,12 @@ export default function FilterBar({ filters, count, busy }: FilterBarProps) {
           boxShadow: "0 10px 30px var(--overlay-weak)",
         }}
       >
-        <FilterGroup label="Time" options={SHORT.time} value={shown("time")} onChange={(v) => choose("time", v)} />
-        <FilterGroup label="Era" options={SHORT.era} value={shown("era")} onChange={(v) => choose("era", v)} />
+        <FilterGroup label="Time" options={SHORT_OPTIONS.time} value={shown("time")} onChange={(v) => choose("time", v)} />
+        <FilterGroup label="Era" options={SHORT_OPTIONS.era} value={shown("era")} onChange={(v) => choose("era", v)} />
         <div ref={whereRef} style={{ position: "relative" }}>
           <FilterGroup
             label="Where"
-            options={SHORT.where.map((o) => (o.value === "mine" && pickerOpen ? { ...o, controls: PICKER_ID } : o))}
+            options={SHORT_OPTIONS.where.map((o) => (o.value === "mine" && pickerOpen ? { ...o, controls: PICKER_ID } : o))}
             value={shown("where")}
             onChange={(v) => choose("where", v)}
           />

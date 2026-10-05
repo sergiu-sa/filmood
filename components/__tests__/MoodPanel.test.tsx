@@ -40,7 +40,6 @@ vi.stubGlobal("ResizeObserver", FakeResizeObserver);
 
 const onClose = vi.fn();
 const tileName = (m: (typeof allMoods)[number]) => `${m.tagLabel} — ${m.description}`;
-const grid = () => screen.getAllByRole("link")[0].parentElement!;
 
 describe("MoodPanel", () => {
   afterEach(() => {
@@ -85,19 +84,6 @@ describe("MoodPanel", () => {
     expect(screen.queryByText(/selected/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Slow-burn" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Before 1990" })).not.toBeInTheDocument();
-  });
-
-  it.each([
-    [1440, 4],
-    [900, 4],
-    [899, 3],
-    [640, 3],
-    [639, 2],
-    [390, 2],
-  ])("at %ipx the grid has %i columns", (w, columns) => {
-    width = w;
-    render(<MoodPanel isOpen onClose={onClose} />);
-    expect(grid().style.gridTemplateColumns).toBe(`repeat(${columns}, minmax(0, 1fr))`);
   });
 
   // Collapsed, it's only hidden visually; inert takes its tiles out of the Tab order.

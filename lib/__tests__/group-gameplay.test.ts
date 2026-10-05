@@ -113,8 +113,8 @@ describe("POST /api/group/[code]/mood", () => {
 
   it.each([
     [{ time: "medium" }, "medium"],
-    [{ tempo: "slowburn" }, "long"],
-    [{ tempo: "fastpaced" }, "short"],
+    // The page stopped sending tempo; stored tempo is still read by the deck.
+    [{ tempo: "slowburn" }, null],
     [{ time: "short", tempo: "slowburn" }, "short"],
     [{ text: "slow burn" }, "long"],
     [{ time: "medium", text: "slow burn" }, "medium"],

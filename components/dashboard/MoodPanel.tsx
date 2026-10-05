@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { allMoods } from "@/lib/moodMap";
 import { useMediaQuery } from "@/lib/useMediaQuery";
+import MoodGrid from "@/components/mood/MoodGrid";
 import MoodTile from "@/components/mood/MoodTile";
 import MoodDescribe from "@/components/mood/MoodDescribe";
 import Icon from "@/components/ui/Icon";
@@ -15,10 +16,6 @@ interface MoodPanelProps {
 }
 
 export default function MoodPanel({ isOpen, onClose, embedded }: MoodPanelProps) {
-  // 899, not 900: DashboardShell swaps to the sheet at the same width.
-  const narrow = useMediaQuery("(max-width: 639px)");
-  const medium = useMediaQuery("(max-width: 899px)");
-  const columns = narrow ? 2 : medium ? 3 : 4;
   const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const rootRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLDivElement>(null);
@@ -89,7 +86,7 @@ export default function MoodPanel({ isOpen, onClose, embedded }: MoodPanelProps)
         )}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: embedded ? "10px" : "12px" }}>
+      <MoodGrid gap={embedded ? 10 : 12}>
         {allMoods.map((m) => (
           <MoodTile
             key={m.key}
@@ -98,7 +95,7 @@ export default function MoodPanel({ isOpen, onClose, embedded }: MoodPanelProps)
             variant={embedded ? "compact" : "full"}
           />
         ))}
-      </div>
+      </MoodGrid>
 
       <div
         ref={footerRef}
