@@ -109,6 +109,8 @@ export async function POST(
         mood_text: trimmedText || null,
         era: finalEra,
         time: finalTime,
+        // A row rolled back from before migration 010 keeps its tempo, which the deck reads when time is null.
+        tempo: null,
         extra_keywords: extraKeywords,
       })
       .eq("id", participant.id);

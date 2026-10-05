@@ -251,6 +251,18 @@ describe("buildSharedDeck", () => {
       expect(sentParams(spy)[0].has("with_runtime.lte")).toBe(false);
     });
 
+    // Above, time decides; here the stored tempo breaks what would otherwise be a tie.
+    it("counts a stored tempo as a vote", async () => {
+      const spy = fullTMDB();
+      global.fetch = spy;
+      await buildSharedDeck([
+        { mood_selections: ["laugh"], time: "long" },
+        { mood_selections: ["laugh"], tempo: "slowburn" },
+        { mood_selections: ["laugh"], time: "short" },
+      ]);
+      expect(sentParams(spy)[0].get("with_runtime.gte")).toBe("140");
+    });
+
     it("lets a participant's time beat their own stored tempo", async () => {
       const spy = fullTMDB();
       global.fetch = spy;

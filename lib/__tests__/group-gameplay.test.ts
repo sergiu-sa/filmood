@@ -75,9 +75,15 @@ describe("POST /api/group/[code]/mood", () => {
   const notSubmitted = { data: { id: "p-1", mood_selections: null }, error: null };
   const ok = { data: null, error: null };
 
-  // Session, participant, the update, everyone's picks; then, if the deck fails, the status re-read and the rollback.
-  async function lockIn(body: Record<string, unknown>, everyone: unknown[] = [{ mood_selections: ["laugh"] }, { mood_selections: null }]) {
-    const supabase = createMockSupabase([inMood, notSubmitted, ok, { data: everyone, error: null }, { data: { status: "mood" }, error: null }, ok]);
+  // Session, participant, the update, everyone's picks; then `rest`: by default what a failed deck reads,
+  // the status re-read and the rollback. A built deck's only further call is the compare-and-set write.
+  const rollbackCalls = [{ data: { status: "mood" }, error: null }, ok];
+  async function lockIn(
+    body: Record<string, unknown>,
+    everyone: unknown[] = [{ mood_selections: ["laugh"] }, { mood_selections: null }],
+    rest: unknown[] = rollbackCalls,
+  ) {
+    const supabase = createMockSupabase([inMood, notSubmitted, ok, { data: everyone, error: null }, ...(rest as { data: unknown; error: null }[])]);
     mockGetSupabaseAdmin.mockReturnValue(supabase);
     const req = mockRequest("POST", "/api/group/ABC123/mood", body);
     const res = await readResponse(await submitMood(req, routeParams("ABC123")));
@@ -114,11 +120,12 @@ describe("POST /api/group/[code]/mood", () => {
     [{ time: "medium", text: "slow burn" }, "medium"],
     [{ time: "constructor" }, null],
     [{}, null],
-  ])("stores time %o as %s, and never a tempo", async (extra, time) => {
+  ])("stores time %o as %s, and clears any old tempo", async (extra, time) => {
     mockGetAuthUser.mockResolvedValue(mockUser);
     const { update } = await lockIn({ moods: ["laugh"], ...extra });
     expect(update.time).toBe(time);
-    expect(update).not.toHaveProperty("tempo");
+    // A row rolled back from before migration 010 keeps its tempo, which the deck would read as a Time.
+    expect(update.tempo).toBeNull();
   });
 
   it("stores at most 120 characters of text", async () => {
@@ -161,10 +168,15 @@ describe("POST /api/group/[code]/mood", () => {
       { mood_selections: ["cry"], user_id: null },
       { mood_selections: ["dark"], user_id: "user-2" },
     ];
-    const { json, supabase } = await lockIn({ moods: ["laugh"] }, everyone);
+    const { json, supabase } = await lockIn({ moods: ["laugh"] }, everyone, [{ data: [{ id: "s-1" }], error: null }]);
     expect(json.allDone).toBe(true);
+    expect(json.claimedBuild).toBe(true);
     expect(mockGroupProviders).toHaveBeenCalledWith(supabase, ["user-1", "user-2"]);
     expect(mockBuildSharedDeck).toHaveBeenCalledWith(everyone, [8, 76]);
+    // The deck is stored and the session moves on in one compare-and-set write.
+    expect(supabase.from).toHaveBeenNthCalledWith(5, "sessions");
+    expect(supabase.from.mock.results[4].value.update).toHaveBeenCalledWith({ movie_deck: defaultDeck, status: "swiping" });
+    expect(supabase.from.mock.results[4].value.eq).toHaveBeenCalledWith("status", "mood");
     expect(afterCallbacks).toHaveLength(1);
   });
 
