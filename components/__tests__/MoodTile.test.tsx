@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import MoodTile from "@/components/mood/MoodTile";
 import { ACCENT_VARS } from "@/lib/constants";
 
@@ -60,5 +60,39 @@ describe("MoodTile", () => {
   it("renders nothing for a key that isn't a mood", () => {
     const { container } = render(<MoodTile moodKey="constructor" href="/results?mood=constructor" />);
     expect(container).toBeEmptyDOMElement();
+  });
+
+  describe("toggle", () => {
+    const onToggle = vi.fn();
+    afterEach(() => onToggle.mockClear());
+
+    it("is a button with the link's name, unpressed, and no href", () => {
+      render(<MoodTile moodKey="easy" pressed={false} onToggle={onToggle} />);
+      const button = screen.getByRole("button", { name: "Need a hug — Warm, gentle, comforting" });
+      expect(button).toHaveAttribute("type", "button");
+      expect(button).toHaveAttribute("aria-pressed", "false");
+      expect(button).not.toHaveAttribute("href");
+      expect(button).toHaveClass("mood-tile");
+      expect(button.querySelector("svg")).toBeNull();
+    });
+
+    it("hands its key to onToggle", () => {
+      render(<MoodTile moodKey="easy" pressed={false} onToggle={onToggle} />);
+      fireEvent.click(screen.getByRole("button"));
+      expect(onToggle).toHaveBeenCalledExactlyOnceWith("easy");
+    });
+
+    it("pressed: a check, the accent fill and a heavier accent border", () => {
+      render(<MoodTile moodKey="easy" pressed onToggle={onToggle} />);
+      const button = screen.getByRole("button", { pressed: true });
+      expect(button.querySelectorAll("svg")).toHaveLength(1);
+      expect(button.style.border).toContain("1.5px solid");
+      expect(button.getAttribute("style")).toContain(ACCENT_VARS.teal.soft);
+    });
+
+    it("renders nothing for a key that isn't a mood", () => {
+      const { container } = render(<MoodTile moodKey="constructor" pressed={false} onToggle={onToggle} />);
+      expect(container).toBeEmptyDOMElement();
+    });
   });
 });

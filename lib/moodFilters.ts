@@ -38,6 +38,23 @@ export const WHERE_OPTIONS: { value: WhereKey; label: string; short: string }[] 
 /** What each filter reads when it's off; suggestion buttons use the same words. */
 export const ANY_LABELS: Record<FilterKey, string> = { time: "Any length", era: "Any era", where: "Anywhere" };
 
+/** Segmented-control options: the results bar, and the group page from 900px. */
+export const SHORT_OPTIONS = {
+  time: [{ value: null, label: "Any" }, ...TIME_OPTIONS.map((o) => ({ value: o.value, label: o.short }))],
+  era: [{ value: null, label: "Any" }, ...ERA_OPTIONS.map((o) => ({ value: o.value, label: o.short }))],
+  where: WHERE_OPTIONS.map((o) => ({ value: o.value, label: o.short })),
+};
+
+/** Vertical-row options with hints: the results page's sheets, and the group page below 900px. */
+export const LONG_OPTIONS = {
+  time: [
+    { value: null, label: ANY_LABELS.time },
+    ...TIME_OPTIONS.map((o) => ({ value: o.value, label: o.label, hint: o.hint })),
+  ],
+  era: [{ value: null, label: ANY_LABELS.era }, ...ERA_OPTIONS.map((o) => ({ value: o.value, label: o.label }))],
+  where: WHERE_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
+};
+
 export const EMPTY_FILTERS: Filters = {
   time: null,
   era: null,

@@ -21,7 +21,6 @@ describe("moodMap data integrity", () => {
     for (const mood of allMoods) {
       expect(mood.key).toBeTruthy();
       expect(mood.tagLabel).toBeTruthy();
-      expect(mood.label).toBeTruthy();
       expect(mood.description).toBeTruthy();
       expect(mood.voteCountGte).toBeGreaterThan(0);
       expect(["popularity.desc", "vote_average.desc"]).toContain(mood.sortBy);

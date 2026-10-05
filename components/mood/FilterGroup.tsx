@@ -10,7 +10,7 @@ interface FilterGroupProps<V extends string> {
   options: { value: V | null; label: string; hint?: string; controls?: string }[];
   value: V | null;
   onChange: (value: V | null) => void;
-  /** vertical: 48px rows with a check on the selected one (sheets, and the group page in 4.2). */
+  /** vertical: 48px rows with a check on the selected one (sheets, and the group page below 900). */
   orientation?: "horizontal" | "vertical";
   hideLabel?: boolean;
 }

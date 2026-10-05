@@ -674,11 +674,18 @@ svg.logo-static { overflow: visible; }
     border-color var(--t-fast),
     box-shadow var(--t-fast);
 }
-.mood-tile:hover,
 .mood-tile:focus-visible {
   background: var(--tile-soft) !important;
   border-color: var(--tile-accent) !important;
   box-shadow: 0 0 0 3px var(--tile-soft);
+}
+/* A touch screen keeps :hover after a tap, so a toggle tile tapped off would still look picked. */
+@media (hover: hover) {
+  .mood-tile:hover {
+    background: var(--tile-soft) !important;
+    border-color: var(--tile-accent) !important;
+    box-shadow: 0 0 0 3px var(--tile-soft);
+  }
 }
 .mood-tile:hover .mood-tile-arrow,
 .mood-tile:focus-visible .mood-tile-arrow {

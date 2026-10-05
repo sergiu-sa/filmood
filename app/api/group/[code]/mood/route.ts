@@ -2,7 +2,7 @@ import { after, NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
 import { MAX_MOODS, normalizeMoodKeys } from "@/lib/moodMap";
 import { MAX_TEXT_LENGTH, resolveMoodText } from "@/lib/moodResolver";
-import { isEraKey, isTempoKey, isTimeKey, LEGACY_TEMPO_TIME } from "@/lib/moodFilters";
+import { isEraKey, isTimeKey } from "@/lib/moodFilters";
 import { resolveSession, resolveParticipant } from "@/lib/group-api";
 import { buildSharedDeck } from "@/lib/deck";
 import { groupProviders } from "@/lib/watchProviders";
@@ -27,8 +27,6 @@ export async function POST(
     text?: string;
     era?: string;
     time?: string;
-    /** Sent by the mood page before it had Time. */
-    tempo?: string;
   };
 
   try {
@@ -37,7 +35,7 @@ export async function POST(
     return badRequest("Invalid JSON");
   }
 
-  const { moods, participantId, text, era, time, tempo } = body;
+  const { moods, participantId, text, era, time } = body;
 
   // Validate + coerce
   const tileMoods = Array.isArray(moods)
@@ -68,11 +66,7 @@ export async function POST(
   }
 
   const finalEra: EraKey | null = isEraKey(era) ? era : resolved?.era ?? null;
-  const finalTime: TimeKey | null = isTimeKey(time)
-    ? time
-    : isTempoKey(tempo)
-      ? LEGACY_TEMPO_TIME[tempo]
-      : resolved?.time ?? null;
+  const finalTime: TimeKey | null = isTimeKey(time) ? time : resolved?.time ?? null;
   const extraKeywords = resolved?.keywords ?? [];
 
   try {

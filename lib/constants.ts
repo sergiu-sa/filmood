@@ -20,7 +20,7 @@ export const AVATAR_COLORS: { bg: string; text: string }[] = [
 
 /**
  * Single source of truth for mood accent CSS variables. Imported by
- * MoodCard, SwipeCard, TopPickCard, and the results hero. All fields
+ * MoodTile, SwipeCard, TopPickCard, and the results hero. All fields
  * are CSS variables so dark/light theme overrides propagate for free.
  *
  * - base:   solid color — text, card borders, chip foreground
