@@ -57,6 +57,10 @@ export default function GroupMoodPage() {
   const { participantId } = useParticipantId();
   const redirectingRef = useRef(false);
   const buildingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Counts lock-in answers. A status read that started before one may have seen a submission
+  // that a failed deck build then rolled back, so it mustn't move the page to waiting.
+  const lockInsRef = useRef(0);
+  const headingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     return () => {
@@ -66,6 +70,7 @@ export default function GroupMoodPage() {
 
   const fetchState = useCallback(async () => {
     if (redirectingRef.current) return;
+    const lockIns = lockInsRef.current;
 
     try {
       const res = await fetch(`/api/group/${code}`);
@@ -116,7 +121,7 @@ export default function GroupMoodPage() {
         },
       );
 
-      if (self?.has_submitted) {
+      if (self?.has_submitted && lockIns === lockInsRef.current) {
         setPhase((prev) => prev === "building" ? prev : "waiting");
       }
     } catch {
@@ -125,6 +130,11 @@ export default function GroupMoodPage() {
       setLoading(false);
     }
   }, [code, router, user, participantId]);
+
+  // The lock-in button unmounts once this participant is in, so focus goes to the heading that says so.
+  useEffect(() => {
+    if (phase === "waiting") headingRef.current?.focus();
+  }, [phase]);
 
   // Initial fetch
   useEffect(() => {
@@ -195,6 +205,7 @@ export default function GroupMoodPage() {
         headers,
         body: JSON.stringify(body),
       });
+      lockInsRef.current += 1;
 
       const data = await res.json();
 
@@ -394,7 +405,8 @@ export default function GroupMoodPage() {
       <div
         className="mx-auto"
         style={{
-          maxWidth: "1080px",
+          // The frame's 1080px card plus this container's side padding.
+          maxWidth: "1128px",
           padding: narrow ? "32px 16px 48px" : "44px 24px 60px",
           position: "relative",
           zIndex: 2,
@@ -420,8 +432,16 @@ export default function GroupMoodPage() {
             {totalCount} {totalCount === 1 ? "person" : "people"}
           </p>
           <h1
+            ref={headingRef}
+            tabIndex={-1}
             className="font-serif"
-            style={{ margin: "0 0 8px", fontSize: "clamp(28px, 4vw, 40px)", fontWeight: 600, letterSpacing: "-0.3px" }}
+            style={{
+              margin: "0 0 8px",
+              fontSize: "clamp(28px, 4vw, 40px)",
+              fontWeight: 600,
+              letterSpacing: "-0.3px",
+              outline: "none",
+            }}
           >
             {phase === "waiting" ? "Moods submitted" : "How do you feel?"}
           </h1>
@@ -592,7 +612,6 @@ export default function GroupMoodPage() {
                     fontSize: "15px",
                     fontWeight: 700,
                     cursor: canSubmit && phase === "selecting" ? "pointer" : "not-allowed",
-                    opacity: phase === "submitting" ? 0.7 : 1,
                   }}
                 >
                   {lockLabel}

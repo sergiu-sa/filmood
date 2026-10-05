@@ -18,13 +18,23 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+// Signed in as the host (u1), or a guest holding p2's participant id.
+let signedIn = true;
 vi.mock("@/components/AuthProvider", () => ({
-  useAuth: () => ({ user: { id: "u1" }, loading: false }),
+  useAuth: () => ({ user: signedIn ? { id: "u1" } : null, loading: false }),
 }));
-vi.mock("@/lib/useParticipantId", () => ({ useParticipantId: () => ({ participantId: null }) }));
-vi.mock("@/lib/useGroupRealtime", () => ({ useGroupRealtime: () => {} }));
+vi.mock("@/lib/useParticipantId", () => ({ useParticipantId: () => ({ participantId: signedIn ? null : "p2" }) }));
 vi.mock("@/lib/getAuthToken", () => ({
-  getAuthHeaders: async () => ({ "Content-Type": "application/json", Authorization: "Bearer t" }),
+  getAuthHeaders: async () =>
+    signedIn ? { "Content-Type": "application/json", Authorization: "Bearer t" } : { "Content-Type": "application/json" },
+}));
+
+// The page's refetch, as Realtime or the 2s poll would call it.
+let poll: () => Promise<void> = async () => {};
+vi.mock("@/lib/useGroupRealtime", () => ({
+  useGroupRealtime: ({ onUpdate }: { onUpdate: () => Promise<void> }) => {
+    poll = onUpdate;
+  },
 }));
 
 // The viewport width the mocked media queries answer for.
@@ -38,17 +48,28 @@ vi.mock("@/lib/useMediaQuery", () => ({
 
 const HINT = "Two is the max — tap one of yours to swap it out.";
 
-let selfSubmitted = false;
-const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-  if (init?.method === "POST") return Response.json({ allDone: false });
-  return Response.json({
+const session = (selfSubmitted: boolean, extra: object[] = []) =>
+  Response.json({
     session: { id: "s1", status: "mood" },
     participants: [
       { id: "p1", nickname: "Host", user_id: "u1", has_submitted: selfSubmitted },
       { id: "p2", nickname: "Guest", user_id: null, has_submitted: false },
+      ...extra,
     ],
   });
-});
+
+function deferred() {
+  let resolve!: (r: Response) => void;
+  const promise = new Promise<Response>((r) => (resolve = r));
+  return { promise, resolve };
+}
+
+let selfSubmitted = false;
+let answerPost: () => Promise<Response> = async () => Response.json({ allDone: false });
+let answerGet: () => Promise<Response> = async () => session(selfSubmitted);
+const fetchMock = vi.fn(async (url: string, init?: RequestInit) =>
+  init?.method === "POST" ? answerPost() : answerGet(),
+);
 vi.stubGlobal("fetch", fetchMock);
 
 const tile = (tagLabel: string) => screen.getByRole("button", { name: new RegExp(`^${tagLabel} — `) });
@@ -64,6 +85,9 @@ describe("Group mood page", () => {
   afterEach(() => {
     width = 1280;
     selfSubmitted = false;
+    signedIn = true;
+    answerPost = async () => Response.json({ allDone: false });
+    answerGet = async () => session(selfSubmitted);
     fetchMock.mockClear();
   });
 
@@ -142,7 +166,82 @@ describe("Group mood page", () => {
     const [url, init] = posts()[0];
     expect(url).toBe("/api/group/K7F2AB/mood");
     expect(JSON.parse(init!.body as string)).toEqual({ moods: ["laugh", "dark"], time: "medium", era: "classic" });
-    expect(await screen.findByRole("heading", { level: 1, name: "Moods submitted" })).toBeInTheDocument();
+    // The lock-in button is gone, so focus moves to the heading that says why.
+    expect(await screen.findByRole("heading", { level: 1, name: "Moods submitted" })).toHaveFocus();
+  });
+
+  it("ignores taps and a second lock-in while the first is pending", async () => {
+    await renderPage();
+    fireEvent.click(tile("Need to laugh"));
+    const post = deferred();
+    answerPost = () => post.promise;
+    fireEvent.click(lockIn());
+    await waitFor(() => expect(posts()).toHaveLength(1));
+
+    fireEvent.click(tile("Go dark"));
+    expect(tile("Go dark")).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(screen.getByRole("button", { name: "Submitting..." }));
+    post.resolve(Response.json({ allDone: false }));
+    await screen.findByRole("heading", { level: 1, name: "Moods submitted" });
+    expect(posts()).toHaveLength(1);
+    expect(JSON.parse(posts()[0][1]!.body as string).moods).toEqual(["laugh"]);
+  });
+
+  it("returns to the form after a failed lock-in, with the error and the picks kept", async () => {
+    answerPost = async () => Response.json({ error: "Failed to build the deck" }, { status: 500 });
+    await renderPage();
+    fireEvent.click(tile("Need to laugh"));
+    fireEvent.click(tile("Go dark"));
+    fireEvent.click(lockIn());
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Failed to build the deck");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("How do you feel?");
+    expect(screen.getAllByRole("button", { pressed: true })).toHaveLength(2);
+    expect(lockIn()).toHaveTextContent("Lock in 2 moods");
+    expect(lockIn()).toHaveAttribute("aria-disabled", "false");
+  });
+
+  // A read taken while the last lock-in builds the deck sees it submitted; the build then fails and rolls it back.
+  it("doesn't let a status read from before a failed lock-in move the page to waiting", async () => {
+    await renderPage();
+    fireEvent.click(tile("Need to laugh"));
+    const post = deferred();
+    answerPost = () => post.promise;
+    fireEvent.click(lockIn());
+    await waitFor(() => expect(posts()).toHaveLength(1));
+
+    const read = deferred();
+    answerGet = () => read.promise;
+    const polled = poll();
+    post.resolve(Response.json({ error: "Failed to build the deck" }, { status: 500 }));
+    await screen.findByRole("alert");
+
+    read.resolve(session(true, [{ id: "p3", nickname: "Third", user_id: null, has_submitted: false }]));
+    await polled;
+    // The stale read did land (three people now), but the page stays on the form.
+    await screen.findByText(/3 people/);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("How do you feel?");
+    expect(lockIn()).toHaveTextContent("Lock in 1 mood");
+  });
+
+  it("hands the echo the picked tiles and the page's Era", async () => {
+    await renderPage();
+    fireEvent.click(tile("Need to laugh"));
+    fireEvent.click(tile("Go dark"));
+    fireEvent.click(within(screen.getByRole("radiogroup", { name: "Era" })).getByRole("radio", { name: "2010 on" }));
+    fireEvent.change(screen.getByLabelText("Anything else? (optional)"), { target: { value: "cozy 80s" } });
+    const echo = screen.getByRole("status");
+    await waitFor(() => expect(echo).toHaveTextContent("Two moods at a time — left out Need a hug."));
+    expect(echo).not.toHaveTextContent("Before 1990");
+  });
+
+  it("sends a guest's participant id", async () => {
+    signedIn = false;
+    await renderPage();
+    fireEvent.click(tile("Need to laugh"));
+    fireEvent.click(lockIn());
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    expect(JSON.parse(posts()[0][1]!.body as string)).toEqual({ moods: ["laugh"], time: null, era: null, participantId: "p2" });
   });
 
   it("sends the text, with Any as no Time or Era", async () => {
@@ -153,7 +252,7 @@ describe("Group mood page", () => {
     expect(JSON.parse(posts()[0][1]!.body as string)).toEqual({ moods: [], time: null, era: null, text: "cozy heist" });
   });
 
-  it("uses segments from 900px and vertical rows with hints below", async () => {
+  it("uses short-label segments from 900px", async () => {
     await renderPage();
     expect(screen.getByRole("radiogroup", { name: "Time" })).toHaveAttribute("aria-orientation", "horizontal");
     expect(screen.getByRole("radio", { name: "Under 2 h" })).toBeInTheDocument();
