@@ -186,6 +186,11 @@ async function suggestRemovals(
     .sort((x, y) => y.total - x.total);
 }
 
+/** Picking "Everyone's watching" means kids are watching, so its cap covers every pool. */
+export function searchCap(moodKeys: string[]): CertificationCap {
+  return moodKeys.map((k) => moodMap[k].certification).find(Boolean);
+}
+
 /**
  * 1–2 moods → blended, capped result, plus suggestions when it's thin.
  * `removable` lists the filters a suggestion may offer to loosen (see `removableFilterKeys`).
@@ -196,8 +201,7 @@ export async function runMoodSearch(
   rng: () => number,
   removable: FilterKey[],
 ): Promise<MoodSearchResult> {
-  // Picking "Everyone's watching" means kids are watching, so its cap covers every pool.
-  const cap = moodKeys.map((k) => moodMap[k].certification).find(Boolean);
+  const cap = searchCap(moodKeys);
   // One generator per pool, drawn up front: the pools run in parallel, and a
   // shared one would make the order depend on which TMDB call returned first.
   const poolRngs = moodKeys.map(() => mulberry32(1 + Math.floor(rng() * SEED_MAX)));

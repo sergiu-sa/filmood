@@ -18,7 +18,7 @@ const settle = (page: Page) =>
 
 const topPick = (page: Page) => page.getByRole("heading", { level: 2, name: /midnight harvest/i });
 
-const NO_MOOD_WORD = "Add a feeling word — like 'funny', 'dark', or 'cozy'. Era or tempo alone isn't enough.";
+const NO_MOOD_WORD = "Add a feeling word — like 'funny', 'dark', or 'cozy'. A length or an era alone isn't enough.";
 
 test.describe("Results notices", () => {
   test.beforeEach(async ({ page }) => {

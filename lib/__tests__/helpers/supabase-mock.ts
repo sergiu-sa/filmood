@@ -32,7 +32,7 @@ export function createMockSupabase(responses: MockResponse[] = []) {
 
       for (const method of [
         "select", "insert", "update", "upsert", "delete",
-        "eq", "neq", "order", "limit",
+        "eq", "neq", "in", "order", "limit",
       ]) {
         chain[method] = vi.fn(() => chain);
       }

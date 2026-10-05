@@ -27,6 +27,8 @@ const fullPage = (from = 1) => ({
 
 const PROVIDERS_PATH = "/watch/providers/movie";
 
+const FEELING_WORD = "Add a feeling word — like 'funny', 'dark', or 'cozy'. A length or an era alone isn't enough.";
+
 // TMDB's Norway provider list, as lib/watchProviders.ts reads it.
 const providerList = {
   results: [
@@ -140,8 +142,13 @@ describe("GET /api/movies/discover", () => {
     const { get, recordSearchEvent } = await setup();
     const { status, body } = await get("text=80s");
     expect(status).toBe(400);
-    expect(body.error).toMatch(/add a feeling word/i);
+    expect(body.error).toBe(FEELING_WORD);
     expect(recordSearchEvent).not.toHaveBeenCalled();
+  });
+
+  it("asks for a feeling word when the text only set a length", async () => {
+    const { get } = await setup();
+    expect(await get("text=slow")).toEqual({ status: 400, body: { error: FEELING_WORD } });
   });
 
   // Shared links and history still carry retired keys.

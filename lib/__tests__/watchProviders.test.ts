@@ -155,3 +155,46 @@ describe("savedServices", () => {
     expect(chain.eq).toHaveBeenCalledWith("user_id", "user-1");
   });
 });
+
+describe("groupProviders", () => {
+  afterEach(() => {
+    vi.resetModules();
+  });
+
+  const rows = (data: unknown, error: unknown = null) => {
+    const supabase = createMockSupabase([{ data, error }]);
+    return { supabase, client: supabase as unknown as SupabaseClient };
+  };
+
+  // "What at least one of us can stream": any member's service counts, once.
+  it("unions every user's saved services into Norway provider ids, in PLATFORMS order", async () => {
+    const { groupProviders } = await load();
+    const { supabase, client } = rows([{ platforms: ["Viaplay", "Netflix"] }, { platforms: ["Netflix", "Hulu"] }]);
+
+    expect(await groupProviders(client, ["u1", "u2"])).toEqual([8, 76]);
+    expect(supabase.from).toHaveBeenCalledWith("streaming_preferences");
+    expect(supabase.from.mock.results[0].value.in).toHaveBeenCalledWith("user_id", ["u1", "u2"]);
+  });
+
+  it("asks nothing when no participant is signed in", async () => {
+    const { groupProviders, tmdbJson } = await load();
+    const { supabase, client } = rows([]);
+    expect(await groupProviders(client, [])).toEqual([]);
+    expect(supabase.from).not.toHaveBeenCalled();
+    expect(tmdbJson).not.toHaveBeenCalled();
+  });
+
+  it("returns none, without asking TMDB, when nobody saved a service", async () => {
+    const { groupProviders, tmdbJson } = await load();
+    expect(await groupProviders(rows([]).client, ["u1"])).toEqual([]);
+    expect(await groupProviders(rows([{ platforms: ["Hulu"] }]).client, ["u1"])).toEqual([]);
+    expect(tmdbJson).not.toHaveBeenCalled();
+  });
+
+  it("rejects on a database error", async () => {
+    const { groupProviders } = await load();
+    await expect(groupProviders(rows(null, { message: "permission denied" }).client, ["u1"])).rejects.toMatchObject({
+      message: "permission denied",
+    });
+  });
+});

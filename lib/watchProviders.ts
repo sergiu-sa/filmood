@@ -43,6 +43,20 @@ export async function savedServices(supabase: SupabaseClient, userId: string): P
   return slugsFromNames(data?.platforms ?? []);
 }
 
+/** Every service these users saved, as Norway provider ids in PLATFORMS order; [] when nobody saved any. Throws on a database error. */
+export async function groupProviders(supabase: SupabaseClient, userIds: string[]): Promise<number[]> {
+  if (userIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from("streaming_preferences")
+    .select("platforms")
+    .in("user_id", userIds);
+  if (error) throw error;
+  const slugs = slugsFromNames((data ?? []).flatMap((row: { platforms: string[] | null }) => row.platforms ?? []));
+  if (slugs.length === 0) return [];
+  const ids = await norwayProviderIds();
+  return slugs.flatMap((slug) => ids.get(slug) ?? []);
+}
+
 /**
  * Settles `where=mine`: saved services for a signed-in user, else the
  * `services` param, else Norway. Any other Where passes through with no calls.

@@ -21,7 +21,7 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-const MESSAGE = "Add a feeling word — like 'funny', 'dark', or 'cozy'. Era or tempo alone isn't enough.";
+const MESSAGE = "Add a feeling word — like 'funny', 'dark', or 'cozy'. A length or an era alone isn't enough.";
 
 describe("ResultsError", () => {
   beforeEach(() => {

@@ -15,12 +15,20 @@ describe("resolveMoodText", () => {
     expect(r.matched).toBe(true);
   });
 
-  it("resolves multiple signals in one phrase — mood + era + tempo", () => {
+  it("resolves multiple signals in one phrase — mood + era + time", () => {
     const r = resolveMoodText("slow burn 80s noir");
     expect(r.moodKeys).toContain("dark");
     expect(r.era).toBe("classic");
-    expect(r.tempo).toBe("slowburn");
+    expect(r.time).toBe("long");
     expect(r.keywords).toContain(TMDB_KEYWORDS.neoNoir.id);
+  });
+
+  // Time is the filter the app has; tempo was the group page's old name for it.
+  it("reads pace words as a Time, with no tempo left in the result", () => {
+    expect(resolveMoodText("something fast").time).toBe("short");
+    expect(resolveMoodText("meditative").time).toBe("long");
+    expect(resolveMoodText("slow").time).toBe("long");
+    expect(resolveMoodText("slow burn noir")).not.toHaveProperty("tempo");
   });
 
   it("extracts a heist keyword from the word 'heist'", () => {
@@ -34,7 +42,7 @@ describe("resolveMoodText", () => {
     expect(r.moodKeys).toEqual([]);
     expect(r.keywords).toEqual([]);
     expect(r.era).toBeNull();
-    expect(r.tempo).toBeNull();
+    expect(r.time).toBeNull();
     expect(r.matched).toBe(false);
   });
 
@@ -67,7 +75,7 @@ describe("resolveMoodText", () => {
   it("resolves the placeholder 'slow-burn noir' in full", () => {
     const r = resolveMoodText("slow-burn noir");
     expect(r.moodKeys).toEqual(["dark"]);
-    expect(r.tempo).toBe("slowburn");
+    expect(r.time).toBe("long");
     expect(r.unmatched).toEqual([]);
   });
 
