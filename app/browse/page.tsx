@@ -133,8 +133,8 @@ function BrowseContent() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // Client-side search filter + sort, debounced via the shared hook so the
-  // pattern matches SearchInput. Derived state — no useEffect needed.
+  // Client-side search filter + sort, debounced via the shared hook.
+  // Derived state — no useEffect needed.
   const debouncedSearch = useDebouncedValue(searchQuery, 200);
   const displayFilms = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();

@@ -4,9 +4,8 @@ import { useEffect, useState } from "react";
 
 /**
  * Debounces a value — returns the input only after `ms` milliseconds have
- * passed without further changes. Replaces the inline
- * `useEffect + setTimeout(..., n)` pattern that lived in `SearchInput`
- * and `app/browse/page.tsx`.
+ * passed without further changes, in place of an inline
+ * `useEffect + setTimeout(..., n)`.
  *
  * Usage:
  *   const debounced = useDebouncedValue(query, 400);

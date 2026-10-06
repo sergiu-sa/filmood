@@ -7,7 +7,7 @@ import { getAuthHeaders } from "@/lib/getAuthToken";
 import Link from "next/link";
 
 export default function SessionCreator() {
-  const { user, session } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
 
   const [loading, setLoading] = useState(false);

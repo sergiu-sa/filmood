@@ -145,7 +145,7 @@ export async function mockTmdb(page: Page) {
     route.fulfill({
       status: 200,
       contentType: "application/json",
-      // Must match real shape `{ films }` — SearchBox reads `data.films ?? []`.
+      // Must match real shape `{ films }` — SearchToolbar reads `data.films ?? []`.
       body: JSON.stringify({ films: fakeFilms }),
     }),
   );

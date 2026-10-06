@@ -90,7 +90,7 @@ export default function DashboardShell() {
     [defaultResults, panelCategory],
   );
 
-  // Called from SearchBox pills to keep panel tabs in sync
+  // Called from SearchToolbar's pills to keep the panel's tabs in sync
   const handleActiveCategory = useCallback(
     (category: string | null, genreId?: number | null) => {
       setPanelCategory(category);
