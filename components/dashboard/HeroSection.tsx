@@ -280,7 +280,7 @@ export default function HeroSection() {
               </Link>
               <button
                 type="button"
-                onClick={() => document.getElementById("dashboard")?.scrollIntoView({ behavior: "smooth" })}
+                onClick={() => document.getElementById("dashboard")?.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth" })}
                 style={{
                   minHeight: touch ? 44 : undefined,
                   background: "transparent", color: "var(--t2)",
@@ -318,7 +318,7 @@ export default function HeroSection() {
               })}
               <button
                 type="button"
-                onClick={() => document.getElementById("dashboard")?.scrollIntoView({ behavior: "smooth" })}
+                onClick={() => document.getElementById("dashboard")?.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth" })}
                 style={{
                   minHeight: touch ? 44 : undefined,
                   background: "transparent", color: "var(--t2)",

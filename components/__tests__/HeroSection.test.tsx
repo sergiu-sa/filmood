@@ -149,6 +149,22 @@ describe("HeroSection", () => {
     expect(moodOf(cycler())).toBe("laugh");
   });
 
+  // A behavior passed in JS beats globals.css's scroll-behavior, so the button picks it itself.
+  it.each([
+    [false, "smooth"],
+    [true, "auto"],
+  ])("scrolls to the dashboard (reduced motion: %s) with behavior %s", (reduce, behavior) => {
+    reducedMotion = reduce;
+    const dashboard = document.createElement("div");
+    dashboard.id = "dashboard";
+    dashboard.scrollIntoView = vi.fn();
+    document.body.append(dashboard);
+    render(<HeroSection />);
+    fireEvent.click(screen.getByRole("button", { name: /more →$/ }));
+    expect(dashboard.scrollIntoView).toHaveBeenCalledWith({ behavior });
+    dashboard.remove();
+  });
+
   it("offers a signed-in user their last mood again, in its own words", async () => {
     user = { email: "sam@example.com" };
     stubFetch("cry");
