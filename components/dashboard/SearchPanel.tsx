@@ -598,7 +598,7 @@ export default function SearchPanel({
               padding: "9px 18px",
               borderRadius: "10px",
               background: "var(--blue)",
-              color: "#fff",
+              color: "var(--blue-on)",
               fontSize: "13px",
               fontWeight: 600,
               lineHeight: 1,

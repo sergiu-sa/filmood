@@ -89,7 +89,7 @@ export default function ResultsNotice({
               fontWeight: primary ? 700 : 600,
               cursor: "pointer",
               background: primary ? "var(--gold)" : "var(--surface2)",
-              color: primary ? "var(--accent-ink)" : "var(--t1)",
+              color: primary ? "var(--gold-on)" : "var(--t1)",
               border: primary ? "1px solid var(--gold)" : "1px solid var(--border-h)",
             }}
           >

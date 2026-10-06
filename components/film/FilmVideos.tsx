@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { MovieVideo } from "@/lib/types";
+import { ACCENT_VARS } from "@/lib/constants";
 
 interface FilmVideosProps {
   videos: MovieVideo[];
@@ -153,7 +154,7 @@ export default function FilmVideos({ videos }: FilmVideosProps) {
             borderRadius: "4px",
             background: `var(--${activeMeta.accent}-soft)`,
             border: `1px solid var(--${activeMeta.accent}-border)`,
-            color: `var(--${activeMeta.accent})`,
+            color: ACCENT_VARS[activeMeta.accent].text,
             fontSize: "10px",
             fontWeight: 700,
             letterSpacing: "1.4px",
@@ -337,7 +338,7 @@ function SupportingSection({
                     ? `var(--${g.meta.accent}-border)`
                     : "var(--tag-border)"
                 }`,
-                color: isActive ? `var(--${g.meta.accent})` : "var(--t1)",
+                color: isActive ? ACCENT_VARS[g.meta.accent].text : "var(--t1)",
                 cursor: "pointer",
                 transition: "background 0.18s ease, border-color 0.18s ease, color 0.18s ease",
               }}
@@ -413,7 +414,7 @@ function GroupHeader({
         style={{
           fontSize: "11px",
           lineHeight: 1,
-          color: `var(--${meta.accent})`,
+          color: ACCENT_VARS[meta.accent].text,
           flexShrink: 0,
         }}
       >
@@ -572,7 +573,7 @@ function VideoCard({
               background: isActive
                 ? `var(--${meta.accent})`
                 : "rgba(255,255,255,0.92)",
-              color: isActive ? "var(--accent-ink)" : "rgb(20,16,28)",
+              color: isActive ? ACCENT_VARS[meta.accent].on : "rgb(20,16,28)",
               fontSize: size === "large" ? "15px" : "12px",
               paddingLeft: "3px",
               boxShadow: "0 4px 14px rgba(0,0,0,0.4)",
@@ -592,7 +593,7 @@ function VideoCard({
               padding: "2px 6px",
               borderRadius: "3px",
               background: `var(--${meta.accent})`,
-              color: "var(--accent-ink)",
+              color: ACCENT_VARS[meta.accent].on,
               fontSize: "8.5px",
               fontWeight: 800,
               letterSpacing: "1.5px",

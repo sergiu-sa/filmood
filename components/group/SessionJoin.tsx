@@ -149,7 +149,7 @@ export default function SessionJoin({ initialCode = "" }: SessionJoinProps) {
           fontSize: "18px",
           marginBottom: "20px",
           opacity: 0.85,
-          color: "var(--gold)",
+          color: "var(--gold-text)",
           fontWeight: 700,
         }}
       >
@@ -310,7 +310,7 @@ export default function SessionJoin({ initialCode = "" }: SessionJoinProps) {
           padding: "14px 36px",
           borderRadius: "var(--r)",
           background: loading || !isFilled ? "var(--surface2)" : "var(--gold)",
-          color: loading || !isFilled ? "var(--t3)" : "var(--accent-ink)",
+          color: loading || !isFilled ? "var(--t3)" : "var(--gold-on)",
           fontSize: "14px",
           fontWeight: 600,
           border: "none",

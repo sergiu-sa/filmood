@@ -81,7 +81,7 @@ export default function LoginPage() {
               <Link
                 href="/signup"
                 className="font-medium no-underline hover:underline"
-                style={{ color: "var(--gold)" }}
+                style={{ color: "var(--gold-text)" }}
               >
                 Create an account
               </Link>
@@ -223,7 +223,7 @@ export default function LoginPage() {
               type="submit"
               disabled={loading}
               className="w-full cursor-pointer rounded-xl border-none py-3.5 text-sm font-semibold transition-all hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed"
-              style={{ background: "var(--gold)", color: "var(--accent-ink)" }}
+              style={{ background: "var(--gold)", color: "var(--gold-on)" }}
             >
               {loading ? "Logging in..." : "Log in"}
             </button>
@@ -237,7 +237,7 @@ export default function LoginPage() {
             <a
               href="#"
               className="hover:underline"
-              style={{ color: "var(--gold)" }}
+              style={{ color: "var(--gold-text)" }}
             >
               Terms
             </a>{" "}
@@ -245,7 +245,7 @@ export default function LoginPage() {
             <a
               href="#"
               className="hover:underline"
-              style={{ color: "var(--gold)" }}
+              style={{ color: "var(--gold-text)" }}
             >
               Privacy Policy
             </a>

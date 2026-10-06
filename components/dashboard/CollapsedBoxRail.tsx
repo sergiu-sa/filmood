@@ -7,6 +7,8 @@ interface CollapsedBoxRailProps {
   title: string;
   sub: string;
   accent: string;
+  /** The accent as text, where it differs from the fill (gold). */
+  accentText?: string;
   accentSoft: string;
   ariaLabel: string;
   onActivate: () => void;
@@ -20,6 +22,7 @@ export default function CollapsedBoxRail({
   title,
   sub,
   accent,
+  accentText = accent,
   accentSoft,
   ariaLabel,
   onActivate,
@@ -75,7 +78,7 @@ export default function CollapsedBoxRail({
           fontWeight: 600,
           textTransform: "uppercase",
           letterSpacing: "1.8px",
-          color: accent,
+          color: accentText,
           marginBottom: "14px",
         }}
       >
@@ -137,7 +140,7 @@ export default function CollapsedBoxRail({
           aria-hidden
           style={{
             fontSize: "14px",
-            color: accent,
+            color: accentText,
             transition: "transform 0.25s ease",
             transform: hovered ? "translateX(3px)" : "none",
           }}

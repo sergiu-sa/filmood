@@ -607,7 +607,7 @@ export default function GroupMoodPage() {
                     border: "none",
                     borderRadius: "12px",
                     background: canSubmit ? "var(--gold)" : "var(--surface2)",
-                    color: canSubmit ? "var(--accent-ink)" : "var(--t2)",
+                    color: canSubmit ? "var(--gold-on)" : "var(--t2)",
                     font: "inherit",
                     fontSize: "15px",
                     fontWeight: 700,

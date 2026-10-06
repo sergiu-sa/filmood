@@ -85,7 +85,7 @@ export default function ProfileTabs({
                   fontSize: "10px",
                   fontWeight: 700,
                   letterSpacing: "1.4px",
-                  color: isActive ? "var(--gold)" : "var(--t3)",
+                  color: isActive ? "var(--gold-text)" : "var(--t3)",
                   transition: "color 0.2s ease",
                 }}
               >

@@ -28,7 +28,7 @@ const steps = [
     num: "3",
     label: "Swipe & match",
     detail: "Filmood builds a shared deck. Swipe together, find the film",
-    accent: "var(--gold)",
+    accent: "var(--gold-text)",
     accentSoft: "var(--gold-soft)",
   },
 ];

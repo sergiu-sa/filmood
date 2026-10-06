@@ -184,7 +184,7 @@ export default function AccountSettings({ user }: Props) {
               <p
                 style={{
                   fontSize: "11px",
-                  color: "var(--rose)",
+                  color: "var(--t1)",
                   margin: "4px 0 0",
                 }}
               >
@@ -198,7 +198,7 @@ export default function AccountSettings({ user }: Props) {
                 className="cursor-pointer rounded-[8px] border-none px-3 py-1.5 text-[12px] font-semibold disabled:opacity-60"
                 style={{
                   background: "var(--gold)",
-                  color: "var(--accent-ink)",
+                  color: "var(--gold-on)",
                 }}
               >
                 {pwSaving ? "Saving…" : "Update password"}
@@ -248,7 +248,7 @@ export default function AccountSettings({ user }: Props) {
         <button
           onClick={saveProfile}
           disabled={saving}
-          className="mt-5 flex w-full cursor-pointer items-center justify-center rounded-[10px] border-none bg-(--gold) px-5 py-2.5 text-[13px] font-semibold text-(--accent-ink) transition-all hover:brightness-110 disabled:opacity-60"
+          className="mt-5 flex w-full cursor-pointer items-center justify-center rounded-[10px] border-none bg-(--gold) px-5 py-2.5 text-[13px] font-semibold text-(--gold-on) transition-all hover:brightness-110 disabled:opacity-60"
         >
           {saving ? "Saving..." : "Save changes"}
         </button>

@@ -240,7 +240,7 @@ export default function SwipeCard({
               display: "inline-flex",
               alignItems: "center",
               gap: "4px",
-              color: "var(--gold)",
+              color: "var(--t2)",
               fontWeight: 600,
             }}
           >
@@ -264,7 +264,7 @@ export default function SwipeCard({
                     fontSize: isMobile ? "9px" : "10px",
                     fontWeight: 600,
                     lineHeight: 1,
-                    color: vars.base,
+                    color: "var(--t1)",
                     background: vars.soft,
                     border: `1px solid ${vars.border}`,
                   }}

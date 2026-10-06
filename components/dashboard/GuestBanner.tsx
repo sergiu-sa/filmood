@@ -43,7 +43,7 @@ export default function GuestBanner() {
         <Link
           href="/signup"
           className="no-underline rounded-lg px-3 py-1.5 text-[11px] font-semibold whitespace-nowrap transition-all hover:brightness-110 sm:px-4 sm:py-2 sm:text-xs"
-          style={{ background: "var(--gold)", color: "var(--accent-ink)" }}
+          style={{ background: "var(--gold)", color: "var(--gold-on)" }}
         >
           {/* Shorter label on mobile */}
           <span className="sm:hidden">Sign up free</span>

@@ -56,7 +56,7 @@ export default function SessionCreator() {
             alignItems: "center",
             justifyContent: "center",
             fontSize: "18px",
-            color: "var(--gold)",
+            color: "var(--gold-text)",
           }}
         >
           &#9733;
@@ -93,7 +93,7 @@ export default function SessionCreator() {
               padding: "10px 24px",
               borderRadius: "var(--r)",
               background: "var(--gold)",
-              color: "var(--accent-ink)",
+              color: "var(--gold-on)",
               fontSize: "13px",
               fontWeight: 600,
               textDecoration: "none",
@@ -157,7 +157,7 @@ export default function SessionCreator() {
           padding: "14px 36px",
           borderRadius: "var(--r)",
           background: loading ? "var(--surface2)" : "var(--teal)",
-          color: loading ? "var(--t3)" : "var(--accent-ink)",
+          color: loading ? "var(--t3)" : "var(--teal-on)",
           fontSize: "14px",
           fontWeight: 600,
           border: "none",

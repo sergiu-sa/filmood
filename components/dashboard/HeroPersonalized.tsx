@@ -89,7 +89,7 @@ export default function HeroPersonalized({ groupSession, watchlistPeek }: HeroPe
           <div style={{ flex: 1, fontSize: 11.5, color: "var(--t2)", lineHeight: 1.4, minWidth: 0 }}>
             <strong style={{ color: "var(--t1)", fontWeight: 600 }}>Watchlist</strong>
             <br />
-            {watchlistPeek.length} saved · <span style={{ color: "var(--gold)" }}>open →</span>
+            {watchlistPeek.length} saved · <span style={{ color: "var(--gold-text)" }}>open →</span>
           </div>
         </Link>
       )}

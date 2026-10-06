@@ -93,7 +93,7 @@ export function ResultsError({
         <button
           type="button"
           onClick={onRetry}
-          style={{ ...action, border: "none", background: "var(--gold)", color: "var(--accent-ink)", font: "inherit", fontWeight: 700, cursor: "pointer" }}
+          style={{ ...action, border: "none", background: "var(--gold)", color: "var(--gold-on)", font: "inherit", fontWeight: 700, cursor: "pointer" }}
         >
           Try again
         </button>

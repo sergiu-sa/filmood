@@ -469,7 +469,7 @@ export default function GroupSwipePage() {
             }}>
               {[
                 { label: "Yes", count: voteCounts.yes, color: "var(--teal)" },
-                { label: "Maybe", count: voteCounts.maybe, color: "var(--gold)" },
+                { label: "Maybe", count: voteCounts.maybe, color: "var(--gold-text)" },
                 { label: "No", count: voteCounts.no, color: "var(--rose)" },
               ].map((item) => (
                 <div key={item.label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
@@ -583,7 +583,7 @@ export default function GroupSwipePage() {
                   border: "none",
                   fontSize: "14px",
                   fontWeight: 600,
-                  color: "var(--accent-ink)",
+                  color: "var(--gold-on)",
                   transition: "all 0.25s",
                   animation: "fadeUp 0.4s ease both 0.2s",
                 }}

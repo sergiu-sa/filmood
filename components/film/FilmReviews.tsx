@@ -93,7 +93,7 @@ function ReviewItem({ review }: { review: Review }) {
               border: "1px solid var(--gold-border)",
               fontSize: "11px",
               fontWeight: 700,
-              color: "var(--gold)",
+              color: "var(--gold-text)",
               flexShrink: 0,
             }}
           >

@@ -72,7 +72,7 @@ export default function ForgotPasswordPage() {
               <Link
                 href="/login"
                 className="font-medium no-underline hover:underline"
-                style={{ color: "var(--gold)" }}
+                style={{ color: "var(--gold-text)" }}
               >
                 Back to log in
               </Link>
@@ -152,7 +152,7 @@ export default function ForgotPasswordPage() {
                 className="w-full cursor-pointer rounded-xl border-none py-3.5 text-sm font-semibold transition-all hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed"
                 style={{
                   background: "var(--gold)",
-                  color: "var(--accent-ink)",
+                  color: "var(--gold-on)",
                 }}
               >
                 {loading ? "Sending link..." : "Send reset link"}

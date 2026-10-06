@@ -114,7 +114,7 @@ export default function ParticipantList({
                 justifyContent: "center",
                 fontSize: "15px",
                 fontWeight: 700,
-                color: color,
+                color: "var(--t1)",
                 letterSpacing: "0.5px",
                 transition: "border-color 0.3s ease",
                 position: "relative",
@@ -150,7 +150,7 @@ export default function ParticipantList({
                     height: "16px",
                     borderRadius: "50%",
                     background: "var(--teal)",
-                    color: "var(--accent-ink)",
+                    color: "var(--teal-on)",
                     fontSize: "9px",
                     fontWeight: 700,
                     display: "flex",
@@ -189,7 +189,7 @@ export default function ParticipantList({
                 fontWeight: 600,
                 textTransform: "uppercase",
                 letterSpacing: "1.2px",
-                color: isThisHost ? "var(--gold)" : p.is_ready ? "var(--teal)" : "var(--t3)",
+                color: isThisHost || p.is_ready ? "var(--t1)" : "var(--t3)",
               }}
             >
               {isThisHost ? "Host" : p.is_ready ? "Ready" : "Joined"}

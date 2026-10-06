@@ -126,7 +126,7 @@ export default function ServicesPicker({ initial, signedIn, saved, onConfirm, on
         ) : (
           <p style={{ margin: 0 }}>
             Remembered on this device ·{" "}
-            <Link href="/signup" style={{ color: "var(--gold)", fontWeight: 700, textDecoration: "none" }}>
+            <Link href="/signup" style={{ color: "var(--gold-text)", fontWeight: 700, textDecoration: "none" }}>
               Sign up to keep them everywhere
             </Link>
           </p>
@@ -177,7 +177,7 @@ export default function ServicesPicker({ initial, signedIn, saved, onConfirm, on
             fontWeight: 700,
             cursor: count === 0 ? "not-allowed" : "pointer",
             background: count === 0 ? "var(--surface2)" : "var(--gold)",
-            color: count === 0 ? "var(--t2)" : "var(--accent-ink)",
+            color: count === 0 ? "var(--t2)" : "var(--gold-on)",
           }}
         >
           {count === 0 ? "Pick at least one" : `Show films on ${count} service${count === 1 ? "" : "s"}`}

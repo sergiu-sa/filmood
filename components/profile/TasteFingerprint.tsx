@@ -130,7 +130,7 @@ export default function TasteFingerprint() {
               const accentBase = ACCENT_VARS[accent].base;
               return (
                 <div key={mood} className="flex items-center gap-3.5">
-                  <span style={{ color: accentBase }} className="shrink-0">
+                  <span style={{ color: ACCENT_VARS[accent].text }} className="shrink-0">
                     <Icon name="mark" size={12} />
                   </span>
                   <span
@@ -202,7 +202,7 @@ export default function TasteFingerprint() {
                     borderRadius: "100px",
                     background: `var(--${accent}-soft)`,
                     border: `1px solid var(--${accent}-border)`,
-                    color: `var(--${accent})`,
+                    color: ACCENT_VARS[accent].text,
                     fontSize: "12.5px",
                     fontWeight: 600,
                     letterSpacing: "-0.1px",
@@ -241,8 +241,8 @@ export default function TasteFingerprint() {
             }}
           >
             Films like{" "}
-            <em style={{ color: "var(--gold)" }}>{signature.title}</em> — your{" "}
-            <em style={{ color: ACCENT_VARS[moodAccent(topMoodKey)].base }}>
+            <em style={{ color: "var(--gold-text)" }}>{signature.title}</em> — your{" "}
+            <em style={{ color: ACCENT_VARS[moodAccent(topMoodKey)].text }}>
               {moodLabel(topMoodKey)}
             </em>{" "}
             picks.

@@ -71,7 +71,7 @@ export default function FilmError({
               padding: "10px 18px",
               borderRadius: "10px",
               background: "var(--gold)",
-              color: "var(--accent-ink)",
+              color: "var(--gold-on)",
               border: 0,
               fontSize: "13px",
               fontWeight: 600,

@@ -100,7 +100,7 @@ export default function HeroSection() {
 
   const current = MOOD_REEL[moodIndex];
   const currentMoodCfg = allMoods.find((m) => m.key === current.key);
-  const cyclerAccent = currentMoodCfg ? `var(--${currentMoodCfg.accentColor})` : "var(--gold)";
+  const cyclerAccent = currentMoodCfg ? ACCENT_VARS[currentMoodCfg.accentColor].text : "var(--gold-text)";
   const cyclerAccentRgb = currentMoodCfg ? `var(--${currentMoodCfg.accentColor}-rgb)` : "var(--gold-rgb)";
   const lastMoodCfg = lastMood ? allMoods.find((m) => m.key === lastMood) : null;
   // Pausing mid-fade cancels the pending swap, so bring the held word back into view.
@@ -120,7 +120,7 @@ export default function HeroSection() {
 
   // Pick the accent for this render — gold normally, teal in authed-full mode
   const accentVar = mode !== "guest" ? "--teal" : "--gold";
-  const accent = `var(${accentVar})`;
+  const accentText = mode !== "guest" ? "var(--teal)" : "var(--gold-text)";
 
   return (
     <section
@@ -181,7 +181,7 @@ export default function HeroSection() {
           fontWeight: 600,
           letterSpacing: 2.4,
           textTransform: "uppercase",
-          color: accent,
+          color: accentText,
           marginBottom: 14,
         }}>
           Moods, not genres
@@ -271,7 +271,7 @@ export default function HeroSection() {
                 style={{
                   display: "inline-flex", alignItems: "center",
                   minHeight: touch ? 44 : undefined,
-                  background: "var(--gold)", color: "var(--accent-ink)",
+                  background: "var(--gold)", color: "var(--gold-on)",
                   textDecoration: "none", padding: "8px 14px", borderRadius: 999,
                   fontSize: 12, fontWeight: 600,
                 }}

@@ -717,7 +717,7 @@ function BrowseContent() {
                     justifyContent: "center",
                     fontSize: "13px",
                     fontWeight: page === p ? 600 : 500,
-                    color: page === p ? "#fff" : "var(--t2)",
+                    color: page === p ? "var(--blue-on)" : "var(--t2)",
                     cursor: "pointer",
                     transition: "all 0.2s",
                     boxShadow:

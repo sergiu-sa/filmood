@@ -64,7 +64,7 @@ export default function MoodDescribe({ compact = false }: { compact?: boolean })
             border: "none",
             borderRadius: "12px",
             background: "var(--gold)",
-            color: "var(--accent-ink)",
+            color: "var(--gold-on)",
             font: "inherit",
             fontSize: "14px",
             fontWeight: 700,

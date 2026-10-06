@@ -62,9 +62,9 @@ export default function ResultMovieCard({
           position: "relative",
         }}
       >
-        {/* Rating badge — top right, matches v9 result-card pattern */}
+        {/* Rating badge — top right, matches v9 result-card pattern. The scrim is dark in both themes, so the badge takes dark mode's gold. */}
         <div
-          className="font-sans"
+          className="font-sans always-dark-accents"
           style={{
             position: "absolute",
             top: "8px",
@@ -78,7 +78,7 @@ export default function ResultMovieCard({
             backdropFilter: "blur(8px)",
             fontSize: "10px",
             fontWeight: 700,
-            color: "var(--gold)",
+            color: "rgb(var(--gold-rgb))",
           }}
         >
           <Icon name="star-burst" size={9} />
@@ -130,13 +130,13 @@ export default function ResultMovieCard({
           }}
         >
           {yesCount > 0 && (
-            <span style={{ color: "var(--teal)" }}>{yesCount} yes</span>
+            <span style={{ color: "var(--t2)" }}>{yesCount} yes</span>
           )}
           {maybeCount > 0 && (
-            <span style={{ color: "var(--gold)" }}>{maybeCount} maybe</span>
+            <span style={{ color: "var(--t2)" }}>{maybeCount} maybe</span>
           )}
           {noCount > 0 && (
-            <span style={{ color: "var(--rose)" }}>{noCount} no</span>
+            <span style={{ color: "var(--t2)" }}>{noCount} no</span>
           )}
         </div>
 
