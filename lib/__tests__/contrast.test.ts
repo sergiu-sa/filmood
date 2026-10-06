@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { ACCENT_VARS, AVATAR_COLORS } from "@/lib/constants";
 
 // Every text token in app/globals.css must reach WCAG AA (4.5:1) on the
 // surfaces it is allowed on, in both themes.
@@ -73,6 +74,11 @@ describe.each(Object.entries(themes))("%s theme", (_, tokens) => {
     expect(tokens[`${a}-rgb`]).toBe(triplet);
     for (const suffix of ["soft", "glow", "border"]) expect(tokens[`${a}-${suffix}`]).toMatch(`rgba(${triplet},`);
   });
+});
+
+it("every token ACCENT_VARS and AVATAR_COLORS name exists", () => {
+  const names = JSON.stringify([ACCENT_VARS, AVATAR_COLORS]).match(/--[\w-]+/g)!;
+  for (const tokens of Object.values(themes)) for (const name of names) expect(tokens).toHaveProperty(name.slice(2));
 });
 
 it(".always-dark-accents carries dark mode's -rgb triplets", () => {

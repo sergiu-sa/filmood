@@ -56,7 +56,7 @@ export default function MoodTile(props: MoodTileProps) {
                 height: "22px",
                 borderRadius: "50%",
                 background: accent.base,
-                color: "var(--bg)",
+                color: accent.on,
               }}
             >
               <Icon name="check" size={13} />

@@ -180,12 +180,15 @@ export default function AccountSettings({ user }: Props) {
               className="w-full bg-transparent text-[13px] font-medium text-(--t1) outline-none"
               placeholder="Repeat the new password"
             />
+            {/* Rose text is under 4.5:1 on --surface2, so the rose border marks the error. */}
             {pwError && (
               <p
                 style={{
                   fontSize: "11px",
                   color: "var(--t1)",
                   margin: "4px 0 0",
+                  borderLeft: "2px solid var(--rose)",
+                  paddingLeft: "8px",
                 }}
               >
                 {pwError}
