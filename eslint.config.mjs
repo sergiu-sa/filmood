@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Gitignored local folder; without this its files are linted with the app's.
+    "linkedin-post/**",
   ]),
 ]);
 

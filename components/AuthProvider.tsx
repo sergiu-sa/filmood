@@ -36,7 +36,7 @@ export default function AuthProvider({
 
   useEffect(() => {
     // Safety net: if the auth server is unreachable, onAuthStateChange may
-    // never fire and AuthGuard would render "Loading..." forever. Flip
+    // never fire and every page waiting on `loading` would wait forever. Flip
     // loading to false after 5s; the user proceeds as a guest until the
     // real auth event arrives (which then re-resolves the state).
     const timeout = setTimeout(() => setLoading(false), 5000);
