@@ -29,7 +29,7 @@
   /* Text hierarchy — warm chalk on cool bg (cinematic) */
   --t1: #F3E8D2;
   --t2: #C4B69C;
-  --t3: #7A7160;
+  --t3: #978E7B;
 
   /* Borders — chalk at low alpha */
   --border:         rgba(243, 232, 210, 0.08);
@@ -51,14 +51,14 @@
   --blue-glow: rgba(122, 158, 224, 0.08);
 
   /* Accents — bougain (theatrical pink on deep blue) */
-  --rose:      #E85A8E;
-  --rose-soft: rgba(232, 90, 142, 0.10);
-  --rose-glow: rgba(232, 90, 142, 0.08);
+  --rose:      #E85C8F;
+  --rose-soft: rgba(232, 92, 143, 0.10);
+  --rose-glow: rgba(232, 92, 143, 0.08);
 
   /* Accents — shadow-bright (wine; cerebral/mindbending moods) */
-  --violet:      #D06080;
-  --violet-soft: rgba(208, 96, 128, 0.10);
-  --violet-glow: rgba(208, 96, 128, 0.08);
+  --violet:      #D46E8B;
+  --violet-soft: rgba(212, 110, 139, 0.10);
+  --violet-glow: rgba(212, 110, 139, 0.08);
 
   /* Accents — jade (calm moods) */
   --teal:      #5AB5A0;
@@ -66,34 +66,46 @@
   --teal-glow: rgba(90, 181, 160, 0.08);
 
   /* Accents — burnt (intense moods) */
-  --ember:      #E56338;
-  --ember-soft: rgba(229, 99, 56, 0.10);
-  --ember-glow: rgba(229, 99, 56, 0.08);
+  --ember:      #E6663C;
+  --ember-soft: rgba(230, 102, 60, 0.10);
+  --ember-glow: rgba(230, 102, 60, 0.08);
 
   /* Accent borders — 25% alpha for chip borders and outline accents */
   --gold-border:   rgba(232, 160, 46, 0.25);
   --blue-border:   rgba(122, 158, 224, 0.25);
-  --rose-border:   rgba(232, 90, 142, 0.25);
-  --violet-border: rgba(208, 96, 128, 0.25);
+  --rose-border:   rgba(232, 92, 143, 0.25);
+  --violet-border: rgba(212, 110, 139, 0.25);
   --teal-border:   rgba(90, 181, 160, 0.25);
-  --ember-border:  rgba(229, 99, 56, 0.25);
+  --ember-border:  rgba(230, 102, 60, 0.25);
 
   /* Accent RGB triplets — compose tints at arbitrary alpha:
      rgba(var(--gold-rgb), 0.7). Prefer --*-soft / --*-glow / --*-border
      for the common 10 / 8 / 25 % cases. */
   --gold-rgb:   232, 160, 46;
   --blue-rgb:   122, 158, 224;
-  --rose-rgb:   232, 90, 142;
-  --violet-rgb: 208, 96, 128;
+  --rose-rgb:   232, 92, 143;
+  --violet-rgb: 212, 110, 139;
   --teal-rgb:   90, 181, 160;
-  --ember-rgb:  229, 99, 56;
+  --ember-rgb:  230, 102, 60;
 
-  /* Contrast text on accent-colored backgrounds. Theme-fixed because
-     accent fills don't flip with mode — a gold button is gold in both
-     themes, so the readable text on top is a palette-family constant.
+  /* The two text colours for accent fills, fixed across themes. Which one
+     a fill takes depends on the mode, so components use --{accent}-on.
      Ink and chalk match the Marquee palette, not generic black/white. */
   --accent-ink:   #1A130F;
   --accent-paper: #F3E8D2;
+
+  /* Text on each accent fill. Every dark accent is light enough that only
+     ink reaches 4.5:1 on it; light mode swaps five of them to paper. */
+  --gold-on:   var(--accent-ink);
+  --blue-on:   var(--accent-ink);
+  --rose-on:   var(--accent-ink);
+  --violet-on: var(--accent-ink);
+  --teal-on:   var(--accent-ink);
+  --ember-on:  var(--accent-ink);
+
+  /* Gold as text. Light mode needs a darker gold than its fill, which has
+     to stay light enough for ink on top. */
+  --gold-text: var(--gold);
 
   /* Dark overlay tokens — scrims over posters, floating badge backgrounds,
      subtle card shadows. Fixed across themes because overlays darken
@@ -136,7 +148,7 @@
   /* Text hierarchy — warm ink on chalk */
   --t1: #1A130F;
   --t2: #52382B;
-  --t3: #8A7B6D;
+  --t3: #6B5E53;
 
   /* Borders — ink at low alpha */
   --border:        rgba(26, 19, 15, 0.10);
@@ -155,35 +167,44 @@
   --blue-soft: rgba(36, 62, 148, 0.10);
   --blue-glow: rgba(36, 62, 148, 0.08);
 
-  --rose:      #C4397A;    /* bougain, darkened */
-  --rose-soft: rgba(196, 57, 122, 0.10);
-  --rose-glow: rgba(196, 57, 122, 0.08);
+  --rose:      #A83169;    /* bougain, darkened */
+  --rose-soft: rgba(168, 49, 105, 0.10);
+  --rose-glow: rgba(168, 49, 105, 0.08);
 
   --violet:      #6B1F3A;  /* shadow (your reference) */
   --violet-soft: rgba(107, 31, 58, 0.10);
   --violet-glow: rgba(107, 31, 58, 0.08);
 
-  --teal:      #2E7D6E;    /* jade */
-  --teal-soft: rgba(46, 125, 110, 0.10);
-  --teal-glow: rgba(46, 125, 110, 0.08);
+  --teal:      #286B5E;    /* jade */
+  --teal-soft: rgba(40, 107, 94, 0.10);
+  --teal-glow: rgba(40, 107, 94, 0.08);
 
-  --ember:      #C04820;   /* burnt */
-  --ember-soft: rgba(192, 72, 32, 0.10);
-  --ember-glow: rgba(192, 72, 32, 0.08);
+  --ember:      #A63E1B;   /* burnt */
+  --ember-soft: rgba(166, 62, 27, 0.10);
+  --ember-glow: rgba(166, 62, 27, 0.08);
 
   --gold-border:   rgba(184, 118, 30, 0.25);
   --blue-border:   rgba(36, 62, 148, 0.25);
-  --rose-border:   rgba(196, 57, 122, 0.25);
+  --rose-border:   rgba(168, 49, 105, 0.25);
   --violet-border: rgba(107, 31, 58, 0.25);
-  --teal-border:   rgba(46, 125, 110, 0.25);
-  --ember-border:  rgba(192, 72, 32, 0.25);
+  --teal-border:   rgba(40, 107, 94, 0.25);
+  --ember-border:  rgba(166, 62, 27, 0.25);
 
   --gold-rgb:   184, 118, 30;
   --blue-rgb:   36, 62, 148;
-  --rose-rgb:   196, 57, 122;
+  --rose-rgb:   168, 49, 105;
   --violet-rgb: 107, 31, 58;
-  --teal-rgb:   46, 125, 110;
-  --ember-rgb:  192, 72, 32;
+  --teal-rgb:   40, 107, 94;
+  --ember-rgb:  166, 62, 27;
+
+  --gold-text: #875616;
+
+  --gold-on:   var(--accent-ink);
+  --blue-on:   var(--accent-paper);
+  --rose-on:   var(--accent-paper);
+  --violet-on: var(--accent-paper);
+  --teal-on:   var(--accent-paper);
+  --ember-on:  var(--accent-paper);
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -199,10 +220,10 @@
 [data-theme="light"] .always-dark-accents {
   --gold-rgb:   232, 160, 46;
   --blue-rgb:   122, 158, 224;
-  --rose-rgb:   232, 90, 142;
-  --violet-rgb: 208, 96, 128;
+  --rose-rgb:   232, 92, 143;
+  --violet-rgb: 212, 110, 139;
   --teal-rgb:   90, 181, 160;
-  --ember-rgb:  229, 99, 56;
+  --ember-rgb:  230, 102, 60;
 }
 
 /* ═══════════════════════════════════════════════════════════

@@ -78,7 +78,9 @@ export default function FilmCard({
             </div>
           )}
 
+          {/* The scrim is dark in both themes, so the badge takes dark mode's gold. */}
           <div
+            className="always-dark-accents"
             style={{
               position: "absolute",
               top: "10px",
@@ -91,7 +93,7 @@ export default function FilmCard({
               fontSize: "11px",
               fontWeight: 700,
               lineHeight: 1,
-              color: "var(--gold)",
+              color: "rgb(var(--gold-rgb))",
               background: "var(--overlay-heavy)",
               border: "1px solid rgba(255,255,255,0.06)",
               boxShadow: "0 6px 18px rgba(0,0,0,0.24)",

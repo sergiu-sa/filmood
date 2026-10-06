@@ -120,7 +120,7 @@ export default function Navbar() {
                 fontSize: "12px",
                 fontWeight: 500,
                 background: "var(--gold)",
-                color: "var(--accent-ink)",
+                color: "var(--gold-on)",
                 border: "none",
               }}
             >
@@ -155,7 +155,7 @@ export default function Navbar() {
                   background: "var(--gold)",
                   fontSize: "12px",
                   fontWeight: 600,
-                  color: "var(--accent-ink)",
+                  color: "var(--gold-on)",
                 }}
               >
                 {user.email?.[0]?.toUpperCase() || "U"}
@@ -220,7 +220,7 @@ export default function Navbar() {
                 href="/signup"
                 onClick={() => setIsOpen(false)}
                 className="no-underline"
-                style={{ fontSize: "14px", color: "var(--gold)" }}
+                style={{ fontSize: "14px", color: "var(--gold-text)" }}
               >
                 Sign up
               </Link>

@@ -98,9 +98,9 @@ export default function TopPickCard({
             backgroundPosition: "center top",
           }}
         >
-          {/* Tier badge — sits on the poster */}
+          {/* Tier badge — sits on the poster. The scrim is dark in both themes, so the badge takes dark mode's gold. */}
           <div
-            className="font-sans"
+            className="font-sans always-dark-accents"
             style={{
               position: "absolute",
               top: "16px",
@@ -113,7 +113,7 @@ export default function TopPickCard({
               fontWeight: 700,
               textTransform: "uppercase",
               letterSpacing: "1.8px",
-              color: "var(--gold)",
+              color: "rgb(var(--gold-rgb))",
               border: "1px solid rgba(var(--gold-rgb), 0.4)",
             }}
           >
@@ -161,7 +161,7 @@ export default function TopPickCard({
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "4px",
-                  color: "var(--gold)",
+                  color: "var(--gold-text)",
                   fontWeight: 700,
                 }}
               >
@@ -185,7 +185,7 @@ export default function TopPickCard({
                       borderRadius: "100px",
                       fontSize: "10px",
                       fontWeight: 600,
-                      color: vars.base,
+                      color: vars.text,
                       background: vars.soft,
                       border: `1px solid ${vars.border}`,
                     }}
@@ -242,7 +242,7 @@ export default function TopPickCard({
           >
             {[
               { label: "Yes", count: yesCount, color: "var(--teal)" },
-              { label: "Maybe", count: maybeCount, color: "var(--gold)" },
+              { label: "Maybe", count: maybeCount, color: "var(--gold-text)" },
               { label: "No", count: noCount, color: "var(--rose)" },
             ].map((s) => (
               <div key={s.label} style={{ display: "flex", flexDirection: "column" }}>
@@ -350,7 +350,7 @@ export default function TopPickCard({
               padding: "14px 24px",
               borderRadius: "10px",
               background: "var(--gold)",
-              color: "var(--accent-ink)",
+              color: "var(--gold-on)",
               fontSize: "13px",
               fontWeight: 700,
               textDecoration: "none",

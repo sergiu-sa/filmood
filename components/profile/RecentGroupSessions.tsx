@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import { getAuthHeaders } from "@/lib/getAuthToken";
 import { tmdbImageUrl } from "@/lib/tmdb";
+import { AVATAR_COLORS } from "@/lib/constants";
 
 interface SessionParticipant {
   nickname: string;
@@ -21,15 +22,6 @@ interface RecentSession {
   topPickTitle: string | null;
   topPickPoster: string | null;
 }
-
-const PARTICIPANT_COLORS = [
-  "var(--gold)",
-  "var(--blue)",
-  "var(--teal)",
-  "var(--rose)",
-  "var(--violet)",
-  "var(--ember)",
-];
 
 function relativeTime(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
@@ -219,11 +211,8 @@ export default function RecentGroupSessions() {
                             height: "20px",
                             fontSize: "9px",
                             fontWeight: 700,
-                            color: "var(--accent-ink)",
-                            background:
-                              PARTICIPANT_COLORS[
-                                i % PARTICIPANT_COLORS.length
-                              ],
+                            color: AVATAR_COLORS[i % AVATAR_COLORS.length].text,
+                            background: AVATAR_COLORS[i % AVATAR_COLORS.length].bg,
                             marginLeft: i === 0 ? 0 : "-4px",
                             border: "2px solid var(--surface2)",
                           }}
@@ -259,12 +248,7 @@ export default function RecentGroupSessions() {
                             : status.tone === "live"
                               ? "var(--gold-soft)"
                               : "var(--tag-bg)",
-                        color:
-                          status.tone === "match"
-                            ? "var(--teal)"
-                            : status.tone === "live"
-                              ? "var(--gold)"
-                              : "var(--t2)",
+                        color: status.tone === "match" || status.tone === "live" ? "var(--t1)" : "var(--t2)",
                       }}
                     >
                       {status.text}

@@ -200,12 +200,12 @@ export default function DangerZone() {
                       row.danger
                         ? {
                             background: "var(--rose)",
-                            color: "var(--accent-paper)",
+                            color: "var(--rose-on)",
                             border: 0,
                           }
                         : {
                             background: "var(--gold)",
-                            color: "var(--accent-ink)",
+                            color: "var(--gold-on)",
                             border: 0,
                           }
                     }

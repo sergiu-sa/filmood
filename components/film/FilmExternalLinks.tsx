@@ -78,7 +78,7 @@ export default function FilmExternalLinks({
                   border: "1px solid var(--gold-border)",
                   fontSize: "12px",
                   fontWeight: 700,
-                  color: "var(--gold)",
+                  color: "var(--gold-text)",
                   textDecoration: "none",
                 }
               : {

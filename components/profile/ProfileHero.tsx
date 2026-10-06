@@ -94,7 +94,7 @@ export default function ProfileHero({ user }: Props) {
               width: "72px",
               height: "72px",
               background: "var(--gold)",
-              color: "var(--accent-ink)",
+              color: "var(--gold-on)",
               fontSize: "26px",
               fontWeight: 700,
               boxShadow:
@@ -199,7 +199,7 @@ export default function ProfileHero({ user }: Props) {
                   fontWeight: 700,
                   letterSpacing: "1.4px",
                   textTransform: "uppercase",
-                  color: ACCENT_VARS[topMoodAccent].base,
+                  color: ACCENT_VARS[topMoodAccent].text,
                 }}
               >
                 <Icon name="mark" size={11} />
@@ -222,7 +222,7 @@ export default function ProfileHero({ user }: Props) {
         <Stat
           value={stats == null ? "·" : String(stats.watchlistCount)}
           label="Watchlist"
-          color="var(--gold)"
+          color="var(--gold-text)"
         />
         <Stat
           value={stats == null ? "·" : String(stats.moodPicks)}
@@ -232,7 +232,7 @@ export default function ProfileHero({ user }: Props) {
         <Stat
           value={moodLabel(topMoodKey)}
           label="Top mood"
-          color={ACCENT_VARS[topMoodAccent].base}
+          color={ACCENT_VARS[topMoodAccent].text}
           italic
         />
         <Stat
@@ -259,7 +259,7 @@ function Stat({
   return (
     <div
       className="px-3 py-3.5 text-center"
-      style={{ background: "var(--surface2)" }}
+      style={{ background: "var(--surface)" }}
     >
       <div
         className="font-serif"

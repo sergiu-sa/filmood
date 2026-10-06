@@ -85,7 +85,7 @@ function Row({ event }: RowProps) {
             style={{
               fontStyle: "italic",
               fontWeight: 600,
-              color: ACCENT_VARS[accent].base,
+              color: ACCENT_VARS[accent].text,
             }}
           >
             {moodLabel(mood)}

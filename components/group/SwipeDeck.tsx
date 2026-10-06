@@ -20,6 +20,7 @@ const VOTE_BUTTONS: {
   vote: SwipeVote;
   label: string;
   color: string;
+  text: string;
   hoverBg: string;
   hoverText: string;
   size: number;
@@ -29,8 +30,9 @@ const VOTE_BUTTONS: {
     vote: "no",
     label: "Nah",
     color: "var(--rose)",
+    text: "var(--rose)",
     hoverBg: "var(--rose)",
-    hoverText: "var(--accent-paper)",
+    hoverText: "var(--rose-on)",
     size: 56,
     icon: <Icon name="close" size={20} />,
   },
@@ -38,8 +40,9 @@ const VOTE_BUTTONS: {
     vote: "maybe",
     label: "Maybe",
     color: "var(--gold)",
+    text: "var(--gold-text)",
     hoverBg: "var(--gold)",
-    hoverText: "var(--accent-ink)",
+    hoverText: "var(--gold-on)",
     size: 46,
     // Squiggle is unique to the "maybe" vote semantic — kept inline.
     icon: (
@@ -52,8 +55,9 @@ const VOTE_BUTTONS: {
     vote: "yes",
     label: "Yes",
     color: "var(--teal)",
+    text: "var(--teal)",
     hoverBg: "var(--teal)",
-    hoverText: "var(--accent-ink)",
+    hoverText: "var(--teal-on)",
     size: 56,
     icon: <Icon name="check" size={20} />,
   },
@@ -257,7 +261,7 @@ export default function SwipeDeck({
                 style={{
                   fontSize: "11px",
                   fontWeight: 500,
-                  color: isHovered ? btn.color : "var(--t3)",
+                  color: isHovered ? btn.text : "var(--t3)",
                   transition: "color 0.2s",
                 }}
               >

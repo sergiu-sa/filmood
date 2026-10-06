@@ -99,7 +99,7 @@ export default function SignupPage() {
               <Link
                 href="/login"
                 className="font-medium no-underline hover:underline"
-                style={{ color: "var(--gold)" }}
+                style={{ color: "var(--gold-text)" }}
               >
                 Log in
               </Link>
@@ -289,7 +289,7 @@ export default function SignupPage() {
               type="submit"
               disabled={loading || success}
               className="w-full cursor-pointer rounded-xl border-none py-3.5 text-sm font-semibold transition-all hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed"
-              style={{ background: "var(--gold)", color: "var(--accent-ink)" }}
+              style={{ background: "var(--gold)", color: "var(--gold-on)" }}
             >
               {loading ? "Creating account..." : "Sign up"}
             </button>
@@ -303,7 +303,7 @@ export default function SignupPage() {
             <a
               href="#"
               className="hover:underline"
-              style={{ color: "var(--gold)" }}
+              style={{ color: "var(--gold-text)" }}
             >
               Terms
             </a>{" "}
@@ -311,7 +311,7 @@ export default function SignupPage() {
             <a
               href="#"
               className="hover:underline"
-              style={{ color: "var(--gold)" }}
+              style={{ color: "var(--gold-text)" }}
             >
               Privacy Policy
             </a>

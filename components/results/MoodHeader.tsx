@@ -154,7 +154,7 @@ export default function MoodHeader({ moods, interpreted, droppedMoods, filters, 
               fontWeight: 700,
               letterSpacing: isMobile ? "1.6px" : "1.8px",
               textTransform: "uppercase",
-              color: "var(--gold)",
+              color: "var(--gold-text)",
             }}
           >
             {moods.length > 1 ? "What to watch · blended" : "What to watch"}
@@ -213,7 +213,6 @@ export default function MoodHeader({ moods, interpreted, droppedMoods, filters, 
                     borderRadius: "999px",
                     background: accent.soft,
                     border: `1px solid ${accent.border}`,
-                    // Accent text on its own soft fill is under 4.5:1 in light mode; the dot, border and fill carry the mood.
                     color: "var(--t1)",
                     fontSize: chipFont,
                     fontWeight: 600,
@@ -351,7 +350,7 @@ export default function MoodHeader({ moods, interpreted, droppedMoods, filters, 
                   margin: "-12px -10px -12px -2px",
                   border: "none",
                   background: "none",
-                  color: "var(--gold)",
+                  color: "var(--gold-text)",
                   font: "inherit",
                   fontWeight: 700,
                   cursor: busy ? "progress" : "pointer",
@@ -443,7 +442,7 @@ function Reading({
       {applied.map((m, i) => (
         <span key={m.key}>
           {i > 0 && " + "}
-          <span style={{ color: ACCENT_VARS[m.accent].base, fontWeight: 700 }}>{m.label}</span>
+          <span style={{ color: ACCENT_VARS[m.accent].text, fontWeight: 700 }}>{m.label}</span>
         </span>
       ))}
       {labels.map((label, i) => (
@@ -510,7 +509,7 @@ export function EditForm({
       />
       <button
         type="submit"
-        style={{ ...button, padding: "0 18px", border: "none", background: "var(--gold)", color: "var(--accent-ink)", fontWeight: 700 }}
+        style={{ ...button, padding: "0 18px", border: "none", background: "var(--gold)", color: "var(--gold-on)", fontWeight: 700 }}
       >
         Search
       </button>

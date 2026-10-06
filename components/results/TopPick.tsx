@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useMediaQuery } from "@/lib/useMediaQuery";
-import type { DiscoverFilm, DiscoverResponse, Film, Keyword, Provider } from "@/lib/types";
+import type { AccentColor, DiscoverFilm, DiscoverResponse, Film, Keyword, Provider } from "@/lib/types";
 import { moodMap } from "@/lib/moodMap";
 import { ACCENT_VARS } from "@/lib/constants";
 import { tmdbImageUrl } from "@/lib/tmdb";
@@ -14,7 +14,7 @@ import Icon from "@/components/ui/Icon";
 interface TopPickProps {
   film: Film;
   moods: string[];
-  accent: { base: string; soft: string; glow: string };
+  accent: AccentColor;
   providers: Provider[] | null;
   providersLoading: boolean;
   /** Mood keywords TMDB tagged the film with, and its genres, moods' own first. */
@@ -30,11 +30,12 @@ interface TopPickProps {
 export default function TopPick({
   film,
   moods,
-  accent,
+  accent: accentKey,
   providers,
   providersLoading,
   why,
 }: TopPickProps) {
+  const accent = ACCENT_VARS[accentKey];
   const isMobile = useMediaQuery("(max-width: 820px)");
   const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const year = film.release_date
@@ -120,8 +121,9 @@ export default function TopPick({
           )}
 
           {/* Badge */}
+          {/* The scrim is dark in both themes, so the badge takes dark mode's accent. */}
           <div
-            className="font-sans"
+            className="font-sans always-dark-accents"
             style={{
               position: "absolute",
               top: "16px",
@@ -134,7 +136,7 @@ export default function TopPick({
               fontWeight: 700,
               textTransform: "uppercase",
               letterSpacing: "1.8px",
-              color: accent.base,
+              color: `rgb(var(--${accentKey}-rgb))`,
               border: `1px solid ${accent.soft}`,
             }}
           >
@@ -182,7 +184,7 @@ export default function TopPick({
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "4px",
-                  color: accent.base,
+                  color: accent.text,
                   fontWeight: 700,
                 }}
               >
@@ -203,8 +205,7 @@ export default function TopPick({
                   fontWeight: 700,
                   letterSpacing: "1.4px",
                   textTransform: "uppercase",
-                  // --t2, not gold: light-mode gold text is under 4.5:1 until the accent tokens are fixed.
-                  color: "var(--t2)",
+                  color: "var(--gold-text)",
                 }}
               >
                 Why
@@ -243,7 +244,7 @@ export default function TopPick({
                       borderRadius: "100px",
                       fontSize: "10px",
                       fontWeight: 600,
-                      color: moodAccent.base,
+                      color: moodAccent.text,
                       background: moodAccent.soft,
                       border: `1px solid ${moodAccent.soft}`,
                     }}
@@ -344,7 +345,7 @@ export default function TopPick({
               padding: isMobile ? "12px 20px" : "14px 24px",
               borderRadius: "10px",
               background: accent.base,
-              color: "var(--accent-ink)",
+              color: accent.on,
               fontSize: "13px",
               fontWeight: 700,
               textDecoration: "none",
@@ -399,7 +400,7 @@ export function ResultsTopPick({ film, mood }: { film: DiscoverFilm; mood: Disco
     <TopPick
       film={film}
       moods={[mood.key]}
-      accent={ACCENT_VARS[mood.accent]}
+      accent={mood.accent}
       providers={providers}
       providersLoading={providers === null}
       why={{

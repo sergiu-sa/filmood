@@ -255,7 +255,7 @@ export default function ResetPasswordPage() {
                 className="w-full cursor-pointer rounded-xl border-none py-3.5 text-sm font-semibold transition-all hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed"
                 style={{
                   background: "var(--gold)",
-                  color: "var(--accent-ink)",
+                  color: "var(--gold-on)",
                 }}
               >
                 {loading ? "Saving..." : "Save new password"}

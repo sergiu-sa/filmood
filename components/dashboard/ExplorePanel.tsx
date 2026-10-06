@@ -19,21 +19,18 @@ const steps = [
     num: "1",
     title: "Create & share",
     sub: "Send the code to your group",
-    accent: "var(--teal)",
     accentSoft: "var(--teal-soft)",
   },
   {
     num: "2",
     title: "Pick moods",
     sub: "Everyone selects privately",
-    accent: "var(--violet)",
     accentSoft: "var(--violet-soft)",
   },
   {
     num: "3",
     title: "Swipe & match",
     sub: "Find the film together",
-    accent: "var(--gold)",
     accentSoft: "var(--gold-soft)",
   },
 ];
@@ -160,7 +157,7 @@ export default function ExplorePanel({ isOpen, onClose, embedded }: ExplorePanel
                 height: "26px",
                 borderRadius: "7px",
                 background: step.accentSoft,
-                color: step.accent,
+                color: "var(--t1)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -277,8 +274,9 @@ export default function ExplorePanel({ isOpen, onClose, embedded }: ExplorePanel
                   Start a private room and invite up to 10 friends.
                 </p>
 
+                {/* Rose text is under 4.5:1 on --surface2, so the rose border marks the error. */}
                 {createError && (
-                  <p style={{ color: "var(--rose)", fontSize: "12px" }}>
+                  <p style={{ color: "var(--t1)", fontSize: "12px", borderLeft: "2px solid var(--rose)", paddingLeft: "8px" }}>
                     {createError}
                   </p>
                 )}
@@ -292,7 +290,7 @@ export default function ExplorePanel({ isOpen, onClose, embedded }: ExplorePanel
                     padding: "12px 24px",
                     borderRadius: "10px",
                     background: createLoading ? "var(--surface3)" : "var(--teal)",
-                    color: createLoading ? "var(--t3)" : "var(--accent-ink)",
+                    color: createLoading ? "var(--t3)" : "var(--teal-on)",
                     fontSize: "13px",
                     fontWeight: 600,
                     border: "none",
@@ -322,7 +320,7 @@ export default function ExplorePanel({ isOpen, onClose, embedded }: ExplorePanel
                       padding: "10px 20px",
                       borderRadius: "10px",
                       background: "var(--teal)",
-                      color: "var(--accent-ink)",
+                      color: "var(--teal-on)",
                       fontSize: "13px",
                       fontWeight: 600,
                       textDecoration: "none",
@@ -413,7 +411,7 @@ export default function ExplorePanel({ isOpen, onClose, embedded }: ExplorePanel
                   padding: "11px 20px",
                   borderRadius: "10px",
                   background: joinLoading ? "var(--surface3)" : "var(--gold)",
-                  color: joinLoading ? "var(--t3)" : "var(--accent-ink)",
+                  color: joinLoading ? "var(--t3)" : "var(--gold-on)",
                   fontSize: "13px",
                   fontWeight: 600,
                   border: "none",
@@ -426,7 +424,7 @@ export default function ExplorePanel({ isOpen, onClose, embedded }: ExplorePanel
             </div>
 
             {joinError && (
-              <p style={{ fontSize: "12px", color: "var(--rose)" }}>
+              <p style={{ fontSize: "12px", color: "var(--t1)", borderLeft: "2px solid var(--rose)", paddingLeft: "8px" }}>
                 {joinError}
               </p>
             )}

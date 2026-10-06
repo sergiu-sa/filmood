@@ -148,7 +148,7 @@ export default function VoteBreakdown({
                 fontWeight: 600,
                 textTransform: "uppercase",
                 letterSpacing: "0.5px",
-                color: voteColor,
+                color: "var(--t2)",
               }}
             >
               <span

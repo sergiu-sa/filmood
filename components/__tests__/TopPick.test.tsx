@@ -33,7 +33,7 @@ function renderPick(why: { keywords: string[]; genres: string[] }) {
     <TopPick
       film={film}
       moods={["easy"]}
-      accent={{ base: "var(--teal)", soft: "var(--teal-soft)", glow: "var(--teal-glow)" }}
+      accent="teal"
       providers={[]}
       providersLoading={false}
       why={why}

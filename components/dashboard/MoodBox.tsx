@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { allMoods } from "@/lib/moodMap";
+import { ACCENT_VARS } from "@/lib/constants";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import CollapsedBoxRail from "./CollapsedBoxRail";
 
@@ -54,6 +55,7 @@ export default function MoodBox({
         title="Pick your mood"
         sub="Select how you want to feel — we'll find the film."
         accent="var(--gold)"
+        accentText="var(--gold-text)"
         accentSoft="var(--gold-soft)"
         ariaLabel="Pick your mood — select how you want to feel"
         onActivate={onExpand}
@@ -90,7 +92,7 @@ export default function MoodBox({
           fontWeight: 600,
           textTransform: "uppercase",
           letterSpacing: "1.8px",
-          color: "var(--gold)",
+          color: "var(--gold-text)",
           marginBottom: "12px",
         }}
       >
@@ -150,7 +152,7 @@ export default function MoodBox({
             fontWeight: 600,
             letterSpacing: 2,
             textTransform: "uppercase",
-            color: featuredAccent,
+            color: ACCENT_VARS[featured.accentColor].text,
             marginBottom: 6,
             opacity: fading ? 0 : 1,
             transition: "opacity 0.4s, color 0.8s",
@@ -200,7 +202,7 @@ export default function MoodBox({
           borderRadius: "10px",
           background: "var(--gold-soft)",
           border: "1px solid rgba(var(--gold-rgb), 0.22)",
-          color: "var(--gold)",
+          color: "var(--gold-text)",
           fontSize: "12.5px",
           fontWeight: 600,
           letterSpacing: "0.2px",

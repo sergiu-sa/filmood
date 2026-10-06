@@ -264,7 +264,7 @@ export default function GroupResultsPage() {
               fontWeight: 700,
               textTransform: "uppercase",
               letterSpacing: "2.2px",
-              color: "var(--gold)",
+              color: "var(--gold-text)",
               marginBottom: "12px",
             }}
           >
@@ -394,7 +394,7 @@ export default function GroupResultsPage() {
               padding: "12px 28px",
               borderRadius: "10px",
               background: "var(--gold)",
-              color: "var(--accent-ink)",
+              color: "var(--gold-on)",
               fontSize: "13px",
               fontWeight: 700,
               textDecoration: "none",

@@ -39,7 +39,7 @@ export default function HeroDateline({ name }: HeroDatelineProps) {
 
   const prefix = name ? name.slice(0, 10).toUpperCase() : "N°01";
   const timePart = now ? formatTime(now) : "TONIGHT";
-  const accent = name ? "var(--teal)" : "var(--gold)";
+  const accent = name ? "var(--teal)" : "var(--gold-text)";
 
   return (
     <time

@@ -77,15 +77,16 @@ export default function HeroFeatureFilm({ moodKey }: HeroFeatureFilmProps) {
           {film.year}
         </span>
 
-        {/* MOOD MATCH badge — top-right */}
+        {/* MOOD MATCH badge — top-right. The scrim is dark in both themes, so the badge takes dark mode's gold. */}
         <span
+          className="always-dark-accents"
           style={{
             position: "absolute", top: 9, right: 11,
             background: "var(--overlay-heavy)", backdropFilter: "blur(6px)",
             border: "1px solid rgba(var(--gold-rgb), 0.35)",
             padding: "4px 8px", borderRadius: 999,
             fontSize: 9, fontWeight: 600, letterSpacing: 0.8,
-            color: "var(--gold)",
+            color: "rgb(var(--gold-rgb))",
           }}
         >
           ◉ MOOD MATCH
