@@ -539,6 +539,18 @@ svg.logo-static { overflow: visible; }
 [data-theme="light"] .hero-orb { opacity: 0.5 !important; }
 
 /* ── Reduced motion ── */
+/* !important in a stylesheet beats a non-important inline declaration, so this reaches the inline animations too. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    /* A staggered card would otherwise sit at opacity 0 through its delay, then pop in. */
+    animation-delay: 0s !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .logo-drift .c1,
   .logo-drift .c2,
@@ -556,10 +568,6 @@ svg.logo-static { overflow: visible; }
   .hero-orb {
     animation: none !important;
     opacity: 1 !important;
-  }
-
-  .hero-grain {
-    animation: none !important;
   }
 }
 
@@ -752,7 +760,4 @@ button:focus-visible {
 }
 .hero-feature-poster {
   animation: moodPosterFade 1.2s ease both;
-}
-@media (prefers-reduced-motion: reduce) {
-  .hero-feature-poster { animation: none !important; }
 }

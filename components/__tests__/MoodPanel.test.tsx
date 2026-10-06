@@ -19,10 +19,8 @@ vi.mock("next/link", () => ({
 
 // The viewport width the mocked media queries answer for.
 let width = 1440;
-let reducedMotion = false;
 vi.mock("@/lib/useMediaQuery", () => ({
   useMediaQuery: (query: string) => {
-    if (query.includes("reduced-motion")) return reducedMotion;
     const max = Number(/max-width: (\d+)px/.exec(query)?.[1]);
     return Number.isFinite(max) && width <= max;
   },
@@ -44,7 +42,6 @@ const tileName = (m: (typeof allMoods)[number]) => `${m.tagLabel} — ${m.descri
 describe("MoodPanel", () => {
   afterEach(() => {
     width = 1440;
-    reducedMotion = false;
     vi.clearAllMocks();
   });
 
@@ -94,13 +91,6 @@ describe("MoodPanel", () => {
     expect(wrapper).toHaveAttribute("inert");
     rerender(<MoodPanel isOpen onClose={onClose} />);
     expect(wrapper).not.toHaveAttribute("inert");
-  });
-
-  // The collapse is an inline transition, which globals.css's reduced-motion rules can't reach.
-  it("opens and closes without animating under reduced motion", () => {
-    reducedMotion = true;
-    const { container } = render(<MoodPanel isOpen onClose={onClose} />);
-    expect((container.firstChild as HTMLElement).style.transition).toBe("none");
   });
 
   // The sheet's tiles read it as their scroll-margin, so focus never leaves one under the pinned field.
