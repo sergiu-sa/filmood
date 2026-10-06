@@ -187,7 +187,7 @@ export interface RegionAvailability {
   release_date: string | null;
 }
 
-/** Response shape for GET /api/movies/[id]/regional-availability. */
+/** What `getRegionalAvailability` in lib/filmData.ts returns to the film page. */
 export interface RegionalAvailabilityResponse {
   /** Map keyed by ISO 3166-1 alpha-2 country code (uppercase). */
   regions: Record<string, RegionAvailability>;

@@ -30,7 +30,7 @@ Next.js 16 (App Router) · React 19 · TypeScript 5 · Tailwind CSS 4 · Supabas
 
 ## How it works
 
-- **The TMDB key never reaches the browser.** All film data goes through the app's own `/api/movies/*` routes, and one helper (`lib/tmdb-fetch.ts`) owns the key, URL building and caching. Upstream failures surface as errors instead of empty results.
+- **The TMDB key never reaches the browser.** All film data is fetched on the server, by the app's own `/api/movies/*` routes or the film page as it renders, and one helper (`lib/tmdb-fetch.ts`) owns the key, URL building and caching. Upstream failures surface as errors instead of empty results.
 - **Moods are measured, not guessed.** Each mood is pure data turned into a TMDB query. `npm run check:moods` runs every mood against live TMDB, and prints how many films each one returns; `--keywords` verifies every keyword ID by name.
 - **Group sessions work for guests.** Guests carry a participant ID in `localStorage`; signed-in users send a Supabase JWT. One pair of helpers in `lib/group-api.ts` resolves both.
 - **Realtime with a safety net.** Supabase Realtime pushes session and participant changes, and a 2-second poll covers dropped connections and swipe counts.

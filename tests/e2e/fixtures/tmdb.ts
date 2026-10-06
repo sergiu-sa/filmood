@@ -61,37 +61,6 @@ export const fakeFilms = [
   },
 ];
 
-export const fakeFilmDetail = {
-  id: 990001,
-  title: "Midnight Harvest",
-  overview: "A retired chef chases an old recipe across three countries.",
-  poster_path: "/fake-poster-1.jpg",
-  backdrop_path: "/fake-backdrop-1.jpg",
-  release_date: "2024-09-12",
-  runtime: 118,
-  vote_average: 8.2,
-  genres: [
-    { id: 18, name: "Drama" },
-    { id: 10749, name: "Romance" },
-  ],
-  credits: {
-    cast: [
-      {
-        id: 1,
-        name: "Alma Berger",
-        character: "Mira",
-        profile_path: "/fake-cast-1.jpg",
-      },
-      {
-        id: 2,
-        name: "Tomas Reyes",
-        character: "Owen",
-        profile_path: "/fake-cast-2.jpg",
-      },
-    ],
-  },
-};
-
 export const fakeProviders = [
   { provider_id: 8, provider_name: "Netflix", logo_path: "/fake-netflix.jpg" },
 ];
@@ -172,15 +141,6 @@ export async function mockTmdb(page: Page) {
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({ keywords: [] }),
-    }),
-  );
-
-  // Film detail — the `$` anchor keeps /providers from matching here.
-  await page.route(/\/api\/movies\/\d+$/, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(fakeFilmDetail),
     }),
   );
 }

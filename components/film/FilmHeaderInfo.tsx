@@ -57,6 +57,7 @@ export default function FilmHeaderInfo({
           movieTitle={title}
           posterPath={posterPath}
           layout="row"
+          recordView
         />
       </div>
 
