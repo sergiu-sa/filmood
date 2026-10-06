@@ -60,4 +60,18 @@ describe("POST /api/film-views", () => {
       poster_path: "/looked-up.jpg",
     });
   });
+
+  it("records nothing when the film lookup fails, and logs it", async () => {
+    const { post, afterCallbacks, supabase, getFilmDetail } = await setup(mockUser);
+    const missing = new Error("TMDB responded 404 for /movie/7");
+    getFilmDetail.mockRejectedValueOnce(missing);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await post({ movie_id: 7 });
+    await afterCallbacks[0]();
+
+    expect(supabase.from).not.toHaveBeenCalled();
+    expect(consoleError).toHaveBeenCalledWith("Film view not recorded", missing);
+    consoleError.mockRestore();
+  });
 });

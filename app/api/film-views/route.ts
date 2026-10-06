@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
           poster_path: film.poster_path,
         }),
       )
-      .catch((err) => console.error("film_views insert failed", err)),
+      .catch((err) => console.error("Film view not recorded", err)),
   );
 
   return new NextResponse(null, { status: 204 });

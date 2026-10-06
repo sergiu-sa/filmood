@@ -414,11 +414,14 @@ export default async function FilmDetailPage({
               {detail.overview}
             </p>
 
-            {/* Videos */}
-            <div style={{ marginBottom: "28px" }}>
-              <SectionLabel>Videos</SectionLabel>
-              <FilmVideos videos={videos} />
-            </div>
+            {/* Videos — its empty state says "No videos available", which a
+                failed call can't claim, so a failure leaves the section out. */}
+            {videosResult.status === "fulfilled" && (
+              <div style={{ marginBottom: "28px" }}>
+                <SectionLabel>Videos</SectionLabel>
+                <FilmVideos videos={videos} />
+              </div>
+            )}
 
             {/* Gallery */}
             {(posters.length > 0 || backdrops.length > 0) && (
