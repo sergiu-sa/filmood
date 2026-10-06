@@ -22,7 +22,6 @@ export default function ResultsGrid({ films, moods }: ResultsGridProps) {
   const isMedium = useMediaQuery("(max-width: 740px)");
   const isTablet = useMediaQuery("(max-width: 900px)");
   const isNarrowDesktop = useMediaQuery("(max-width: 1100px)");
-  const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
 
   if (films.length === 0) return null;
 
@@ -48,12 +47,7 @@ export default function ResultsGrid({ films, moods }: ResultsGridProps) {
       {list.map((film, i) => (
         <div
           key={film.id}
-          style={
-            // Inline, so globals.css's reduced-motion rules can't reach it.
-            reduceMotion
-              ? undefined
-              : { animation: "fadeUp 0.4s ease both", animationDelay: `${Math.min(i * 40, 500)}ms` }
-          }
+          style={{ animation: "fadeUp 0.4s ease both", animationDelay: `${Math.min(i * 40, 500)}ms` }}
         >
           <FilmCard
             id={film.id}

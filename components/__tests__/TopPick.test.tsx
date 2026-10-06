@@ -5,10 +5,8 @@ import { render, screen } from "@testing-library/react";
 import TopPick, { ResultsTopPick } from "@/components/results/TopPick";
 import { TMDB_KEYWORDS } from "@/lib/tmdbKeywords";
 
-let reduceMotion = false;
-
 vi.mock("@/lib/useMediaQuery", () => ({
-  useMediaQuery: (q: string) => q.includes("reduced-motion") && reduceMotion,
+  useMediaQuery: () => false,
 }));
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
@@ -42,10 +40,6 @@ function renderPick(why: { keywords: string[]; genres: string[] }) {
 }
 
 describe("TopPick", () => {
-  beforeEach(() => {
-    reduceMotion = false;
-  });
-
   it("names the matching keywords, then the genres", () => {
     renderPick({ keywords: ["feelgood", "heartwarming"], genres: ["Comedy", "Drama"] });
     expect(screen.getByText("Why").parentElement).toHaveTextContent(
@@ -69,17 +63,6 @@ describe("TopPick", () => {
     renderPick({ keywords: [], genres: ["Comedy"] });
     expect(screen.getByRole("heading", { level: 2, name: "Barbie" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /view details/i })).toHaveAttribute("href", "/film/7");
-  });
-
-  it("stops the glow under reduced motion", () => {
-    const { container, unmount } = renderPick({ keywords: [], genres: [] });
-    const glow = () => container.querySelector<HTMLElement>('[aria-hidden="true"]')!;
-    expect(glow().style.animation).toContain("breathe");
-    unmount();
-
-    reduceMotion = true;
-    const again = renderPick({ keywords: [], genres: [] });
-    expect(again.container.querySelector<HTMLElement>('[aria-hidden="true"]')!.style.animation).toBe("none");
   });
 });
 

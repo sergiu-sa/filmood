@@ -62,7 +62,8 @@ export default function DashboardShell() {
     if (isMobile) return;
     setTimeout(() => {
       searchResultsRef.current?.scrollIntoView({
-        behavior: "smooth",
+        // A behavior passed here beats globals.css's reduced-motion scroll-behavior.
+        behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
         block: "start",
       });
     }, 120);

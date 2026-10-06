@@ -5,10 +5,8 @@ import { render, screen } from "@testing-library/react";
 import ResultsGrid from "@/components/results/ResultsGrid";
 import type { DiscoverFilm } from "@/lib/types";
 
-let reduceMotion = false;
-
 vi.mock("@/lib/useMediaQuery", () => ({
-  useMediaQuery: (q: string) => q.includes("reduced-motion") && reduceMotion,
+  useMediaQuery: () => false,
 }));
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
@@ -37,10 +35,6 @@ const film = (id: number, moodKeys: string[], genre_ids = [18, 35]): DiscoverFil
 const headings = () => screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
 
 describe("ResultsGrid", () => {
-  beforeEach(() => {
-    reduceMotion = false;
-  });
-
   it("shows More matches for one mood, with the why line and no dots", () => {
     render(<ResultsGrid films={[film(1, ["laugh"])]} moods={[LAUGH]} />);
     expect(headings()).toEqual(["More matches"]);
@@ -90,16 +84,6 @@ describe("ResultsGrid", () => {
   it("puts the film's moods' genres first in its why line", () => {
     render(<ResultsGrid films={[film(1, ["dark"], [35, 80])]} moods={[LAUGH, DARK]} />);
     expect(screen.getByRole("link")).toHaveTextContent("Crime · Comedy");
-  });
-
-  it("drops the stagger under reduced motion", () => {
-    const { container, unmount } = render(<ResultsGrid films={[film(1, ["laugh"])]} moods={[LAUGH]} />);
-    expect(container.querySelector<HTMLElement>("a")!.parentElement!.style.animation).toContain("fadeUp");
-    unmount();
-
-    reduceMotion = true;
-    const again = render(<ResultsGrid films={[film(1, ["laugh"])]} moods={[LAUGH]} />);
-    expect(again.container.querySelector<HTMLElement>("a")!.parentElement!.getAttribute("style")).toBeNull();
   });
 
   it("renders nothing without films", () => {

@@ -37,7 +37,6 @@ export default function TopPick({
 }: TopPickProps) {
   const accent = ACCENT_VARS[accentKey];
   const isMobile = useMediaQuery("(max-width: 820px)");
-  const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const year = film.release_date
     ? new Date(film.release_date).getFullYear()
     : "";
@@ -66,8 +65,7 @@ export default function TopPick({
           opacity: 0.9,
           pointerEvents: "none",
           zIndex: 0,
-          // Inline, so globals.css's reduced-motion rules can't reach it.
-          animation: reduceMotion ? "none" : "breathe 5s ease-in-out infinite",
+          animation: "breathe 5s ease-in-out infinite",
         }}
       />
 

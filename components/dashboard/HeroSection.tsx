@@ -145,7 +145,7 @@ export default function HeroSection() {
             width: 380, height: 240, borderRadius: "50%",
             background: `radial-gradient(ellipse, rgba(var(${accentVar}-rgb), 0.5), transparent 70%)`,
             filter: "blur(50px)", opacity: 0.7,
-            animation: prefersReducedMotion ? "none" : "heroOrbDrift1 16s ease-in-out infinite",
+            animation: "heroOrbDrift1 16s ease-in-out infinite",
           }}
         />
         <div
@@ -155,7 +155,7 @@ export default function HeroSection() {
             width: 260, height: 180, borderRadius: "50%",
             background: "radial-gradient(ellipse, rgba(var(--rose-rgb), 0.35), transparent 65%)",
             filter: "blur(50px)", opacity: 0.5,
-            animation: prefersReducedMotion ? "none" : "heroOrbDrift2 20s ease-in-out infinite",
+            animation: "heroOrbDrift2 20s ease-in-out infinite",
           }}
         />
         <div className="hero-grain" />
@@ -280,7 +280,7 @@ export default function HeroSection() {
               </Link>
               <button
                 type="button"
-                onClick={() => document.getElementById("dashboard")?.scrollIntoView({ behavior: "smooth" })}
+                onClick={() => document.getElementById("dashboard")?.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth" })}
                 style={{
                   minHeight: touch ? 44 : undefined,
                   background: "transparent", color: "var(--t2)",
@@ -318,7 +318,7 @@ export default function HeroSection() {
               })}
               <button
                 type="button"
-                onClick={() => document.getElementById("dashboard")?.scrollIntoView({ behavior: "smooth" })}
+                onClick={() => document.getElementById("dashboard")?.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth" })}
                 style={{
                   minHeight: touch ? 44 : undefined,
                   background: "transparent", color: "var(--t2)",

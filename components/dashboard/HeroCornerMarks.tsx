@@ -7,7 +7,6 @@ interface HeroCornerMarksProps {
 
 /**
  * Four L-shaped corner marks that frame the hero content. Decorative, aria-hidden.
- * Hidden on mobile via the hero's CSS; always off in prefers-reduced-motion (no animation anyway).
  */
 export default function HeroCornerMarks({ accentVar = "--gold" }: HeroCornerMarksProps) {
   const accent = `rgba(var(${accentVar}-rgb), 0.4)`;

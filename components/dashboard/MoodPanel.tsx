@@ -2,7 +2,6 @@
 
 import { useEffect, useRef } from "react";
 import { allMoods } from "@/lib/moodMap";
-import { useMediaQuery } from "@/lib/useMediaQuery";
 import MoodGrid from "@/components/mood/MoodGrid";
 import MoodTile from "@/components/mood/MoodTile";
 import MoodDescribe from "@/components/mood/MoodDescribe";
@@ -16,7 +15,6 @@ interface MoodPanelProps {
 }
 
 export default function MoodPanel({ isOpen, onClose, embedded }: MoodPanelProps) {
-  const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const rootRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLDivElement>(null);
 
@@ -124,9 +122,7 @@ export default function MoodPanel({ isOpen, onClose, embedded }: MoodPanelProps)
         maxHeight: isOpen ? "1200px" : "0",
         opacity: isOpen ? 1 : 0,
         overflow: "hidden",
-        transition: reducedMotion
-          ? "none"
-          : "max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s, padding 0.4s",
+        transition: "max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s, padding 0.4s",
         paddingBottom: isOpen ? "10px" : "0",
       }}
     >

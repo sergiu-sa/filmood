@@ -130,7 +130,8 @@ function BrowseContent() {
   const goPage = (p: number) => {
     if (p < 1 || p > totalPages) return;
     setPage(p);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    // A behavior passed here beats globals.css's reduced-motion scroll-behavior.
+    window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   };
 
   // Client-side search filter + sort, debounced via the shared hook.
