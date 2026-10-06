@@ -1,13 +1,4 @@
-import type {
-  CrewMember,
-  Film,
-  FilmDetail,
-  Keyword,
-  MovieImage,
-  MovieVideo,
-  RegionalAvailabilityResponse,
-  Review,
-} from "@/lib/types";
+import type { CrewMember } from "@/lib/types";
 import Breadcrumb from "@/components/Breadcrumb";
 import FilmVideos from "@/components/film/FilmVideos";
 import FilmGallery from "@/components/film/FilmGallery";
@@ -21,9 +12,18 @@ import FilmKeywordChips from "@/components/film/FilmKeywordChips";
 import FilmExternalLinks from "@/components/film/FilmExternalLinks";
 import FilmDetailsTable from "@/components/film/FilmDetailsTable";
 import Image from "next/image";
-import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { tmdbImageUrl, parseTMDBId } from "@/lib/tmdb";
+import { TMDBError } from "@/lib/tmdb-fetch";
+import {
+  getFilmDetail,
+  getFilmImages,
+  getFilmKeywords,
+  getFilmReviews,
+  getFilmVideos,
+  getRegionalAvailability,
+  getRelatedFilms,
+} from "@/lib/filmData";
 
 function SectionLabel({ children }: { children: string }) {
   return (
@@ -60,6 +60,13 @@ function sortCrew(crew: CrewMember[]): CrewMember[] {
   });
 }
 
+/** A section that failed renders like an empty one; the log names it. */
+function orEmpty<T>(result: PromiseSettledResult<T>, section: string, empty: T): T {
+  if (result.status === "fulfilled") return result.value;
+  console.error(`Film ${section} failed`, result.reason);
+  return empty;
+}
+
 export default async function FilmDetailPage({
   params,
 }: {
@@ -69,60 +76,60 @@ export default async function FilmDetailPage({
 
   // Fail fast on malformed ids so we render the framework's not-found page
   // rather than a half-broken detail surface.
-  if (parseTMDBId(id) === null) notFound();
-
-  const headersList = await headers();
-  const host = headersList.get("host");
-  const protocol = host && host.startsWith("localhost") ? "http" : "https";
-  const baseUrl = host ? `${protocol}://${host}` : "";
+  const movieId = parseTMDBId(id);
+  if (movieId === null) notFound();
 
   const [
-    detailRes,
-    availabilityRes,
-    videosRes,
-    imagesRes,
-    keywordsRes,
-    relatedRes,
-    reviewsRes,
-  ] = await Promise.all([
-    fetch(`${baseUrl}/api/movies/${id}`),
-    fetch(`${baseUrl}/api/movies/${id}/regional-availability`),
-    fetch(`${baseUrl}/api/movies/${id}/videos`),
-    fetch(`${baseUrl}/api/movies/${id}/images`),
-    fetch(`${baseUrl}/api/movies/${id}/keywords`),
-    fetch(`${baseUrl}/api/movies/${id}/related`),
-    fetch(`${baseUrl}/api/movies/${id}/reviews`),
+    detailResult,
+    availabilityResult,
+    videosResult,
+    imagesResult,
+    keywordsResult,
+    relatedResult,
+    reviewsResult,
+  ] = await Promise.allSettled([
+    getFilmDetail(movieId),
+    getRegionalAvailability(movieId),
+    getFilmVideos(movieId),
+    getFilmImages(movieId),
+    getFilmKeywords(movieId),
+    getRelatedFilms(movieId),
+    getFilmReviews(movieId),
   ]);
 
-  // Detail is the load-bearing fetch. 404 => not-found page; other failures
-  // bubble up to error.tsx via the throw below.
-  if (detailRes.status === 404) notFound();
-  if (!detailRes.ok) {
-    throw new Error(`Failed to load film ${id}: ${detailRes.status}`);
+  // Detail is the load-bearing call. Only TMDB's 404 means "no such film";
+  // anything else is an outage and goes to error.tsx.
+  if (detailResult.status === "rejected") {
+    if (detailResult.reason instanceof TMDBError && detailResult.reason.status === 404) {
+      notFound();
+    }
+    throw detailResult.reason;
   }
+  const detail = detailResult.value;
 
-  const detail: FilmDetail = await detailRes.json();
-  const availability: RegionalAvailabilityResponse = await availabilityRes.json();
-  const videosData = await videosRes.json();
-  const imagesData = await imagesRes.json();
-  const keywordsData = await keywordsRes.json();
-  const relatedData = await relatedRes.json();
-  const reviewsData = await reviewsRes.json();
-
-  const videos: MovieVideo[] = videosData.videos || [];
-  const posters: MovieImage[] = imagesData.posters || [];
-  const backdrops: MovieImage[] = imagesData.backdrops || [];
-  const keywords: Keyword[] = keywordsData.keywords || [];
-  const relatedFilms: Film[] = relatedData.films || [];
-  const relatedSource: "recommendations" | "similar" =
-    relatedData.source ?? "similar";
-  const reviews: Review[] = reviewsData.reviews || [];
+  const availabilityFailed = availabilityResult.status === "rejected";
+  const availability = orEmpty(availabilityResult, "where to watch", {
+    regions: {},
+    defaultRegion: null,
+  });
+  const videos = orEmpty(videosResult, "videos", []);
+  const { posters, backdrops } = orEmpty(imagesResult, "images", {
+    posters: [],
+    backdrops: [],
+  });
+  const keywords = orEmpty(keywordsResult, "keywords", []);
+  const { films: relatedFilms, source: relatedSource } = orEmpty(
+    relatedResult,
+    "related films",
+    { films: [], source: "similar" },
+  );
+  const reviews = orEmpty(reviewsResult, "reviews", []);
   const externalIds = detail.external_ids ?? null;
 
   // Compute country labels server-side — Intl.DisplayNames ICU data differs
   // between Node and the browser ("Hong Kong SAR China" vs "Hong Kong") and
   // would hydration-mismatch.
-  const regionCodes = Object.keys(availability.regions ?? {});
+  const regionCodes = Object.keys(availability.regions);
   const regionLabels: Record<string, string> = {};
   try {
     const intl = new Intl.DisplayNames(["en"], { type: "region" });
@@ -407,11 +414,14 @@ export default async function FilmDetailPage({
               {detail.overview}
             </p>
 
-            {/* Videos */}
-            <div style={{ marginBottom: "28px" }}>
-              <SectionLabel>Videos</SectionLabel>
-              <FilmVideos videos={videos} />
-            </div>
+            {/* Videos — its empty state says "No videos available", which a
+                failed call can't claim, so a failure leaves the section out. */}
+            {videosResult.status === "fulfilled" && (
+              <div style={{ marginBottom: "28px" }}>
+                <SectionLabel>Videos</SectionLabel>
+                <FilmVideos videos={videos} />
+              </div>
+            )}
 
             {/* Gallery */}
             {(posters.length > 0 || backdrops.length > 0) && (
@@ -430,6 +440,7 @@ export default async function FilmDetailPage({
               <SectionLabel>Where to watch</SectionLabel>
               <RegionalAvailability
                 data={availability}
+                failed={availabilityFailed}
                 regionLabels={regionLabels}
               />
             </div>

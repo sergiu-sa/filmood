@@ -7,6 +7,8 @@ import { formatCalendarDate } from "@/lib/formatDate";
 
 interface RegionalAvailabilityProps {
   data: RegionalAvailabilityResponse;
+  /** The lookup failed, so the empty `data` doesn't mean "not available anywhere". */
+  failed?: boolean;
   /**
    * Country code → label map computed server-side and passed in as a prop.
    * Computing it here would call `Intl.DisplayNames` whose ICU data differs
@@ -20,14 +22,13 @@ const STORAGE_KEY = "filmood:regionalAvailability:lastRegion";
 
 export default function RegionalAvailability({
   data,
+  failed = false,
   regionLabels,
 }: RegionalAvailabilityProps) {
   const labelFor = (code: string) => regionLabels[code] ?? code;
 
   const codes = useMemo(() => {
-    // `data` comes straight from a route response that can be an error body,
-    // so regions may be absent — an unguarded Object.keys would take the page down.
-    const list = Object.keys(data?.regions ?? {});
+    const list = Object.keys(data.regions);
     list.sort((a, b) => labelFor(a).localeCompare(labelFor(b)));
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- regionLabels is stable per page render; we want re-sort only when regions change
@@ -36,12 +37,14 @@ export default function RegionalAvailability({
   const [region, setRegion] = useState<string | null>(data.defaultRegion);
 
   useEffect(() => {
+    let saved: string | null = null;
     try {
-      const saved = window.localStorage.getItem(STORAGE_KEY);
-      if (saved && data.regions[saved]) setRegion(saved);
+      saved = window.localStorage.getItem(STORAGE_KEY);
     } catch {
       // localStorage unavailable (private mode, sandboxed iframe) — no-op.
     }
+    // hasOwn, not data.regions[saved]: a stored "constructor" would read Object's.
+    if (saved && Object.hasOwn(data.regions, saved)) setRegion(saved);
   }, [data.regions]);
 
   function handleChange(code: string) {
@@ -53,14 +56,16 @@ export default function RegionalAvailability({
     }
   }
 
-  if (codes.length === 0) {
+  if (failed || codes.length === 0) {
     return (
       <div
         className="w-full rounded-lg p-4 flex items-center justify-center"
         style={{ background: "var(--surface2)" }}
       >
-        <span style={{ color: "var(--t3)" }}>
-          No streaming or release info available
+        <span style={{ color: failed ? "var(--t2)" : "var(--t3)" }}>
+          {failed
+            ? "Couldn't load where to watch."
+            : "No streaming or release info available"}
         </span>
       </div>
     );

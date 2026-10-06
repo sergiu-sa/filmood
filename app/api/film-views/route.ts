@@ -1,6 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
-import { internalError } from "@/lib/api-errors";
+import { badRequest, internalError } from "@/lib/api-errors";
+import { parseTMDBId } from "@/lib/tmdb";
+import { getFilmDetail } from "@/lib/filmData";
+import { recordFilmView } from "@/lib/film-views";
 
 const RAIL_LIMIT = 8;
 
@@ -58,4 +61,38 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     return internalError(error, "Failed to load views");
   }
+}
+
+// POST /api/film-views  { movie_id }
+// Records that the signed-in user opened a film page. Only the id comes from
+// the client: the title and poster are looked up (cached for a day), so no
+// client-sent text is stored.
+export async function POST(request: NextRequest) {
+  const user = await getAuthUser(request);
+  if (!user) {
+    return NextResponse.json({ error: "Sign in to record views" }, { status: 401 });
+  }
+
+  let body: { movie_id?: unknown } | null;
+  try {
+    body = await request.json();
+  } catch {
+    return badRequest("Invalid JSON body");
+  }
+  const movieId = parseTMDBId(String(body?.movie_id));
+  if (movieId === null) return badRequest("Invalid movie id");
+
+  after(() =>
+    getFilmDetail(movieId)
+      .then((film) =>
+        recordFilmView(getSupabaseAdmin(), user.id, {
+          movie_id: film.id,
+          movie_title: film.title,
+          poster_path: film.poster_path,
+        }),
+      )
+      .catch((err) => console.error("Film view not recorded", err)),
+  );
+
+  return new NextResponse(null, { status: 204 });
 }

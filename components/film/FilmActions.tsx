@@ -11,6 +11,9 @@ interface FilmActionsProps {
   posterPath: string | null;
   /** Layout variant — desktop renders a horizontal row, mobile stacks. */
   layout: "row" | "column";
+  /** Post the view to `/api/film-views`. The page mounts a copy per layout,
+   *  both always, so only one of them may set this. */
+  recordView?: boolean;
 }
 
 type WatchlistEntry = { movie_id: number };
@@ -20,6 +23,7 @@ export default function FilmActions({
   movieTitle,
   posterPath,
   layout,
+  recordView = false,
 }: FilmActionsProps) {
   const { user, loading: authLoading } = useAuth();
   const [inWatchlist, setInWatchlist] = useState<boolean | null>(null);
@@ -53,6 +57,23 @@ export default function FilmActions({
       cancelled = true;
     };
   }, [user, authLoading, movieId]);
+
+  // Keyed on the id, not `user`: a token refresh hands out a new user object
+  // and must not record the view again.
+  const userId = user?.id;
+  useEffect(() => {
+    if (!recordView || !userId) return;
+    getAuthHeaders()
+      .then((headers) =>
+        fetch("/api/film-views", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ movie_id: movieId }),
+        }),
+      )
+      // A missed view only thins the profile's Continue researching rail.
+      .catch(() => {});
+  }, [recordView, userId, movieId]);
 
   async function toggleWatchlist() {
     if (!user || busy || inWatchlist === null) return;
