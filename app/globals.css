@@ -564,11 +564,6 @@ svg.logo-static { overflow: visible; }
     opacity: 1 !important;
     transform: none !important;
   }
-
-  .hero-orb {
-    animation: none !important;
-    opacity: 1 !important;
-  }
 }
 
 /* ═══════════════════════════════════════════════════════════
