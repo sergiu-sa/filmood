@@ -448,7 +448,7 @@ export default function GroupMoodPage() {
           <p style={{ margin: "0 0 14px", fontSize: "14.5px", lineHeight: 1.5, color: "var(--t2)" }}>
             {phase === "waiting"
               ? "Waiting for everyone to choose"
-              : "Your picks are private \u2014 no one else can see them."}
+              : "No one sees who picked what."}
           </p>
           <span
             style={{

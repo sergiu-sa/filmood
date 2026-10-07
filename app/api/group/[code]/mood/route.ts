@@ -4,7 +4,7 @@ import { MAX_MOODS, normalizeMoodKeys } from "@/lib/moodMap";
 import { MAX_TEXT_LENGTH, resolveMoodText } from "@/lib/moodResolver";
 import { isEraKey, isTimeKey } from "@/lib/moodFilters";
 import { resolveSession, resolveParticipant } from "@/lib/group-api";
-import { buildSharedDeck } from "@/lib/deck";
+import { buildSharedDeck, DeckTooThinError } from "@/lib/deck";
 import { groupProviders } from "@/lib/watchProviders";
 import { badRequest, internalError } from "@/lib/api-errors";
 import { recordMoodPicks } from "@/lib/mood-history";
@@ -163,14 +163,16 @@ export async function POST(
       //
       // Re-read the status first: a simultaneous submitter may have built the
       // deck and moved the session on, in which case rolling back would show
-      // them as "hasn't submitted" for a session already swiping.
-      const { data: current } = await supabase
+      // them as "hasn't submitted" for a session already swiping. A failed
+      // re-read rolls back anyway: that mislabel is cosmetic, a skipped rollback is the wedge.
+      const { data: current, error: readError } = await supabase
         .from("sessions")
         .select("status")
         .eq("id", session.id)
         .single();
+      if (readError) console.error("Mood rollback re-read failed", readError);
 
-      if (current?.status === "mood") {
+      if (readError || current?.status === "mood") {
         const { error: rollbackError } = await supabase
           .from("session_participants")
           .update({ mood_selections: null })
@@ -180,6 +182,12 @@ export async function POST(
         if (rollbackError) {
           console.error("Mood rollback failed — session may be stuck", rollbackError);
         }
+      }
+      if (deckError instanceof DeckTooThinError) {
+        return NextResponse.json(
+          { error: "Nothing fits everyone's picks together. Try another mood, or a wider Time or Era." },
+          { status: 422 },
+        );
       }
       return internalError(deckError, "Failed to build the movie deck");
     }
