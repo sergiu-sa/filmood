@@ -302,8 +302,9 @@ export default function GroupSwipePage() {
     >
       <div className="lobby-ambient" />
 
-      {/* Breadcrumb */}
-      <div style={{ padding: "14px 28px 0", position: "relative", zIndex: 2 }}>
+      {/* Breadcrumb. Above the progress strip, which starts where the crumb row ends
+          and would otherwise cover the bottom of the links' 44px tap area. */}
+      <div style={{ padding: "14px 28px 0", position: "relative", zIndex: 3 }}>
         <Breadcrumb
           items={[
             { label: "Home", href: "/" },

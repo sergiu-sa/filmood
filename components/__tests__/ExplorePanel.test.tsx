@@ -21,6 +21,9 @@ describe("ExplorePanel", () => {
     const wrapper = container.firstChild as HTMLElement;
     expect(wrapper.style.gridTemplateRows).toBe("0fr");
     expect(wrapper.style.maxHeight).toBe("");
+    // Without the inner clip, a 0fr row still shows its content's full height.
+    const inner = wrapper.firstElementChild as HTMLElement;
+    expect([inner.style.overflow, inner.style.minHeight]).toEqual(["hidden", "0"]);
     expect(wrapper).toHaveAttribute("inert");
     rerender(<ExplorePanel isOpen onClose={vi.fn()} />);
     expect(wrapper.style.gridTemplateRows).toBe("1fr");
