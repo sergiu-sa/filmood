@@ -28,7 +28,7 @@ describe("buildSharedDeck", () => {
     delete process.env.TMDB_API_KEY;
   });
 
-  // Unreachable from the route, which stores at least one valid mood, but an empty return would skip every guard below.
+  // Unreachable from the route, which stores at least one valid mood, but returning [] would skip the deck's size guard.
   it.each([
     [[{ mood_selections: null }, { mood_selections: null }]],
     [[]],
@@ -152,13 +152,18 @@ describe("buildSharedDeck", () => {
     ).rejects.toMatchObject({ name: "DeckTooThinError", size: 0 });
   });
 
-  // Two films for five people isn't a deck; the route turns this into a 422 that asks for other picks.
+  // Under five films isn't a deck worth swiping; the route turns this into a 422 that asks for other picks.
   it("refuses a deck under five films when nothing rejected", async () => {
     global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(fakeTMDBResponse(4)) });
 
     const error = await buildSharedDeck([{ mood_selections: ["laugh"] }]).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(DeckTooThinError);
     expect(error).toMatchObject({ size: 4 });
+  });
+
+  it("ships a deck of exactly five", async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(fakeTMDBResponse(5)) });
+    expect(await buildSharedDeck([{ mood_selections: ["laugh"] }])).toHaveLength(5);
   });
 
   // A thin deck beside an outage is the outage's fault, so it stays a retryable 500.
@@ -333,15 +338,20 @@ describe("buildSharedDeck", () => {
       }
     });
 
+    // The services' calls answer `onServices`, Norway's 20 films. A rebuild that kept the
+    // services would recurse forever; past 20 calls TMDB fails, so that ends in an assertion.
+    const servicesThenNorway = (onServices: object) => {
+      let calls = 0;
+      return vi.fn().mockImplementation((url: string) => {
+        if (++calls > 20) return Promise.resolve({ ok: false, status: 503, json: () => Promise.reject(new Error("x")) });
+        const services = new URL(url).searchParams.has("with_watch_providers");
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(services ? onServices : fakeTMDBResponse(20, 100)) });
+      });
+    };
+
     // An empty deck rolls the last lock-in back, and a retry would hit the same one.
     it("falls back to Norway streaming when the group's services hold nothing", async () => {
-      const spy = vi.fn().mockImplementation((url: string) => {
-        const onServices = new URL(url).searchParams.has("with_watch_providers");
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(onServices ? { results: [] } : fakeTMDBResponse(20)),
-        });
-      });
+      const spy = servicesThenNorway({ results: [] });
       global.fetch = spy;
 
       const result = await buildSharedDeck([{ mood_selections: ["laugh"] }], [431]);
@@ -353,13 +363,7 @@ describe("buildSharedDeck", () => {
     });
 
     it("rebuilds a thin services deck on Norway, once", async () => {
-      const spy = vi.fn().mockImplementation((url: string) => {
-        const onServices = new URL(url).searchParams.has("with_watch_providers");
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(onServices ? fakeTMDBResponse(4) : fakeTMDBResponse(20, 100)),
-        });
-      });
+      const spy = servicesThenNorway(fakeTMDBResponse(4));
       global.fetch = spy;
 
       const result = await buildSharedDeck([{ mood_selections: ["laugh"] }, { mood_selections: ["cry"] }], [8]);
@@ -369,7 +373,8 @@ describe("buildSharedDeck", () => {
       const firstNorway = sent.indexOf(null);
       expect(firstNorway).toBeGreaterThan(0);
       expect(sent.slice(0, firstNorway).every((v) => v === "8")).toBe(true);
-      expect(sent.slice(firstNorway).every((v) => v === null)).toBe(true);
+      // One page-1 call per mood: 20 results clear the ladder's 12 on the first tier.
+      expect(sent.slice(firstNorway)).toEqual([null, null]);
     });
 
     it("doesn't retry an outage on Norway", async () => {

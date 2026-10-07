@@ -191,7 +191,7 @@ describe("Group mood page", () => {
   // The 422 is a deck too thin for the group's picks: the last submitter changes them and locks in again.
   it.each([
     [500, "Failed to build the deck"],
-    [422, "Nothing fits everyone's picks together. Try another mood, or a wider Time or Era."],
+    [422, "Nothing fits everyone's picks together. Try a different mood."],
   ])("returns to the form after a failed lock-in (%i), with the error and the picks kept", async (status, error) => {
     answerPost = async () => Response.json({ error }, { status });
     await renderPage();
