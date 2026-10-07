@@ -210,7 +210,7 @@ describe("GET /api/group/[code]", () => {
     expect(json.participants).toHaveLength(1);
   });
 
-  // Anyone with the code can call this, and the mood page promises picks are private.
+  // Anyone with the code can call this, and the mood page promises no one sees who picked what.
   it("says who has locked in, never what they picked", async () => {
     const session = { id: "s-1", code: "ABC123", host_id: "user-1", status: "mood", created_at: new Date().toISOString() };
     const participants = [

@@ -1,5 +1,6 @@
 import { vi } from "vitest";
-import { buildSharedDeck } from "@/lib/deck";
+import { buildSharedDeck, DeckTooThinError } from "@/lib/deck";
+import { TMDBError } from "@/lib/tmdb-fetch";
 
 function fakeTMDBResponse(count: number, startId = 1) {
   return {
@@ -27,17 +28,13 @@ describe("buildSharedDeck", () => {
     delete process.env.TMDB_API_KEY;
   });
 
-  it("returns empty array when no participants have moods", async () => {
-    const result = await buildSharedDeck([
-      { mood_selections: null },
-      { mood_selections: null },
-    ]);
-    expect(result).toEqual([]);
-  });
-
-  it("returns empty array for empty participants list", async () => {
-    const result = await buildSharedDeck([]);
-    expect(result).toEqual([]);
+  // Unreachable from the route, which stores at least one valid mood, but returning [] would skip the deck's size guard.
+  it.each([
+    [[{ mood_selections: null }, { mood_selections: null }]],
+    [[]],
+    [[{ mood_selections: ["not-a-mood"] }]],
+  ])("refuses %j, which holds no valid mood", async (participants) => {
+    await expect(buildSharedDeck(participants)).rejects.toThrow("No valid moods");
   });
 
   it("throws when TMDB API key is not configured", async () => {
@@ -139,7 +136,7 @@ describe("buildSharedDeck", () => {
 
     await expect(
       buildSharedDeck([{ mood_selections: ["laugh"] }]),
-    ).rejects.toThrow();
+    ).rejects.toBeInstanceOf(DeckTooThinError);
   });
 
   // The 200-with-no-results case: nothing rejects, so a rejection-counting
@@ -152,7 +149,36 @@ describe("buildSharedDeck", () => {
 
     await expect(
       buildSharedDeck([{ mood_selections: ["laugh"] }]),
-    ).rejects.toThrow(/No films matched/);
+    ).rejects.toMatchObject({ name: "DeckTooThinError", size: 0 });
+  });
+
+  // Under five films isn't a deck worth swiping; the route turns this into a 422 that asks for other picks.
+  it("refuses a deck under five films when nothing rejected", async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(fakeTMDBResponse(4)) });
+
+    const error = await buildSharedDeck([{ mood_selections: ["laugh"] }]).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(DeckTooThinError);
+    expect(error).toMatchObject({ size: 4 });
+  });
+
+  it("ships a deck of exactly five", async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(fakeTMDBResponse(5)) });
+    expect(await buildSharedDeck([{ mood_selections: ["laugh"] }])).toHaveLength(5);
+  });
+
+  // A thin deck beside an outage is the outage's fault, so it stays a retryable 500.
+  it("rethrows the rejection when a thin deck had one", async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) =>
+      Promise.resolve(
+        new URL(url).searchParams.get("with_genres") === "18"
+          ? { ok: false, status: 429, json: () => Promise.reject(new Error("x")) }
+          : { ok: true, json: () => Promise.resolve(fakeTMDBResponse(4)) },
+      ),
+    );
+
+    const error = await buildSharedDeck([{ mood_selections: ["laugh"] }, { mood_selections: ["cry"] }]).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(TMDBError);
+    expect(error).toMatchObject({ status: 429 });
   });
 
   // An outage or a rotated key must NOT look like "no films matched": the
@@ -188,7 +214,7 @@ describe("buildSharedDeck", () => {
 
     await expect(
       buildSharedDeck([{ mood_selections: ["laugh"] }]),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({ status });
   });
 
   // The deck tests otherwise only inspect the films that come back, so the
@@ -312,15 +338,20 @@ describe("buildSharedDeck", () => {
       }
     });
 
+    // The services' calls answer `onServices`, Norway's 20 films. A rebuild that kept the
+    // services would recurse forever; past 20 calls TMDB fails, so that ends in an assertion.
+    const servicesThenNorway = (onServices: object) => {
+      let calls = 0;
+      return vi.fn().mockImplementation((url: string) => {
+        if (++calls > 20) return Promise.resolve({ ok: false, status: 503, json: () => Promise.reject(new Error("x")) });
+        const services = new URL(url).searchParams.has("with_watch_providers");
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(services ? onServices : fakeTMDBResponse(20, 100)) });
+      });
+    };
+
     // An empty deck rolls the last lock-in back, and a retry would hit the same one.
     it("falls back to Norway streaming when the group's services hold nothing", async () => {
-      const spy = vi.fn().mockImplementation((url: string) => {
-        const onServices = new URL(url).searchParams.has("with_watch_providers");
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(onServices ? { results: [] } : fakeTMDBResponse(20)),
-        });
-      });
+      const spy = servicesThenNorway({ results: [] });
       global.fetch = spy;
 
       const result = await buildSharedDeck([{ mood_selections: ["laugh"] }], [431]);
@@ -329,6 +360,21 @@ describe("buildSharedDeck", () => {
       const sent = sentParams(spy);
       expect(sent[0].get("with_watch_providers")).toBe("431");
       expect(sent.at(-1)!.has("with_watch_providers")).toBe(false);
+    });
+
+    it("rebuilds a thin services deck on Norway, once", async () => {
+      const spy = servicesThenNorway(fakeTMDBResponse(4));
+      global.fetch = spy;
+
+      const result = await buildSharedDeck([{ mood_selections: ["laugh"] }, { mood_selections: ["cry"] }], [8]);
+
+      expect(result).toHaveLength(15);
+      const sent = sentParams(spy).map((p) => p.get("with_watch_providers"));
+      const firstNorway = sent.indexOf(null);
+      expect(firstNorway).toBeGreaterThan(0);
+      expect(sent.slice(0, firstNorway).every((v) => v === "8")).toBe(true);
+      // One page-1 call per mood: 20 results clear the ladder's 12 on the first tier.
+      expect(sent.slice(firstNorway)).toEqual([null, null]);
     });
 
     it("doesn't retry an outage on Norway", async () => {

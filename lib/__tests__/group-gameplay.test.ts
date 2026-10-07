@@ -16,7 +16,8 @@ vi.mock("@/lib/supabase-server", () => ({
 
 const mockBuildSharedDeck = vi.fn();
 
-vi.mock("@/lib/deck", () => ({
+vi.mock("@/lib/deck", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/deck")>()),
   buildSharedDeck: (...args: unknown[]) => mockBuildSharedDeck(...args),
 }));
 
@@ -47,6 +48,7 @@ const defaultDeck = [
   { id: 2, title: "Film 2", poster_path: "/p2.jpg", release_date: "2025-01-01", vote_average: 8.0, overview: "Overview", genre_ids: [18], mood_keys: ["cry"] },
 ];
 
+import { DeckTooThinError } from "@/lib/deck";
 import { POST as submitMood } from "@/app/api/group/[code]/mood/route";
 import { GET as getSwipeState, POST as submitSwipe } from "@/app/api/group/[code]/swipe/route";
 import { GET as getResults } from "@/app/api/group/[code]/results/route";
@@ -89,6 +91,14 @@ describe("POST /api/group/[code]/mood", () => {
     const res = await readResponse(await submitMood(req, routeParams("ABC123")));
     const update = supabase.from.mock.results[2].value.update.mock.calls[0]?.[0];
     return { ...res, supabase, update };
+  }
+
+  // The payload and the row: clearing anything else, or anyone else's picks, leaves the 409 guard up or wipes the group.
+  function expectRolledBack(supabase: ReturnType<typeof createMockSupabase>, slot = 5) {
+    expect(supabase.from).toHaveBeenNthCalledWith(slot + 1, "session_participants");
+    const rollback = supabase.from.mock.results[slot].value;
+    expect(rollback.update).toHaveBeenCalledWith({ mood_selections: null });
+    expect(rollback.eq).toHaveBeenCalledWith("id", "p-1");
   }
 
   it("refuses more than two tile moods, before touching the database", async () => {
@@ -187,8 +197,7 @@ describe("POST /api/group/[code]/mood", () => {
     const { status, supabase } = await lockIn({ moods: ["laugh"] }, [{ mood_selections: ["laugh"] }, { mood_selections: ["cry"] }]);
     expect(status).toBe(500);
     expect(mockBuildSharedDeck).not.toHaveBeenCalled();
-    const rollback = supabase.from.mock.results[5].value.update.mock.calls[0][0];
-    expect(rollback).toEqual({ mood_selections: null });
+    expectRolledBack(supabase);
     expect(afterCallbacks).toHaveLength(0);
   });
 
@@ -295,8 +304,62 @@ describe("POST /api/group/[code]/mood", () => {
       (c: unknown[]) => c[0] === "session_participants",
     );
     expect(participantWrites).toHaveLength(4);
+    expectRolledBack(supabase);
     // A rolled-back submission isn't a pick; the retry would record it twice.
     expect(afterCallbacks).toHaveLength(0);
+  });
+
+  const everyoneIn = [{ mood_selections: ["laugh"] }, { mood_selections: ["cry"] }];
+
+  // Retrying the same picks builds the same thin deck, so the form comes back with a reason to change them.
+  it("answers a thin deck with 422 and the copy, and rolls the submission back", async () => {
+    mockGetAuthUser.mockResolvedValue(mockUser);
+    mockBuildSharedDeck.mockRejectedValue(new DeckTooThinError(2));
+    const { status, json, supabase } = await lockIn({ moods: ["laugh"] }, everyoneIn);
+    expect(status).toBe(422);
+    expect(json).toEqual({ error: "Nothing fits everyone's picks together. Try a different mood." });
+    expectRolledBack(supabase);
+    expect(afterCallbacks).toHaveLength(0);
+  });
+
+  it("rolls back when the status re-read fails, and logs the re-read", async () => {
+    mockGetAuthUser.mockResolvedValue(mockUser);
+    mockBuildSharedDeck.mockRejectedValue(new Error("TMDB responded 429"));
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    const readError = { message: "connection reset" };
+    const { status, supabase } = await lockIn({ moods: ["laugh"] }, everyoneIn, [{ data: null, error: readError }, ok]);
+    expect(status).toBe(500);
+    expectRolledBack(supabase);
+    expect(logged).toHaveBeenCalledWith("Mood rollback re-read failed", readError);
+    logged.mockRestore();
+  });
+
+  // The submission is saved before either call, so a failure in one would otherwise 409 every retry.
+  it("rolls back when everyone's picks can't be loaded", async () => {
+    mockGetAuthUser.mockResolvedValue(mockUser);
+    const supabase = createMockSupabase([inMood, notSubmitted, ok, { data: null, error: { message: "timeout" } }, ...rollbackCalls]);
+    mockGetSupabaseAdmin.mockReturnValue(supabase);
+    const req = mockRequest("POST", "/api/group/ABC123/mood", { moods: ["laugh"] });
+    expect((await readResponse(await submitMood(req, routeParams("ABC123")))).status).toBe(500);
+    expectRolledBack(supabase);
+    expect(afterCallbacks).toHaveLength(0);
+  });
+
+  it("rolls back when the deck can't be written", async () => {
+    mockGetAuthUser.mockResolvedValue(mockUser);
+    const { status, supabase } = await lockIn({ moods: ["laugh"] }, everyoneIn, [{ data: null, error: { message: "timeout" } }, ...rollbackCalls]);
+    expect(status).toBe(500);
+    expectRolledBack(supabase, 6);
+    expect(afterCallbacks).toHaveLength(0);
+  });
+
+  // A simultaneous submitter built the deck; un-submitting this one would show them as waiting in a session that's swiping.
+  it("leaves the submission alone when the session has moved on", async () => {
+    mockGetAuthUser.mockResolvedValue(mockUser);
+    mockBuildSharedDeck.mockRejectedValue(new Error("TMDB responded 429"));
+    const { status, supabase } = await lockIn({ moods: ["laugh"] }, everyoneIn, [{ data: { status: "swiping" }, error: null }]);
+    expect(status).toBe(500);
+    expect(supabase.from).toHaveBeenCalledTimes(5);
   });
 });
 

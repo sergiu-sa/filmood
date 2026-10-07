@@ -4,7 +4,7 @@ import { MAX_MOODS, normalizeMoodKeys } from "@/lib/moodMap";
 import { MAX_TEXT_LENGTH, resolveMoodText } from "@/lib/moodResolver";
 import { isEraKey, isTimeKey } from "@/lib/moodFilters";
 import { resolveSession, resolveParticipant } from "@/lib/group-api";
-import { buildSharedDeck } from "@/lib/deck";
+import { buildSharedDeck, DeckTooThinError } from "@/lib/deck";
 import { groupProviders } from "@/lib/watchProviders";
 import { badRequest, internalError } from "@/lib/api-errors";
 import { recordMoodPicks } from "@/lib/mood-history";
@@ -113,6 +113,34 @@ export async function POST(
       return internalError(updateError, "Failed to save moods");
     }
 
+    // The moods above are now committed and the "already submitted" guard
+    // would reject every retry, so any failure from here on would wedge the
+    // session. Undo this participant's submission so the form comes back.
+    //
+    // Re-read the status first: a simultaneous submitter may have built the
+    // deck and moved the session on, in which case rolling back would show
+    // them as "hasn't submitted" for a session already swiping. A failed
+    // re-read rolls back anyway: that mislabel is cosmetic, a skipped rollback is the wedge.
+    const rollBack = async () => {
+      const { data: current, error: readError } = await supabase
+        .from("sessions")
+        .select("status")
+        .eq("id", session.id)
+        .single();
+      if (readError) console.error("Mood rollback re-read failed", readError);
+      if (!readError && current?.status !== "mood") return;
+
+      const { error: rollbackError } = await supabase
+        .from("session_participants")
+        .update({ mood_selections: null })
+        .eq("id", participant.id);
+      // A failed rollback is the wedge this exists to prevent, so it must be
+      // visible in the logs rather than swallowed.
+      if (rollbackError) {
+        console.error("Mood rollback failed — session may be stuck", rollbackError);
+      }
+    };
+
     // Check if all participants have now submitted. Pull the full refinement
     // payload for deck-building in one round-trip.
     const { data: allParticipants, error: loadErr } = await supabase
@@ -123,6 +151,7 @@ export async function POST(
     // Without this guard a failed query (allParticipants === null) would slip
     // past the `submitted < total` check (both 0) and crash inside buildSharedDeck.
     if (loadErr || !allParticipants) {
+      await rollBack();
       return internalError(loadErr, "Failed to load participants");
     }
 
@@ -157,29 +186,12 @@ export async function POST(
       const userIds = allParticipants.flatMap((p) => p.user_id ?? []);
       deck = await buildSharedDeck(allParticipants, await groupProviders(supabase, userIds));
     } catch (deckError) {
-      // The moods above are already committed and the "already submitted"
-      // guard would reject every retry, so a TMDB outage here would wedge the
-      // session. Undo this participant's submission so the form comes back.
-      //
-      // Re-read the status first: a simultaneous submitter may have built the
-      // deck and moved the session on, in which case rolling back would show
-      // them as "hasn't submitted" for a session already swiping.
-      const { data: current } = await supabase
-        .from("sessions")
-        .select("status")
-        .eq("id", session.id)
-        .single();
-
-      if (current?.status === "mood") {
-        const { error: rollbackError } = await supabase
-          .from("session_participants")
-          .update({ mood_selections: null })
-          .eq("id", participant.id);
-        // A failed rollback is the wedge this block exists to prevent, so it
-        // must be visible in the logs rather than swallowed.
-        if (rollbackError) {
-          console.error("Mood rollback failed — session may be stuck", rollbackError);
-        }
+      await rollBack();
+      if (deckError instanceof DeckTooThinError) {
+        return NextResponse.json(
+          { error: "Nothing fits everyone's picks together. Try a different mood." },
+          { status: 422 },
+        );
       }
       return internalError(deckError, "Failed to build the movie deck");
     }
@@ -196,6 +208,7 @@ export async function POST(
       .select("id");
 
     if (deckError) {
+      await rollBack();
       return internalError(deckError, "Failed to build deck");
     }
 

@@ -94,6 +94,7 @@ describe("Group mood page", () => {
   it("shows the session, its size and twelve unpressed toggle tiles", async () => {
     await renderPage();
     expect(screen.getByText(/Session/)).toHaveTextContent("Session K7F2AB · 2 people");
+    expect(screen.getByText("No one sees who picked what.")).toBeInTheDocument();
     allMoods.forEach((m) => expect(tile(m.tagLabel)).toHaveAttribute("aria-pressed", "false"));
     expect(screen.getAllByRole("button", { pressed: false })).toHaveLength(allMoods.length);
   });
@@ -187,16 +188,23 @@ describe("Group mood page", () => {
     expect(JSON.parse(posts()[0][1]!.body as string).moods).toEqual(["laugh"]);
   });
 
-  it("returns to the form after a failed lock-in, with the error and the picks kept", async () => {
-    answerPost = async () => Response.json({ error: "Failed to build the deck" }, { status: 500 });
+  // The 422 is a deck too thin for the group's picks: the last submitter changes them and locks in again.
+  it.each([
+    [500, "Failed to build the deck"],
+    [422, "Nothing fits everyone's picks together. Try a different mood."],
+  ])("returns to the form after a failed lock-in (%i), with the error and the picks kept", async (status, error) => {
+    answerPost = async () => Response.json({ error }, { status });
     await renderPage();
     fireEvent.click(tile("Need to laugh"));
     fireEvent.click(tile("Go dark"));
+    const before1990 = within(screen.getByRole("radiogroup", { name: "Era" })).getByRole("radio", { name: "Before 1990" });
+    fireEvent.click(before1990);
     fireEvent.click(lockIn());
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Failed to build the deck");
+    expect(await screen.findByRole("alert")).toHaveTextContent(error);
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("How do you feel?");
     expect(screen.getAllByRole("button", { pressed: true })).toHaveLength(2);
+    expect(before1990).toBeChecked();
     expect(lockIn()).toHaveTextContent("Lock in 2 moods");
     expect(lockIn()).toHaveAttribute("aria-disabled", "false");
   });

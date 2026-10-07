@@ -6,6 +6,7 @@ import { settleTMDB } from "@/lib/tmdb-fetch";
 import type { DeckFilm, EraKey, TempoKey, TimeKey } from "@/lib/types";
 
 const DECK_SIZE = 15;
+const MIN_DECK_SIZE = 5;
 // Cap how many text-derived keyword IDs we union across the group: they're ORed
 // with each mood's own keywords, so a large group's would dilute every mood.
 const MAX_SHARED_EXTRA_KEYWORDS = 3;
@@ -17,6 +18,14 @@ interface ParticipantInput {
   /** Participants who locked in before migration 010. */
   tempo?: TempoKey | null;
   extra_keywords?: number[] | null;
+}
+
+/** The group's picks leave too few films; the picks have to change, so a retry as-is won't help. */
+export class DeckTooThinError extends Error {
+  constructor(readonly size: number) {
+    super(`Only ${size} films fit the group's picks`);
+    this.name = "DeckTooThinError";
+  }
 }
 
 // Majority vote across participant values. Ties (or all null) return null —
@@ -58,11 +67,6 @@ export async function buildSharedDeck(
   /** The group's saved services as TMDB ids (`groupProviders`); none means Norway. */
   providers: number[] = [],
 ): Promise<DeckFilm[]> {
-  // Looks redundant with tmdbJson's own check, but isn't: a participant list with no moods never reaches a fetch, so without this a keyless deploy would return an empty deck instead of failing.
-  if (!process.env.TMDB_API_KEY) {
-    throw new Error("TMDB API key not configured");
-  }
-
   // Count mood frequency across all participants
   const moodCounts: Record<string, number> = {};
   for (const p of participants) {
@@ -74,7 +78,7 @@ export async function buildSharedDeck(
   }
 
   const totalWeight = Object.values(moodCounts).reduce((a, b) => a + b, 0);
-  if (totalWeight === 0) return [];
+  if (totalWeight === 0) throw new Error("No valid moods to build a deck from");
 
   // Allocate film slots proportionally
   const allocations: { mood: string; count: number }[] = [];
@@ -198,20 +202,12 @@ export async function buildSharedDeck(
     }
   }
 
-  // An empty deck rolls the last lock-in back, and every retry would hit the same one.
-  if (deck.length === 0 && providers.length > 0 && !firstRejection) return buildSharedDeck(participants);
+  // A thin deck with nothing rejected can be the services' fault, so it gets one more build on Norway.
+  if (deck.length < MIN_DECK_SIZE && providers.length > 0 && !firstRejection) return buildSharedDeck(participants);
 
-  // The guard that matters is emptiness, not rejection count. An over-
-  // constrained query answers 200 {results: []} for every mood, so nothing
-  // rejects and an empty deck would still be written to the session — which
-  // flips it to "swiping" with nothing to swipe, rejects every vote, and 400s
-  // any retry because the status has already moved on. Unrecoverable.
-  if (deck.length === 0) {
-    throw (
-      firstRejection ??
-      new Error("No films matched this session's combined moods")
-    );
-  }
+  // Size is the guard, not rejections: an over-constrained query answers 200 with few films, and a stored deck is final.
+  // With a rejection the cause is TMDB, worth a retry; without one it's the picks, which the last submitter has to change.
+  if (deck.length < MIN_DECK_SIZE) throw firstRejection ?? new DeckTooThinError(deck.length);
 
   return deck;
 }
