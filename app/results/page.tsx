@@ -224,10 +224,11 @@ export default function ResultsPage() {
       {/* Ambient glow */}
       <div aria-hidden="true" style={glow} />
 
+      {/* Positioned so it paints over the glow, but no z-index: a stacking context
+          here would trap the bottom sheets under the sticky header. */}
       <div
         style={{
           position: "relative",
-          zIndex: 1,
           maxWidth: "1400px",
           width: "100%",
           margin: "0 auto",

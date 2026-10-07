@@ -328,24 +328,12 @@ export default async function FilmDetailPage({
               zIndex: 2,
             }}
           >
-            <Breadcrumb
-              items={[
-                { label: "Home", href: "/" },
-                { label: "Results", href: "/results" },
-                { label: detail.title },
-              ]}
-            />
+            <Breadcrumb items={[{ label: "Home", href: "/" }, { label: detail.title }]} />
           </div>
         </div>
       ) : (
         <div className="fd-breadcrumb-wrap">
-          <Breadcrumb
-            items={[
-              { label: "Home", href: "/" },
-              { label: "Results", href: "/results" },
-              { label: detail.title },
-            ]}
-          />
+          <Breadcrumb items={[{ label: "Home", href: "/" }, { label: detail.title }]} />
         </div>
       )}
 

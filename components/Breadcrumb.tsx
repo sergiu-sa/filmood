@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Icon from "@/components/ui/Icon";
+import { useMediaQuery } from "@/lib/useMediaQuery";
 
 export interface BreadcrumbItem {
   label: string;
@@ -13,6 +14,8 @@ export interface BreadcrumbItem {
  * The last item is the current page. All preceding items are links.
  */
 export default function Breadcrumb({ items }: { items: BreadcrumbItem[] }) {
+  const isTouch = useMediaQuery("(max-width: 899px)");
+
   return (
     <nav
       aria-label="Breadcrumb"
@@ -84,6 +87,9 @@ export default function Breadcrumb({ items }: { items: BreadcrumbItem[] }) {
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "5px",
+                  minHeight: isTouch ? "44px" : undefined,
+                  // A 44px tap target without growing the row: nothing below the crumbs moves.
+                  margin: isTouch ? "-8px 0" : undefined,
                 }}
               >
                 {/* Home icon for the first "/" link */}
