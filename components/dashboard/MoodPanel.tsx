@@ -119,22 +119,24 @@ export default function MoodPanel({ isOpen, onClose, embedded }: MoodPanelProps)
       // Collapsed, the panel is only hidden visually; inert keeps its tiles out of the Tab order.
       inert={!isOpen}
       style={{
-        maxHeight: isOpen ? "1200px" : "0",
+        display: "grid",
+        gridTemplateRows: isOpen ? "1fr" : "0fr",
         opacity: isOpen ? 1 : 0,
-        overflow: "hidden",
-        transition: "max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s, padding 0.4s",
+        transition: "grid-template-rows 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s, padding 0.4s",
         paddingBottom: isOpen ? "10px" : "0",
       }}
     >
-      <div
-        style={{
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          borderRadius: "16px",
-          padding: "30px 32px 28px",
-        }}
-      >
-        {content}
+      <div style={{ overflow: "hidden", minHeight: 0 }}>
+        <div
+          style={{
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            borderRadius: "16px",
+            padding: "30px 32px 28px",
+          }}
+        >
+          {content}
+        </div>
       </div>
     </div>
   );

@@ -84,12 +84,15 @@ describe("MoodPanel", () => {
   });
 
   // Collapsed, it's only hidden visually; inert takes its tiles out of the Tab order.
-  it("takes a closed desktop panel out of the Tab order", () => {
+  // Grid rows, not a fixed max-height, so text zoom can't clip the describe field.
+  it("collapses a closed desktop panel and takes it out of the Tab order", () => {
     const { container, rerender } = render(<MoodPanel isOpen={false} onClose={onClose} />);
     const wrapper = container.firstChild as HTMLElement;
-    expect(wrapper.style.maxHeight).toBe("0");
+    expect(wrapper.style.gridTemplateRows).toBe("0fr");
+    expect(wrapper.style.maxHeight).toBe("");
     expect(wrapper).toHaveAttribute("inert");
     rerender(<MoodPanel isOpen onClose={onClose} />);
+    expect(wrapper.style.gridTemplateRows).toBe("1fr");
     expect(wrapper).not.toHaveAttribute("inert");
   });
 
