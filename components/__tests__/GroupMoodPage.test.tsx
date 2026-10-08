@@ -113,7 +113,13 @@ describe("Group mood page", () => {
     fireEvent.click(tile("Need a hug"));
     expect(tile("Need a hug")).toHaveAttribute("aria-pressed", "false");
     expect(screen.getAllByRole("button", { pressed: true })).toHaveLength(2);
-    expect(region).toHaveTextContent(HINT);
+    await waitFor(() => expect(region).toHaveTextContent(HINT));
+
+    // The same text set again changes nothing a polite region would announce,
+    // so a second refusal empties it first.
+    fireEvent.click(tile("Date night"));
+    expect(region).toBeEmptyDOMElement();
+    await waitFor(() => expect(region).toHaveTextContent(HINT));
 
     fireEvent.click(tile("Go dark"));
     expect(screen.queryByText(HINT)).toBeNull();

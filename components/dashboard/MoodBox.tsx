@@ -64,13 +64,9 @@ export default function MoodBox({
   }
 
   return (
+    // A click anywhere on the box toggles too, for pointers; the button is the one control.
     <section
-      role="button"
-      tabIndex={0}
       onClick={onExpand}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onExpand(); } }}
-      aria-expanded={isExpanded}
-      aria-label="Pick your mood — select how you want to feel"
       className="relative overflow-hidden cursor-pointer"
       style={{
         background: "var(--surface)",
@@ -191,6 +187,8 @@ export default function MoodBox({
 
       {/* Open-the-board CTA — pinned to the bottom of the box */}
       <button
+        type="button"
+        aria-expanded={isExpanded}
         onClick={(e) => {
           e.stopPropagation();
           onExpand();
@@ -211,6 +209,7 @@ export default function MoodBox({
       >
         <span>Open the mood board</span>
         <span
+          aria-hidden="true"
           style={{
             fontSize: "11px",
             transition: "transform 0.3s",

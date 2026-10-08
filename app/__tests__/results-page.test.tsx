@@ -18,7 +18,13 @@ vi.mock("@/lib/useMediaQuery", () => ({ useMediaQuery: () => false }));
 vi.mock("@/lib/useServices", () => ({ useDeviceServices: () => [] }));
 vi.mock("@/lib/getAuthToken", () => ({ getAuthHeaders: async () => ({}) }));
 vi.mock("@/components/Breadcrumb", () => ({ default: () => null }));
-vi.mock("@/components/results/MoodHeader", () => ({ default: () => null }));
+vi.mock("@/components/results/MoodHeader", () => ({
+  default: ({ headingRef }: { headingRef: React.Ref<HTMLHeadingElement> }) => (
+    <h1 ref={headingRef} tabIndex={-1}>
+      Need to laugh
+    </h1>
+  ),
+}));
 vi.mock("@/components/results/ResultsNotice", () => ({ default: () => null }));
 vi.mock("@/components/results/TopPick", () => ({ ResultsTopPick: () => null }));
 vi.mock("@/components/results/ResultsGrid", () => ({
@@ -39,7 +45,7 @@ vi.mock("@/components/results/FilterBar", () => ({
   ),
 }));
 
-const requests: { query: string; answer: (title: string) => Promise<void> }[] = [];
+const requests: { query: string; answer: (title: string) => Promise<void>; fail: () => Promise<void> }[] = [];
 
 const body = (title: string) => ({
   moods: [],
@@ -79,6 +85,8 @@ describe("results page", () => {
             requests.push({
               query: url.split("?")[1],
               answer: (title) => act(async () => resolve(new Response(JSON.stringify(body(title))))),
+              // A 5xx that isn't JSON: the retryable error.
+              fail: () => act(async () => resolve(new Response("", { status: 502 }))),
             });
           }),
       ),
@@ -128,5 +136,34 @@ describe("results page", () => {
     expect(requests).toHaveLength(2);
     expect(screen.getByText("A film")).toBeInTheDocument();
     expect(screen.queryByText("B film")).toBeNull();
+  });
+
+  // The Try again that recovered it is gone, so focus would fall to <body>.
+  it("moves focus to the heading when an answer replaces an error", async () => {
+    open(A);
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+    await requests[0].fail();
+    expect(screen.getByRole("heading", { name: "Couldn't reach the film database." })).toHaveFocus();
+
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await vi.waitFor(() => expect(requests).toHaveLength(2));
+    await requests[1].answer("A film");
+    expect(screen.getByRole("heading", { name: "Need to laugh" })).toHaveFocus();
+  });
+
+  // §14: a filter change, or a save's refetch, never moves focus.
+  it("leaves focus alone when an answer replaces an answer", async () => {
+    const go = open(A);
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+    await requests[0].answer("A film");
+
+    await save();
+    await requests[1].answer("A film, new services");
+    expect(screen.getByRole("button", { name: "Save to profile" })).toHaveFocus();
+
+    go(B);
+    await vi.waitFor(() => expect(requests).toHaveLength(3));
+    await requests[2].answer("B film");
+    expect(screen.getByRole("button", { name: "Save to profile" })).toHaveFocus();
   });
 });

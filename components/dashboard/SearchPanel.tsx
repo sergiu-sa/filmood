@@ -626,6 +626,8 @@ export default function SearchPanel({
     inner
   ) : (
     <div
+      // Collapsed, the panel is only hidden visually; inert keeps its controls out of the Tab order.
+      inert={!isOpen}
       style={{
         display: "grid",
         gridTemplateRows: isOpen ? "1fr" : "0fr",

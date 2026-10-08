@@ -67,6 +67,34 @@ describe("FilterGroup", () => {
     expect(screen.getByRole("radio", { name: "Long" })).toHaveFocus();
   });
 
+  // The radiogroup pattern: both axes in either orientation, plus Home and End.
+  it("moves with either axis and Home/End in a horizontal group, without selecting", async () => {
+    const user = userEvent.setup();
+    const { onChange } = renderGroup();
+    screen.getByRole("radio", { name: "Any" }).focus();
+
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("radio", { name: "Under 100 min" })).toHaveFocus();
+    await user.keyboard("{ArrowUp}");
+    expect(screen.getByRole("radio", { name: "Any" })).toHaveFocus();
+    await user.keyboard("{End}");
+    expect(screen.getByRole("radio", { name: "Long" })).toHaveFocus();
+    await user.keyboard("{Home}");
+    expect(screen.getByRole("radio", { name: "Any" })).toHaveFocus();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("moves with Left and Right when vertical", async () => {
+    const user = userEvent.setup();
+    renderGroup({ orientation: "vertical" });
+    screen.getByRole("radio", { name: "Any" }).focus();
+
+    await user.keyboard("{ArrowRight}");
+    expect(screen.getByRole("radio", { name: "Under 100 min" })).toHaveFocus();
+    await user.keyboard("{ArrowLeft}{ArrowLeft}");
+    expect(screen.getByRole("radio", { name: "Long" })).toHaveFocus();
+  });
+
   it("ignores a click on the checked option", async () => {
     const user = userEvent.setup();
     const { onChange } = renderGroup({ value: "short" });

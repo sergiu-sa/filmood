@@ -276,7 +276,7 @@ export default function ExplorePanel({ isOpen, onClose, embedded }: ExplorePanel
 
                 {/* Rose text is under 4.5:1 on --surface2, so the rose border marks the error. */}
                 {createError && (
-                  <p style={{ color: "var(--t1)", fontSize: "12px", borderLeft: "2px solid var(--rose)", paddingLeft: "8px" }}>
+                  <p role="alert" style={{ color: "var(--t1)", fontSize: "12px", borderLeft: "2px solid var(--rose)", paddingLeft: "8px" }}>
                     {createError}
                   </p>
                 )}
@@ -424,7 +424,7 @@ export default function ExplorePanel({ isOpen, onClose, embedded }: ExplorePanel
             </div>
 
             {joinError && (
-              <p style={{ fontSize: "12px", color: "var(--t1)", borderLeft: "2px solid var(--rose)", paddingLeft: "8px" }}>
+              <p role="alert" style={{ fontSize: "12px", color: "var(--t1)", borderLeft: "2px solid var(--rose)", paddingLeft: "8px" }}>
                 {joinError}
               </p>
             )}

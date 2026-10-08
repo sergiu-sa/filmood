@@ -1,7 +1,8 @@
 /**
  * @vitest-environment jsdom
  */
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import ExplorePanel from "@/components/dashboard/ExplorePanel";
 
 vi.mock("next/navigation", () => ({
@@ -10,8 +11,9 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/getAuthToken", () => ({ getAuthHeaders: vi.fn() }));
 
+let user: { id: string } | null = null;
 vi.mock("@/components/AuthProvider", () => ({
-  useAuth: () => ({ user: null, loading: false, signOut: vi.fn() }),
+  useAuth: () => ({ user, loading: false, signOut: vi.fn() }),
 }));
 
 describe("ExplorePanel", () => {
@@ -28,5 +30,30 @@ describe("ExplorePanel", () => {
     rerender(<ExplorePanel isOpen onClose={vi.fn()} />);
     expect(wrapper.style.gridTemplateRows).toBe("1fr");
     expect(wrapper).not.toHaveAttribute("inert");
+  });
+
+  // Each error is marked by a rose border only, so the role is what tells a screen reader.
+  describe("errors", () => {
+    afterEach(() => {
+      user = null;
+      vi.unstubAllGlobals();
+    });
+
+    it("announces a failed create", async () => {
+      user = { id: "u1" };
+      vi.stubGlobal("fetch", vi.fn(async () => Response.json({ error: "Failed to create session" }, { status: 500 })));
+      render(<ExplorePanel isOpen onClose={vi.fn()} />);
+      // The tab, then the button under it.
+      await userEvent.click(screen.getAllByRole("button", { name: "Create session" })[1]);
+      expect(await screen.findByRole("alert")).toHaveTextContent("Failed to create session");
+    });
+
+    it("announces a join code that isn't six characters", async () => {
+      render(<ExplorePanel isOpen onClose={vi.fn()} />);
+      await userEvent.click(screen.getByRole("button", { name: "Join with code" }));
+      await userEvent.type(screen.getByLabelText("Session code"), "AB1");
+      await userEvent.click(screen.getByRole("button", { name: "Join" }));
+      expect(screen.getByRole("alert")).toHaveTextContent("Enter a 6-character code");
+    });
   });
 });

@@ -55,7 +55,10 @@ describe("ServicesPicker", () => {
     const user = userEvent.setup();
     const { onConfirm } = renderPicker({ initial: ["netflix"] });
     expect(screen.getByText(/remembered on this device/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /sign up to keep them everywhere/i })).toHaveAttribute("href", "/signup");
+    const signUp = screen.getByRole("link", { name: /sign up to keep them everywhere/i });
+    expect(signUp).toHaveAttribute("href", "/signup");
+    // A 44px target in the 12.5px line.
+    expect(signUp.style.minHeight).toBe("44px");
     expect(screen.queryByRole("checkbox", { name: /save to my profile/i })).toBeNull();
 
     await user.click(submit());

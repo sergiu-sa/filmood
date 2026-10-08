@@ -17,8 +17,8 @@ interface FilterGroupProps<V extends string> {
 
 /**
  * A segmented radio group for one filter. Roving tabindex: Tab lands on the
- * checked option, arrows move focus without selecting (each selection is a
- * search), Space or Enter selects.
+ * checked option, arrows on either axis and Home/End move focus without
+ * selecting (each selection is a search), Space or Enter selects.
  */
 export default function FilterGroup<V extends string>({
   label,
@@ -37,12 +37,20 @@ export default function FilterGroup<V extends string>({
   );
 
   const onKeyDown = (e: KeyboardEvent) => {
-    const step =
-      e.key === (vertical ? "ArrowDown" : "ArrowRight") ? 1 : e.key === (vertical ? "ArrowUp" : "ArrowLeft") ? -1 : 0;
-    if (!step) return;
+    const current = Math.max(refs.current.findIndex((el) => el === document.activeElement), 0);
+    const last = options.length - 1;
+    const next =
+      e.key === "ArrowRight" || e.key === "ArrowDown"
+        ? (current + 1) % options.length
+        : e.key === "ArrowLeft" || e.key === "ArrowUp"
+          ? (current + last) % options.length
+          : e.key === "Home"
+            ? 0
+            : e.key === "End"
+              ? last
+              : null;
+    if (next === null) return;
     e.preventDefault();
-    const current = refs.current.findIndex((el) => el === document.activeElement);
-    const next = (Math.max(current, 0) + step + options.length) % options.length;
     refs.current[next]?.focus();
   };
 

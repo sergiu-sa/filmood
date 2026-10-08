@@ -118,6 +118,20 @@ function ResultsContent() {
     setAttempt((n) => n + 1);
   };
 
+  // An answer replacing an error takes focus to the header: the control that
+  // recovered it (Try again, Edit) is gone. Any other answer leaves focus alone (§14).
+  const showsError = (!mood && !text) || (failed !== null && failed.query === query);
+  const showsAnswer = !showsError && shown !== null && !busy;
+  const afterError = useRef(false);
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (showsError) afterError.current = true;
+    else if (showsAnswer && afterError.current) {
+      afterError.current = false;
+      heading.current?.focus();
+    }
+  }, [showsError, showsAnswer]);
+
   const films = shown?.data.films ?? [];
   // The server's list: retired keys resolved, text moods added, capped at two.
   const moods = shown?.data.moods ?? [];
@@ -147,7 +161,14 @@ function ResultsContent() {
         <Breadcrumb items={[{ label: "Home", href: "/" }, { label: "What to watch" }]} />
       </div>
 
-      <MoodHeader moods={moods} interpreted={data.interpreted} droppedMoods={data.droppedMoods} filters={data.filters} busy={busy} />
+      <MoodHeader
+        moods={moods}
+        interpreted={data.interpreted}
+        droppedMoods={data.droppedMoods}
+        filters={data.filters}
+        busy={busy}
+        headingRef={heading}
+      />
 
       <FilterBar filters={data.filters} count={films.length} busy={busy} refetch={retry} />
 
