@@ -132,6 +132,7 @@ function ResultsContent() {
     }
     const r = recovery.current;
     if (!r) return;
+    // Null until hydrated and seeded, so the render before the seed is written records nothing.
     r.query ??= query;
     if (r.query !== query) recovery.current = null;
     else if (showsAnswer) {
