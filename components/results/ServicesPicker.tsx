@@ -130,7 +130,17 @@ export default function ServicesPicker({ initial, signedIn, saved, loading, onCo
         ) : (
           <p style={{ margin: 0 }}>
             Remembered on this device ·{" "}
-            <Link href="/signup" style={{ color: "var(--gold-text)", fontWeight: 700, textDecoration: "none" }}>
+            <Link
+              href="/signup"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                minHeight: "44px",
+                color: "var(--gold-text)",
+                fontWeight: 700,
+                textDecoration: "none",
+              }}
+            >
               Sign up to keep them everywhere
             </Link>
           </p>

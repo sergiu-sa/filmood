@@ -202,6 +202,8 @@ describe("SearchPanel", () => {
     );
     const wrapper = container.firstChild as HTMLElement;
     expect(wrapper.style.gridTemplateRows).toBe("0fr");
+    // Collapsed, it's only hidden visually; inert keeps its controls out of the Tab order.
+    expect(wrapper).toHaveAttribute("inert");
   });
 
   it("expands via gridTemplateRows:1fr when isOpen=true and not embedded", () => {
@@ -210,5 +212,6 @@ describe("SearchPanel", () => {
     );
     const wrapper = container.firstChild as HTMLElement;
     expect(wrapper.style.gridTemplateRows).toBe("1fr");
+    expect(wrapper).not.toHaveAttribute("inert");
   });
 });

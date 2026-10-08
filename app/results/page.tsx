@@ -118,6 +118,29 @@ function ResultsContent() {
     setAttempt((n) => n + 1);
   };
 
+  // The answer to the query that left an error (Try again keeps it, Edit or Back
+  // changes it) takes focus to the header, since the control that recovered it is
+  // gone. A new query before that answer, or focus the user has placed, cancels it.
+  const showsError = (!mood && !text) || (failed !== null && failed.query === query);
+  const showsAnswer = !showsError && shown !== null && !busy;
+  const recovery = useRef<{ query: string | null } | null>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (showsError) {
+      recovery.current = { query: null };
+      return;
+    }
+    const r = recovery.current;
+    if (!r) return;
+    // Null until hydrated and seeded, so the render before the seed is written records nothing.
+    r.query ??= query;
+    if (r.query !== query) recovery.current = null;
+    else if (showsAnswer) {
+      recovery.current = null;
+      if (document.activeElement === document.body) heading.current?.focus();
+    }
+  }, [showsError, showsAnswer, query]);
+
   const films = shown?.data.films ?? [];
   // The server's list: retired keys resolved, text moods added, capped at two.
   const moods = shown?.data.moods ?? [];
@@ -147,7 +170,14 @@ function ResultsContent() {
         <Breadcrumb items={[{ label: "Home", href: "/" }, { label: "What to watch" }]} />
       </div>
 
-      <MoodHeader moods={moods} interpreted={data.interpreted} droppedMoods={data.droppedMoods} filters={data.filters} busy={busy} />
+      <MoodHeader
+        moods={moods}
+        interpreted={data.interpreted}
+        droppedMoods={data.droppedMoods}
+        filters={data.filters}
+        busy={busy}
+        headingRef={heading}
+      />
 
       <FilterBar filters={data.filters} count={films.length} busy={busy} refetch={retry} />
 

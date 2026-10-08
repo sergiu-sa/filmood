@@ -167,7 +167,10 @@ export default function GroupMoodPage() {
       setPicked([...picked, key]);
       setHint("");
     } else {
-      setHint(MAX_HINT);
+      // Setting the same text again changes nothing, so a polite region would
+      // stay silent on a second refusal. Empty it, then refill it next frame.
+      setHint("");
+      requestAnimationFrame(() => setHint(MAX_HINT));
     }
   };
 

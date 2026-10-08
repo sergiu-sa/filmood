@@ -88,6 +88,17 @@ describe("MoodHeader", () => {
       expect(screen.getByText("Big laughs, zero homework.")).toBeInTheDocument();
     });
 
+    // The page focuses it when an answer replaces an error.
+    it("hands the page its h1, focusable by script only", () => {
+      const headingRef = { current: null as HTMLHeadingElement | null };
+      render(
+        <MoodHeader moods={[mood("laugh")]} interpreted={null} droppedMoods={[]} filters={NONE} busy={false} headingRef={headingRef} />,
+      );
+      const h1 = screen.getByRole("heading", { level: 1, name: "Need to laugh" });
+      expect(headingRef.current).toBe(h1);
+      expect(h1).toHaveAttribute("tabindex", "-1");
+    });
+
     it("mobile: no one-liner, as drawn", () => {
       mobile = true;
       renderHeader();

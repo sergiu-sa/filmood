@@ -19,9 +19,9 @@ test.describe("Guest dashboard", () => {
     const heading = page.getByRole("heading", { level: 1 });
     await expect(heading).toContainText(/play your/i);
 
-    // Dashboard boxes expose role="button" via aria-label.
+    // MoodBox's one control is its button; the other two boxes are role="button" sections.
     await expect(
-      page.getByRole("button", { name: /pick your mood/i }),
+      page.getByRole("button", { name: "Open the mood board" }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: /discover together/i }),

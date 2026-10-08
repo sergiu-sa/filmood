@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useRef, useState, type FormEvent, type Ref } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import BottomSheet from "@/components/dashboard/BottomSheet";
 import MoodTile from "@/components/mood/MoodTile";
@@ -22,6 +22,8 @@ interface MoodHeaderProps {
   filters: AppliedFilters;
   /** The page is fetching a newer URL than these props answer. */
   busy: boolean;
+  /** The h1, which the page focuses when an answer replaces an error. */
+  headingRef?: Ref<HTMLHeadingElement>;
 }
 
 const ADD_TITLE = "Add a mood";
@@ -55,7 +57,7 @@ export function withText(sp: URLSearchParams, value: string): string {
  * and the line echoing how the free text was read. Mood and text changes push,
  * so Back returns to the previous search.
  */
-export default function MoodHeader({ moods, interpreted, droppedMoods, filters, busy }: MoodHeaderProps) {
+export default function MoodHeader({ moods, interpreted, droppedMoods, filters, busy, headingRef }: MoodHeaderProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isMobile = useMediaQuery("(max-width: 900px)");
@@ -160,6 +162,8 @@ export default function MoodHeader({ moods, interpreted, droppedMoods, filters, 
             {moods.length > 1 ? "What to watch · blended" : "What to watch"}
           </p>
           <h1
+            ref={headingRef}
+            tabIndex={-1}
             className="font-serif"
             style={{
               margin: 0,
@@ -168,6 +172,7 @@ export default function MoodHeader({ moods, interpreted, droppedMoods, filters, 
               lineHeight: 1.08,
               letterSpacing: "-0.5px",
               color: "var(--t1)",
+              outline: "none",
             }}
           >
             {moods.map((m, i) => (

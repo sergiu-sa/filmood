@@ -183,6 +183,7 @@ export default function AccountSettings({ user }: Props) {
             {/* Rose text is under 4.5:1 on --surface2, so the rose border marks the error. */}
             {pwError && (
               <p
+                role="alert"
                 style={{
                   fontSize: "11px",
                   color: "var(--t1)",

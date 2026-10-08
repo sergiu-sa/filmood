@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, type RefObject } from "react";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import MoodBox from "./MoodBox";
 import MoodPanel from "./MoodPanel";
@@ -74,6 +74,14 @@ export default function DashboardShell() {
   };
 
   const closePanel = () => setOpenPanel(null);
+
+  // A closed desktop panel is inert, so focus on its Close would fall to <body>.
+  const exploreBoxRef = useRef<HTMLElement>(null);
+  const trendingBoxRef = useRef<HTMLElement>(null);
+  const closeTo = (box: RefObject<HTMLElement | null>) => () => {
+    closePanel();
+    box.current?.focus();
+  };
 
   const handleSearchResults = useCallback(
     (films: Film[], keepOpen?: boolean) => {
@@ -181,11 +189,13 @@ export default function DashboardShell() {
           isCollapsed={isBoxCollapsed("mood")}
         />
         <ExploreBox
+          ref={exploreBoxRef}
           onExpand={() => togglePanel("explore")}
           isExpanded={openPanel === "explore"}
           isCollapsed={isBoxCollapsed("explore")}
         />
         <TrendingBox
+          ref={trendingBoxRef}
           onExpand={() => setOpenPanel("search")}
           isExpanded={openPanel === "search"}
           isCollapsed={isBoxCollapsed("search")}
@@ -203,9 +213,9 @@ export default function DashboardShell() {
             activeCategory={panelCategory}
             activeGenre={panelGenre}
             onCategoryChange={handlePanelCategoryChange}
-            onClose={closePanel}
+            onClose={closeTo(trendingBoxRef)}
           />
-          <ExplorePanel isOpen={openPanel === "explore"} onClose={closePanel} />
+          <ExplorePanel isOpen={openPanel === "explore"} onClose={closeTo(exploreBoxRef)} />
         </div>
       )}
 

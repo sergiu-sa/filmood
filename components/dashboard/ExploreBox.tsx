@@ -1,11 +1,14 @@
 "use client";
 
+import type { Ref } from "react";
 import CollapsedBoxRail from "./CollapsedBoxRail";
 
 interface ExploreBoxProps {
   onExpand: () => void;
   isExpanded: boolean;
   isCollapsed?: boolean;
+  /** The box, which takes focus back when its panel's Close collapses the panel. */
+  ref?: Ref<HTMLElement>;
 }
 
 const exploreItems = [
@@ -36,6 +39,7 @@ export default function ExploreBox({
   onExpand,
   isExpanded,
   isCollapsed,
+  ref,
 }: ExploreBoxProps) {
   if (isCollapsed) {
     return (
@@ -53,6 +57,7 @@ export default function ExploreBox({
 
   return (
     <section
+      ref={ref}
       role="button"
       tabIndex={0}
       onClick={onExpand}

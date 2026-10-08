@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type Ref } from "react";
 import Link from "next/link";
 import CollapsedBoxRail from "./CollapsedBoxRail";
 
@@ -16,9 +16,11 @@ interface TrendingBoxProps {
   onExpand: () => void;
   isExpanded?: boolean;
   isCollapsed?: boolean;
+  /** The box, which takes focus back when the search panel's Close collapses it. */
+  ref?: Ref<HTMLElement>;
 }
 
-export default function TrendingBox({ onExpand, isExpanded, isCollapsed }: TrendingBoxProps) {
+export default function TrendingBox({ onExpand, isExpanded, isCollapsed, ref }: TrendingBoxProps) {
   const [items, setItems] = useState<TrendingItem[]>([]);
 
   useEffect(() => {
@@ -44,6 +46,7 @@ export default function TrendingBox({ onExpand, isExpanded, isCollapsed }: Trend
 
   return (
     <section
+      ref={ref}
       role="button"
       tabIndex={0}
       onClick={onExpand}
