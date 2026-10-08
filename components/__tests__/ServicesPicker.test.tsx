@@ -18,7 +18,7 @@ function renderPicker(props: Partial<Parameters<typeof ServicesPicker>[0]> = {})
   const onConfirm = vi.fn().mockResolvedValue(undefined);
   const onCancel = vi.fn();
   render(
-    <ServicesPicker initial={[]} signedIn={false} saved={false} onConfirm={onConfirm} onCancel={onCancel} {...props} />,
+    <ServicesPicker initial={[]} signedIn={false} saved={false} loading={false} onConfirm={onConfirm} onCancel={onCancel} {...props} />,
   );
   return { onConfirm, onCancel };
 }
@@ -89,6 +89,18 @@ describe("ServicesPicker", () => {
     const { onConfirm } = renderPicker({ signedIn: true, saved: true, initial: ["netflix"] });
     expect(screen.queryByRole("checkbox", { name: /save to my profile/i })).toBeNull();
     expect(screen.getByText(/saved to your profile/i)).toBeInTheDocument();
+
+    await user.click(submit());
+    expect(onConfirm).toHaveBeenCalledWith(["netflix"], true);
+  });
+
+  // Saved services may exist, so neither the checkbox nor the device line applies yet.
+  it("offers no profile-or-device choice while the saved services load", async () => {
+    const user = userEvent.setup();
+    const { onConfirm } = renderPicker({ signedIn: true, loading: true, initial: ["netflix"] });
+    expect(screen.getByText("Checking your services…")).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: /save to my profile/i })).toBeNull();
+    expect(screen.queryByText(/remembered on this device/i)).toBeNull();
 
     await user.click(submit());
     expect(onConfirm).toHaveBeenCalledWith(["netflix"], true);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect, useRef, useSyncExternalStore, Suspense } from "react";
+import { useState, useEffect, useEffectEvent, useRef, useSyncExternalStore, Suspense } from "react";
 import Link from "next/link";
 import Breadcrumb from "@/components/Breadcrumb";
 import { ResultsTopPick } from "@/components/results/TopPick";
@@ -37,11 +37,17 @@ function ResultsContent() {
 
   // What's on screen and what failed, each with the query it answers, so
   // "busy" is derived from the URL instead of being set in the effect.
-  const [shown, setShown] = useState<{ query: string; data: DiscoverResponse } | null>(null);
+  // A null query: still on screen, but it answers nothing now (see retry).
+  const [shown, setShown] = useState<{ query: string | null; data: DiscoverResponse } | null>(null);
   const [failed, setFailed] = useState<{ query: string; message: string; retryable: boolean } | null>(null);
   const [attempt, setAttempt] = useState(0);
   const busy = shown !== null && shown.query !== query && failed?.query !== query;
-  const fetchedQuery = useRef<string | null>(null);
+  // The fetch whose answer may still land. An object, not the query: a refetch
+  // of the same query must make the earlier request's answer stale.
+  const fetchedQuery = useRef<{ query: string } | null>(null);
+  // Read when the query changes, not a reason to run the effect: an answer
+  // landing would re-run it, and its seed branch with it.
+  const isShown = useEffectEvent((q: string) => q === shown?.query);
 
   useEffect(() => {
     // Text alone is enough to kick off a search — mood tiles are optional now.
@@ -58,8 +64,9 @@ function ResultsContent() {
 
     // Dropping src below re-runs this effect with the same query; don't fetch
     // (and log the search) twice. Try again clears the guard.
-    if (!query || query === fetchedQuery.current) return;
-    fetchedQuery.current = query;
+    if (!query || query === fetchedQuery.current?.query) return;
+    const ticket = { query };
+    fetchedQuery.current = ticket;
     const params = new URLSearchParams(query);
     if (src) params.set("src", src);
 
@@ -73,7 +80,7 @@ function ResultsContent() {
         const data: DiscoverResponse & { error?: string } = await res.json();
         // Superseded (a related mood, then Back). The guard above skips re-runs,
         // so an effect cleanup flag could leave nothing fetching.
-        if (fetchedQuery.current !== query) return;
+        if (fetchedQuery.current !== ticket) return;
 
         if (res.ok && !data.error) {
           setShown({ query, data });
@@ -86,10 +93,12 @@ function ResultsContent() {
       } catch {
         // No answer, or a 5xx that isn't JSON: the default failure, retryable.
       }
-      if (fetchedQuery.current === query) setFailed({ query, ...failure });
+      if (fetchedQuery.current === ticket) setFailed({ query, ...failure });
     };
 
-    fetchFilms();
+    // A → B → back to A: A is still on screen, so don't fetch it again. The
+    // guard now names A, so B's answer is dropped when it lands.
+    if (!isShown(query)) fetchFilms();
 
     // src credits this one search in search_events. Left in the URL, Back and
     // reload would credit it again.
@@ -100,8 +109,11 @@ function ResultsContent() {
     }
   }, [mood, text, seed, src, query, router, searchParams, attempt]);
 
+  // Try again, and a saved-services edit that leaves the query as it is: the
+  // route reads saved services itself, so the films on screen no longer answer it.
   const retry = () => {
     fetchedQuery.current = null;
+    setShown((s) => s && { ...s, query: null });
     setFailed(null);
     setAttempt((n) => n + 1);
   };
@@ -137,7 +149,7 @@ function ResultsContent() {
 
       <MoodHeader moods={moods} interpreted={data.interpreted} droppedMoods={data.droppedMoods} filters={data.filters} busy={busy} />
 
-      <FilterBar filters={data.filters} count={films.length} busy={busy} />
+      <FilterBar filters={data.filters} count={films.length} busy={busy} refetch={retry} />
 
       {/* The last answer stays on screen, dimmed, until the new one arrives. */}
       <div

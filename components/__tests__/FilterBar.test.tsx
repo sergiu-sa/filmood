@@ -8,16 +8,18 @@ import type { AppliedFilters } from "@/lib/types";
 import type { Services } from "@/lib/useServices";
 
 const replace = vi.fn();
+const refetch = vi.fn();
 let search = "mood=laugh&seed=9&tempo=slowburn";
 let mobile = false;
 let services: Services;
+let device: string[] = [];
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace, push: vi.fn() }),
   useSearchParams: () => new URLSearchParams(search),
 }));
 vi.mock("@/lib/useMediaQuery", () => ({ useMediaQuery: () => mobile }));
-vi.mock("@/lib/useServices", () => ({ useServices: () => services }));
+vi.mock("@/lib/useServices", () => ({ useServices: () => services, useDeviceServices: () => device }));
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...rest}>
@@ -30,7 +32,7 @@ const NONE: AppliedFilters = { time: null, era: null, where: "norway" };
 
 function renderBar(props: { filters?: Partial<AppliedFilters>; count?: number; busy?: boolean } = {}) {
   const el = (p: typeof props) => (
-    <FilterBar filters={{ ...NONE, ...p.filters }} count={p.count ?? 20} busy={p.busy ?? false} />
+    <FilterBar filters={{ ...NONE, ...p.filters }} count={p.count ?? 20} busy={p.busy ?? false} refetch={refetch} />
   );
   const view = render(el(props));
   return { ...view, rerender: (p: typeof props) => view.rerender(el(p)) };
@@ -52,7 +54,8 @@ describe("FilterBar", () => {
   beforeEach(() => {
     search = "mood=laugh&seed=9&tempo=slowburn";
     mobile = false;
-    services = { list: [], saved: false, signedIn: false, save: vi.fn().mockResolvedValue(undefined) };
+    device = [];
+    services = { list: [], saved: false, signedIn: false, loading: false, save: vi.fn().mockResolvedValue(undefined) };
   });
   afterEach(() => vi.clearAllMocks());
 
@@ -161,6 +164,68 @@ describe("FilterBar", () => {
       expect(await screen.findByRole("alert")).toBeInTheDocument();
       expect(services.save).toHaveBeenCalledWith(["netflix"], true);
       expect(replace).not.toHaveBeenCalled();
+      expect(refetch).not.toHaveBeenCalled();
+    });
+
+    describe("a profile save", () => {
+      const edit = async (uncheck: string[], check: string[], button: string) => {
+        const user = userEvent.setup();
+        await user.click(screen.getByRole("button", { name: "Edit services" }));
+        for (const name of uncheck) await user.click(screen.getByRole("checkbox", { name }));
+        for (const name of check) await user.click(screen.getByRole("checkbox", { name }));
+        await user.click(screen.getByRole("button", { name: button }));
+      };
+
+      beforeEach(() => {
+        services = { ...services, list: ["viaplay"], saved: true, signedIn: true };
+      });
+
+      // The route searches saved Viaplay; saving Netflix leaves services=netflix as it was.
+      it("fetches again when it leaves a shared link's request as it is", async () => {
+        search = "mood=laugh&where=mine&services=netflix&seed=9";
+        renderBar({ filters: { where: "mine" } });
+        await edit(["Viaplay"], ["Netflix"], "Show films on 1 service");
+
+        await waitFor(() => expect(refetch).toHaveBeenCalledTimes(1));
+        expect(services.save).toHaveBeenCalledWith(["netflix"], true);
+        expect(replace).not.toHaveBeenCalled();
+        expect(screen.queryByRole("dialog", { name: "Which services do you have?" })).toBeNull();
+      });
+
+      // No services in the URL: the request carried this device's, which the save matches.
+      it("compares the request, not the URL", async () => {
+        search = "mood=laugh&where=mine&seed=9";
+        device = ["netflix"];
+        renderBar({ filters: { where: "mine" } });
+        await edit(["Viaplay"], ["Netflix"], "Show films on 1 service");
+
+        await waitFor(() => expect(refetch).toHaveBeenCalledTimes(1));
+        expect(replace).not.toHaveBeenCalled();
+      });
+
+      it("writes the URL when the request changes", async () => {
+        search = "mood=laugh&where=mine&services=netflix&seed=9";
+        renderBar({ filters: { where: "mine" } });
+        await edit([], ["Netflix"], "Show films on 2 services");
+
+        await waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
+        expect(lastUrl().get("services")).toBe("netflix,viaplay");
+        expect(refetch).not.toHaveBeenCalled();
+      });
+    });
+
+    // Nothing the route reads changed, so the answer on screen still stands.
+    it("doesn't fetch again when a device save leaves the request as it is", async () => {
+      const user = userEvent.setup();
+      search = "mood=laugh&where=mine&services=netflix&seed=9";
+      services.list = ["netflix"];
+      renderBar({ filters: { where: "mine" } });
+      await user.click(screen.getByRole("button", { name: "Edit services" }));
+      await user.click(screen.getByRole("button", { name: "Show films on 1 service" }));
+
+      await waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
+      expect(services.save).toHaveBeenCalledWith(["netflix"], false);
+      expect(refetch).not.toHaveBeenCalled();
     });
 
     it("shuffles to a new seed and keeps everything else", async () => {
