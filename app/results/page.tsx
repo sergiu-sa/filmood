@@ -37,11 +37,13 @@ function ResultsContent() {
 
   // What's on screen and what failed, each with the query it answers, so
   // "busy" is derived from the URL instead of being set in the effect.
-  const [shown, setShown] = useState<{ query: string; data: DiscoverResponse } | null>(null);
+  // A null query: still on screen, but it answers nothing now (see retry).
+  const [shown, setShown] = useState<{ query: string | null; data: DiscoverResponse } | null>(null);
   const [failed, setFailed] = useState<{ query: string; message: string; retryable: boolean } | null>(null);
   const [attempt, setAttempt] = useState(0);
   const busy = shown !== null && shown.query !== query && failed?.query !== query;
   const fetchedQuery = useRef<string | null>(null);
+  const shownQuery = shown?.query;
 
   useEffect(() => {
     // Text alone is enough to kick off a search — mood tiles are optional now.
@@ -89,7 +91,9 @@ function ResultsContent() {
       if (fetchedQuery.current === query) setFailed({ query, ...failure });
     };
 
-    fetchFilms();
+    // A → B → back to A: A is still on screen, so don't fetch it again. The
+    // guard now names A, so B's answer is dropped when it lands.
+    if (query !== shownQuery) fetchFilms();
 
     // src credits this one search in search_events. Left in the URL, Back and
     // reload would credit it again.
@@ -98,10 +102,13 @@ function ResultsContent() {
       withoutSrc.delete("src");
       router.replace(`/results?${withoutSrc}`, { scroll: false });
     }
-  }, [mood, text, seed, src, query, router, searchParams, attempt]);
+  }, [mood, text, seed, src, query, router, searchParams, attempt, shownQuery]);
 
+  // Try again, and a saved-services edit that leaves the query as it is: the
+  // route reads saved services itself, so the films on screen no longer answer it.
   const retry = () => {
     fetchedQuery.current = null;
+    setShown((s) => s && { ...s, query: null });
     setFailed(null);
     setAttempt((n) => n + 1);
   };
@@ -137,7 +144,7 @@ function ResultsContent() {
 
       <MoodHeader moods={moods} interpreted={data.interpreted} droppedMoods={data.droppedMoods} filters={data.filters} busy={busy} />
 
-      <FilterBar filters={data.filters} count={films.length} busy={busy} />
+      <FilterBar filters={data.filters} count={films.length} busy={busy} refetch={retry} />
 
       {/* The last answer stays on screen, dimmed, until the new one arrives. */}
       <div

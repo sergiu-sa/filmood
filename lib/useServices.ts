@@ -3,7 +3,7 @@
 // "My services" on the client: this device's list in localStorage (guests, and
 // signed-in users who chose not to save) and a signed-in user's saved list.
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { getAuthHeaders } from "@/lib/getAuthToken";
 import { parseServices, platformsFor, slugsFromNames, type PlatformSlug } from "@/lib/platforms";
@@ -49,6 +49,8 @@ export interface Services {
   /** Services saved to the profile: an edit must save there (Q4). */
   saved: boolean;
   signedIn: boolean;
+  /** Signed in and the saved read hasn't answered, so whether an edit must save to the profile isn't known yet. */
+  loading: boolean;
   /** toProfile PUTs display names; otherwise writes this device. Rejects when the PUT fails. */
   save(slugs: PlatformSlug[], toProfile: boolean): Promise<void>;
 }
@@ -58,10 +60,13 @@ export function useServices(): Services {
   const device = useDeviceServices();
   // Keyed by user, so a sign-out or account switch never shows the last user's list.
   const [fetched, setFetched] = useState<{ userId: string; slugs: PlatformSlug[] } | null>(null);
+  // Bumped by every read and every successful save. A read answers only if it's
+  // still the latest, so a slow one can't put back the list a save replaced.
+  const latest = useRef(0);
 
   useEffect(() => {
     if (!userId) return;
-    let cancelled = false;
+    const id = ++latest.current;
     (async () => {
       let slugs: PlatformSlug[] = [];
       try {
@@ -71,11 +76,8 @@ export function useServices(): Services {
       } catch {
         // A failed read counts as nothing saved; the route still settles Where itself.
       }
-      if (!cancelled) setFetched({ userId, slugs });
+      if (latest.current === id) setFetched({ userId, slugs });
     })();
-    return () => {
-      cancelled = true;
-    };
   }, [userId]);
 
   const saved = userId && fetched?.userId === userId ? fetched.slugs : [];
@@ -92,6 +94,8 @@ export function useServices(): Services {
       body: JSON.stringify({ platforms }),
     });
     if (!res.ok) throw new Error("Couldn't save your services");
+    // Only on success: a failed save leaves a pending read to answer.
+    latest.current++;
     setFetched({ userId, slugs: slugsFromNames(platforms) });
   };
 
@@ -99,6 +103,7 @@ export function useServices(): Services {
     list: saved.length > 0 ? saved : device,
     saved: saved.length > 0,
     signedIn: userId !== null,
+    loading: userId !== null && fetched?.userId !== userId,
     save,
   };
 }

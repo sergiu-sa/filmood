@@ -6,13 +6,14 @@ import BottomSheet from "@/components/dashboard/BottomSheet";
 import FilterGroup from "@/components/mood/FilterGroup";
 import ServicesPicker, { PICKER_TITLE } from "@/components/results/ServicesPicker";
 import Icon from "@/components/ui/Icon";
+import { discoverQuery } from "@/lib/discoverQuery";
 import { filmCount, filmWord } from "@/lib/filmCount";
 import { LONG_OPTIONS, SHORT_OPTIONS, setFilterParam, type FilterKey } from "@/lib/moodFilters";
 import { parseServices, platformsFor, type PlatformSlug } from "@/lib/platforms";
 import { newSeed } from "@/lib/seededRandom";
 import { useDismiss } from "@/lib/useDismiss";
 import { useMediaQuery } from "@/lib/useMediaQuery";
-import { useServices } from "@/lib/useServices";
+import { useDeviceServices, useServices } from "@/lib/useServices";
 import type { AppliedFilters } from "@/lib/types";
 
 interface FilterBarProps {
@@ -21,6 +22,8 @@ interface FilterBarProps {
   count: number;
   /** The page is fetching a different query from the one on screen. */
   busy: boolean;
+  /** Fetches the page's query again, for an answer that changed without the URL. */
+  refetch: () => void;
 }
 
 type Sheet = FilterKey | "services";
@@ -40,11 +43,12 @@ const serviceList = new Intl.ListFormat("en-GB", { type: "conjunction" });
  * desktop, a chip row with one sheet on mobile. It writes the URL with
  * router.replace and keeps the seed (Shuffle replaces it); the page refetches.
  */
-export default function FilterBar({ filters, count, busy }: FilterBarProps) {
+export default function FilterBar({ filters, count, busy, refetch }: FilterBarProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isMobile = useMediaQuery("(max-width: 900px)");
   const services = useServices();
+  const device = useDeviceServices();
   const [pending, setPending] = useState<{ url: string; key: FilterKey; value: string | null } | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   // A new key per open: the mobile sheet keeps its content mounted, and a
@@ -73,12 +77,17 @@ export default function FilterBar({ filters, count, busy }: FilterBarProps) {
     router.replace(`/results?${next}`, { scroll: false });
   };
 
-  const apply = (key: FilterKey, value: string | null, services?: readonly PlatformSlug[]) => {
+  const filterUrl = (key: FilterKey, value: string | null, services?: readonly PlatformSlug[]) => {
     const next = setFilterParam(searchParams, key, value);
     next.delete("src");
     // Every write of where=mine carries its services, so an edit to the same
     // Where still changes the URL, and the request says what it searched.
     if (services) next.set("services", services.join(","));
+    return next;
+  };
+
+  const apply = (key: FilterKey, value: string | null, services?: readonly PlatformSlug[]) => {
+    const next = filterUrl(key, value, services);
     setPending({ url: next.toString(), key, value });
     write(next, "filter");
   };
@@ -119,7 +128,11 @@ export default function FilterBar({ filters, count, busy }: FilterBarProps) {
     await services.save(slugs, toProfile);
     if (isMobile) setSheet((s) => ({ ...s, open: false }));
     else closePicker();
-    apply("where", "mine", slugs);
+    // Signed in, the route searches the saved services, not the URL's, so a save
+    // can change the answer to a request that stays the same (a shared link's).
+    const unchanged = discoverQuery(filterUrl("where", "mine", slugs), device) === discoverQuery(searchParams, device);
+    if (toProfile && unchanged) refetch();
+    else apply("where", "mine", slugs);
   };
 
   const shuffle = () => {
@@ -147,6 +160,7 @@ export default function FilterBar({ filters, count, busy }: FilterBarProps) {
     initial: known,
     signedIn: services.signedIn,
     saved: services.saved,
+    loading: services.loading,
     onConfirm: confirmServices,
   };
 

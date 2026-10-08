@@ -73,7 +73,7 @@ describe("useServices", () => {
     localStorage.setItem(SERVICES_STORAGE_KEY, "viaplay");
     const { result } = renderHook(() => useServices());
 
-    expect(result.current).toMatchObject({ list: ["viaplay"], saved: false, signedIn: false });
+    expect(result.current).toMatchObject({ list: ["viaplay"], saved: false, signedIn: false, loading: false });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -96,8 +96,54 @@ describe("useServices", () => {
     fetchMock.mockResolvedValue(json({ error: "Failed to load preferences" }, 500));
     const { result } = renderHook(() => useServices());
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(result.current).toMatchObject({ list: ["viaplay"], saved: false });
+  });
+
+  // Until the read answers, an unsaved-looking user may have saved services.
+  it("is loading while a signed-in user's read is pending", async () => {
+    mockUser = { id: "user-1" };
+    fetchMock.mockReturnValueOnce(new Promise<Response>(() => {}));
+    const { result } = renderHook(() => useServices());
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(result.current).toMatchObject({ saved: false, signedIn: true, loading: true });
+  });
+
+  it("keeps a save's list when an older read answers after it", async () => {
+    mockUser = { id: "user-1" };
+    let answer!: (res: Response) => void;
+    fetchMock.mockReturnValueOnce(new Promise<Response>((r) => (answer = r)));
+    const { result } = renderHook(() => useServices());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    fetchMock.mockResolvedValueOnce(json({ platforms: ["Netflix"] }));
+    await act(() => result.current.save(["netflix"], true));
+    expect(result.current).toMatchObject({ list: ["netflix"], saved: true, loading: false });
+
+    const late = json({ platforms: ["Viaplay"] });
+    const read = vi.spyOn(late, "json");
+    answer(late);
+    await waitFor(() => expect(read).toHaveBeenCalled());
+    // The hook awaits this same promise first, so its check has run once this resolves.
+    await act(() => read.mock.results[0].value);
+    expect(result.current.list).toEqual(["netflix"]);
+  });
+
+  it("lets a pending read answer when the save fails", async () => {
+    mockUser = { id: "user-1" };
+    let answer!: (res: Response) => void;
+    fetchMock.mockReturnValueOnce(new Promise<Response>((r) => (answer = r)));
+    const { result } = renderHook(() => useServices());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    fetchMock.mockResolvedValueOnce(json({ error: "Failed to save preferences" }, 500));
+    await act(() => expect(result.current.save(["netflix"], true)).rejects.toThrow());
+
+    answer(json({ platforms: ["Viaplay"] }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current).toMatchObject({ list: ["viaplay"], saved: true });
   });
 
   it("saves to the profile as display names", async () => {

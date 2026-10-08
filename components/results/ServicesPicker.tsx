@@ -12,12 +12,14 @@ interface ServicesPickerProps {
   signedIn: boolean;
   /** Q4: saves to the profile, no checkbox. */
   saved: boolean;
+  /** Signed in, saved services not read yet: no profile-or-device choice to offer. */
+  loading: boolean;
   onConfirm: (slugs: PlatformSlug[], toProfile: boolean) => Promise<void>;
   onCancel: () => void;
 }
 
 /** "My services" with nothing known, or Edit services. FilterBar places it in a popover or a sheet. */
-export default function ServicesPicker({ initial, signedIn, saved, onConfirm, onCancel }: ServicesPickerProps) {
+export default function ServicesPicker({ initial, signedIn, saved, loading, onConfirm, onCancel }: ServicesPickerProps) {
   const [picked, setPicked] = useState<PlatformSlug[]>(initial);
   const [saveToProfile, setSaveToProfile] = useState(true);
   const [pending, setPending] = useState(false);
@@ -113,6 +115,8 @@ export default function ServicesPicker({ initial, signedIn, saved, onConfirm, on
       <div style={{ fontSize: "12.5px", color: "var(--t2)" }}>
         {saved ? (
           <p style={{ margin: 0 }}>Saved to your profile</p>
+        ) : loading ? (
+          <p style={{ margin: 0 }}>Checking your services…</p>
         ) : signedIn ? (
           <label style={{ display: "flex", alignItems: "center", gap: "8px", minHeight: "44px", cursor: "pointer" }}>
             <input
