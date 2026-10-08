@@ -62,6 +62,7 @@ const body = (title: string) => ({
 
 const A = "mood=laugh&where=mine&services=netflix&seed=9";
 const B = "mood=laugh&time=short&where=mine&services=netflix&seed=9";
+const C = "mood=laugh&time=long&where=mine&services=netflix&seed=9";
 
 function open(search: string) {
   params = new URLSearchParams(search);
@@ -151,7 +152,7 @@ describe("results page", () => {
     expect(screen.getByRole("heading", { name: "Need to laugh" })).toHaveFocus();
   });
 
-  // §14: a filter change, or a save's refetch, never moves focus.
+  // A filter change, or a save's refetch, never moves focus.
   it("leaves focus alone when an answer replaces an answer", async () => {
     const go = open(A);
     await vi.waitFor(() => expect(requests).toHaveLength(1));
@@ -165,5 +166,37 @@ describe("results page", () => {
     await vi.waitFor(() => expect(requests).toHaveLength(3));
     await requests[2].answer("B film");
     expect(screen.getByRole("button", { name: "Save to profile" })).toHaveFocus();
+  });
+
+  // While Try again refetches, the last answer and its filter bar are back on screen.
+  describe("during Try again's refetch", () => {
+    async function retryingB() {
+      const go = open(A);
+      await vi.waitFor(() => expect(requests).toHaveLength(1));
+      await requests[0].answer("A film");
+      go(B);
+      await vi.waitFor(() => expect(requests).toHaveLength(2));
+      await requests[1].fail();
+      await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+      await vi.waitFor(() => expect(requests).toHaveLength(3));
+      return go;
+    }
+
+    it("leaves focus where the user put it", async () => {
+      await retryingB();
+      screen.getByRole("button", { name: "Save to profile" }).focus();
+      await requests[2].answer("B film");
+      expect(screen.getByRole("button", { name: "Save to profile" })).toHaveFocus();
+    });
+
+    // A click on a button doesn't focus it in Safari, so focus can still be on <body>.
+    it("doesn't count a new query's answer as the recovery", async () => {
+      const go = await retryingB();
+      expect(document.body).toHaveFocus();
+      go(C);
+      await vi.waitFor(() => expect(requests).toHaveLength(4));
+      await requests[3].answer("C film");
+      expect(screen.getByRole("heading", { name: "Need to laugh" })).not.toHaveFocus();
+    });
   });
 });

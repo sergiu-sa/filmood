@@ -118,19 +118,27 @@ function ResultsContent() {
     setAttempt((n) => n + 1);
   };
 
-  // An answer replacing an error takes focus to the header: the control that
-  // recovered it (Try again, Edit) is gone. Any other answer leaves focus alone (§14).
+  // The answer to the query that left an error (Try again keeps it, Edit or Back
+  // changes it) takes focus to the header, since the control that recovered it is
+  // gone. A new query before that answer, or focus the user has placed, cancels it.
   const showsError = (!mood && !text) || (failed !== null && failed.query === query);
   const showsAnswer = !showsError && shown !== null && !busy;
-  const afterError = useRef(false);
+  const recovery = useRef<{ query: string | null } | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
-    if (showsError) afterError.current = true;
-    else if (showsAnswer && afterError.current) {
-      afterError.current = false;
-      heading.current?.focus();
+    if (showsError) {
+      recovery.current = { query: null };
+      return;
     }
-  }, [showsError, showsAnswer]);
+    const r = recovery.current;
+    if (!r) return;
+    r.query ??= query;
+    if (r.query !== query) recovery.current = null;
+    else if (showsAnswer) {
+      recovery.current = null;
+      if (document.activeElement === document.body) heading.current?.focus();
+    }
+  }, [showsError, showsAnswer, query]);
 
   const films = shown?.data.films ?? [];
   // The server's list: retired keys resolved, text moods added, capped at two.
