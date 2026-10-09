@@ -19,7 +19,7 @@ export async function norwayProviderIds(): Promise<Map<PlatformSlug, number>> {
     PROVIDER_LIST_REVALIDATE,
   ).catch((error: unknown) => {
     // A 404 here means TMDB dropped the endpoint, not that a film is missing:
-    // a plain Error, so tmdbError reports it as a 500 instead of forwarding it.
+    // a plain Error, so a caller on tmdbError can't forward it as a missing film.
     if (error instanceof TMDBError && error.status === 404) {
       throw new Error("TMDB provider list missing", { cause: error });
     }
