@@ -6,8 +6,9 @@ interface FilmCardProps {
   id: number;
   title: string;
   posterPath: string | null;
-  releaseDate: string;
-  voteAverage: number;
+  /** null hides the year or the badge (a watchlist film whose lookup failed); "" still reads "N/A". */
+  releaseDate: string | null;
+  voteAverage: number | null;
   overview: string;
   accentBase?: string;
   /** Why it's here: genre names, the first one emphasised. */
@@ -79,29 +80,31 @@ export default function FilmCard({
           )}
 
           {/* The scrim is dark in both themes, so the badge takes dark mode's gold. */}
-          <div
-            className="always-dark-accents"
-            style={{
-              position: "absolute",
-              top: "10px",
-              right: "10px",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-              padding: "5px 9px",
-              borderRadius: "999px",
-              fontSize: "11px",
-              fontWeight: 700,
-              lineHeight: 1,
-              color: "rgb(var(--gold-rgb))",
-              background: "var(--overlay-heavy)",
-              border: "1px solid rgba(255,255,255,0.06)",
-              boxShadow: "0 6px 18px rgba(0,0,0,0.24)",
-              zIndex: 2,
-            }}
-          >
-            ★ {rating}
-          </div>
+          {voteAverage !== null && (
+            <div
+              className="always-dark-accents"
+              style={{
+                position: "absolute",
+                top: "10px",
+                right: "10px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                padding: "5px 9px",
+                borderRadius: "999px",
+                fontSize: "11px",
+                fontWeight: 700,
+                lineHeight: 1,
+                color: "rgb(var(--gold-rgb))",
+                background: "var(--overlay-heavy)",
+                border: "1px solid rgba(255,255,255,0.06)",
+                boxShadow: "0 6px 18px rgba(0,0,0,0.24)",
+                zIndex: 2,
+              }}
+            >
+              ★ {rating}
+            </div>
+          )}
 
           {moodDots && moodDots.length > 0 && (
             <div
@@ -151,9 +154,11 @@ export default function FilmCard({
             </span>
           )}
 
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <span style={{ fontSize: "11px", color: "var(--t3)" }}>{year}</span>
-          </div>
+          {releaseDate !== null && (
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "11px", color: "var(--t3)" }}>{year}</span>
+            </div>
+          )}
 
           {reason && reason.length > 0 && (
             <p style={{ fontSize: "12px", color: "var(--t2)", margin: "4px 0 0" }}>
