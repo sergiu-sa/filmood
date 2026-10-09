@@ -179,6 +179,13 @@ describe("settleTMDB", () => {
     await expect(result).rejects.toBeUndefined();
   });
 
+  // Callers read `failure !== null` as "partial", so an unboxed falsy reason would hide one.
+  it("reports a falsy reason it doesn't throw", async () => {
+    const { failure } = await settleTMDB([Promise.resolve(1), Promise.reject(undefined)], () => false);
+
+    expect(failure).toEqual({ reason: undefined });
+  });
+
   it("resolves when the caller has something to show, logging the failure once", async () => {
     const outage = new TMDBError(503, "/b");
     const { failure } = await settleTMDB([Promise.resolve(1), Promise.reject(outage)], () => false);

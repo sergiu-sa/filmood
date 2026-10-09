@@ -1,24 +1,12 @@
 import { createMockSupabase, mockRequest, mockUser } from "@/lib/__tests__/helpers/supabase-mock";
 import { GET } from "@/app/api/profile/fingerprint/route";
+import { mockTMDB } from "@/lib/__tests__/helpers/tmdb-mock";
 
 const mockGetSupabaseAdmin = vi.fn();
 vi.mock("@/lib/supabase-server", () => ({
   getAuthUser: async () => mockUser,
   getSupabaseAdmin: () => mockGetSupabaseAdmin(),
 }));
-
-/** Answers each TMDB path with its body, or with the status when it's a number. Unlisted paths 404. */
-function mockTMDB(answers: Record<string, unknown>) {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (url: string) => {
-      const path = new URL(url).pathname.replace(/^\/3/, "");
-      const answer = path in answers ? answers[path] : 404;
-      const status = typeof answer === "number" ? answer : 200;
-      return { ok: status === 200, status, json: async () => answer };
-    }),
-  );
-}
 
 const fingerprint = async () => {
   mockGetSupabaseAdmin.mockReturnValue(

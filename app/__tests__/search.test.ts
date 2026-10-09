@@ -1,18 +1,6 @@
 import { NextRequest } from "next/server";
 import { GET } from "@/app/api/movies/search/route";
-
-/** Answers each TMDB path with its body, or with the status when it's a number. Unlisted paths 404. */
-function mockTMDB(answers: Record<string, unknown>) {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (url: string) => {
-      const path = new URL(url).pathname.replace(/^\/3/, "");
-      const answer = path in answers ? answers[path] : 404;
-      const status = typeof answer === "number" ? answer : 200;
-      return { ok: status === 200, status, json: async () => answer };
-    }),
-  );
-}
+import { mockTMDB } from "@/lib/__tests__/helpers/tmdb-mock";
 
 const film = (id: number) => ({
   id,
@@ -49,6 +37,13 @@ describe("GET /api/movies/search?type=all", () => {
     expect((await searchAll()).status).toBe(500);
     expect(logged).toHaveBeenCalledTimes(2);
     expect(logged).toHaveBeenCalledWith("Failed to search films", expect.objectContaining({ status: 503 }));
+  });
+
+  // The title leg answered, so "every leg rejected" would call this "no hits".
+  it("answers 500 when one leg finds nothing and the other is down", async () => {
+    mockTMDB({ "/search/movie": { results: [] }, "/search/person": 503 });
+
+    expect((await searchAll()).status).toBe(500);
   });
 
   it("keeps the title films when the person leg fails, and logs the failure once", async () => {

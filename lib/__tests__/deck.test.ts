@@ -1,4 +1,4 @@
-import { vi } from "vitest";
+import { onTestFinished, vi } from "vitest";
 import { buildSharedDeck, DeckTooThinError } from "@/lib/deck";
 import { TMDBError } from "@/lib/tmdb-fetch";
 
@@ -184,6 +184,7 @@ describe("buildSharedDeck", () => {
   // The route logs what the deck throws, so a log here would report the same failure twice.
   it("leaves a thin deck's rejection unlogged for the route to log", async () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    onTestFinished(() => logged.mockRestore());
     global.fetch = vi.fn().mockImplementation((url: string) =>
       Promise.resolve(
         new URL(url).searchParams.get("with_genres") === "18"
@@ -194,7 +195,6 @@ describe("buildSharedDeck", () => {
 
     await expect(buildSharedDeck([{ mood_selections: ["laugh"] }, { mood_selections: ["cry"] }])).rejects.toMatchObject({ status: 429 });
     expect(logged).not.toHaveBeenCalled();
-    logged.mockRestore();
   });
 
   // An outage or a rotated key must NOT look like "no films matched": the
