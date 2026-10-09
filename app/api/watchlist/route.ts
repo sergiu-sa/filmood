@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ watchlist: data });
   }
 
-  // ponytail: one lookup per saved film, all at once, through the film page's 24 h cache. A cold cache
+  // One lookup per saved film, all at once, through the film page's 24 h cache. A cold cache
   // on hundreds of films can hit TMDB's rate limit (those cards lose rating and year): page the grid then.
   const { values } = await settleTMDB(data.map((row) => getFilmDetail(row.movie_id)), () => false);
   return NextResponse.json({

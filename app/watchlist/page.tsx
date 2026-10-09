@@ -43,6 +43,7 @@ export default function WatchlistPage() {
   const [notice, setNotice] = useState("");
   const [attempt, setAttempt] = useState(0);
   const heading = useRef<HTMLHeadingElement>(null);
+  const cards = useRef<HTMLUListElement>(null);
 
   // ResultsGrid's breakpoints, so the cards look the same as on /results.
   const isSmall = useMediaQuery("(max-width: 440px)");
@@ -79,11 +80,14 @@ export default function WatchlistPage() {
     };
   }, [userId, attempt]);
 
-  async function remove(film: WatchlistFilm) {
+  async function remove(film: WatchlistFilm, index: number) {
     setNotice("");
-    // The button goes with its card, so focus moves to the heading once its count has changed.
+    // The button goes with its card. Once that has rendered, focus the Remove now in its slot
+    // (the previous one after the last card, the heading when none is left).
     flushSync(() => setRemoved((ids) => new Set(ids).add(film.movie_id)));
-    heading.current?.focus({ preventScroll: true });
+    const buttons = cards.current?.querySelectorAll<HTMLButtonElement>("li > button");
+    (buttons?.[index] ?? buttons?.[index - 1] ?? heading.current)?.focus();
+    setNotice(`Removed ${film.movie_title}.`);
     try {
       const res = await fetch("/api/watchlist/remove", {
         method: "DELETE",
@@ -115,11 +119,14 @@ export default function WatchlistPage() {
     );
   } else if (shown === undefined) {
     body = (
-      <div aria-hidden="true" style={grid}>
-        {Array.from({ length: columns * 2 }, (_, i) => (
-          <div key={i} className="search-skeleton-bar" style={{ aspectRatio: "2/3", borderRadius: "var(--r)" }} />
-        ))}
-      </div>
+      <>
+        <p className="sr-only">Loading your watchlist…</p>
+        <div aria-hidden="true" style={grid}>
+          {Array.from({ length: columns * 2 }, (_, i) => (
+            <div key={i} className="search-skeleton-bar" style={{ aspectRatio: "2/3", borderRadius: "var(--r)" }} />
+          ))}
+        </div>
+      </>
     );
   } else if (shown === null) {
     body = (
@@ -127,6 +134,8 @@ export default function WatchlistPage() {
         <button
           type="button"
           onClick={() => {
+            // The button is gone while the list reloads, which would drop focus to <body>.
+            heading.current?.focus();
             setList(null);
             setAttempt((n) => n + 1);
           }}
@@ -146,8 +155,8 @@ export default function WatchlistPage() {
   } else {
     body = (
       // Safari drops a list's semantics under list-style: none.
-      <ul role="list" style={grid}>
-        {shown.map((film) => (
+      <ul ref={cards} role="list" style={grid}>
+        {shown.map((film, i) => (
           <li key={film.movie_id} style={{ display: "flex", flexDirection: "column", gap: "8px", minWidth: 0 }}>
             <FilmCard
               id={film.movie_id}
@@ -159,7 +168,7 @@ export default function WatchlistPage() {
             />
             <button
               type="button"
-              onClick={() => remove(film)}
+              onClick={() => remove(film, i)}
               aria-label={`Remove ${film.movie_title}`}
               style={{
                 display: "inline-flex",

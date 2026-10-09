@@ -31,6 +31,13 @@ const rows = [
 const fetchMock = vi.fn();
 const answer = (body: unknown, ok = true) => Promise.resolve({ ok, status: ok ? 200 : 500, json: async () => body });
 const cardTitles = () => screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
+const region = () => document.querySelector('[aria-live="polite"]') as HTMLElement;
+// A DELETE held open, so a test can look at the page before it answers.
+const held = () => {
+  let settle: (ok: boolean) => void = () => {};
+  const res = new Promise((resolve) => (settle = (ok) => resolve({ ok, status: ok ? 200 : 500, json: async () => ({}) })));
+  return { res, settle };
+};
 
 beforeEach(() => {
   fetchMock.mockReset();
@@ -50,6 +57,15 @@ describe("/watchlist", () => {
     expect(screen.getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
     expect(screen.getByRole("link", { name: "Sign up" })).toHaveAttribute("href", "/signup");
     await new Promise((r) => setTimeout(r, 0));
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("shows nothing for a guest until auth has loaded", async () => {
+    auth.value = { user: null, loading: true };
+    render(<WatchlistPage />);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByText("Log in to see your watchlist.")).not.toBeInTheDocument();
+    expect(screen.getByText("Loading your watchlist…")).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -80,18 +96,16 @@ describe("/watchlist", () => {
     expect(cards[2]).not.toHaveTextContent("N/A");
   });
 
-  it("drops a removed card at once and deletes it", async () => {
-    fetchMock.mockReturnValueOnce(answer({ watchlist: rows })).mockReturnValueOnce(answer({ success: true }));
+  it("drops a removed card before the delete answers", async () => {
+    const del = held();
+    fetchMock.mockReturnValueOnce(answer({ watchlist: rows })).mockReturnValueOnce(del.res);
     render(<WatchlistPage />);
-    const remove = await screen.findByRole("button", { name: "Remove Blade Runner" });
-    const heading = screen.getByRole("heading", { level: 1 });
-    // What a screen reader reads as focus lands: the count must already be the new one.
-    let readOnFocus = "";
-    heading.addEventListener("focus", () => (readOnFocus = heading.textContent ?? ""));
-    await userEvent.click(remove);
+    await userEvent.click(await screen.findByRole("button", { name: "Remove Blade Runner" }));
     expect(cardTitles()).toEqual(["Arrival", "Contact"]);
-    expect(heading).toHaveFocus();
-    expect(readOnFocus).toBe("My watchlist · 2 films");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("My watchlist · 2 films");
+    // The next card's Remove takes the removed one's place.
+    expect(screen.getByRole("button", { name: "Remove Contact" })).toHaveFocus();
+    expect(within(region()).getByText("Removed Blade Runner.")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenLastCalledWith(
       "/api/watchlist/remove",
       expect.objectContaining({
@@ -100,6 +114,31 @@ describe("/watchlist", () => {
         body: JSON.stringify({ movie_id: 2 }),
       }),
     );
+    del.settle(true);
+    await waitFor(() => expect(within(region()).getByText("Removed Blade Runner.")).toBeInTheDocument());
+    expect(cardTitles()).toEqual(["Arrival", "Contact"]);
+  });
+
+  it("moves focus back a card after the last one, and to the heading when none is left", async () => {
+    fetchMock.mockReturnValueOnce(answer({ watchlist: rows })).mockImplementation(() => answer({ success: true }));
+    render(<WatchlistPage />);
+    await userEvent.click(await screen.findByRole("button", { name: "Remove Contact" }));
+    expect(screen.getByRole("button", { name: "Remove Blade Runner" })).toHaveFocus();
+    await userEvent.click(screen.getByRole("button", { name: "Remove Blade Runner" }));
+    await userEvent.click(screen.getByRole("button", { name: "Remove Arrival" }));
+    expect(screen.getByText("Nothing saved yet.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveFocus();
+  });
+
+  it("tries a failed load again, keeping focus on the page", async () => {
+    fetchMock.mockReturnValueOnce(answer({}, false)).mockReturnValueOnce(answer({ watchlist: rows }));
+    render(<WatchlistPage />);
+    expect(await screen.findByText("Couldn't load your watchlist.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(screen.getByRole("heading", { level: 1 })).toHaveFocus();
+    await screen.findByText("Arrival");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(cardTitles()).toEqual(["Arrival", "Blade Runner", "Contact"]);
   });
 
   it("keeps a new account's list when the old account's answer lands late", async () => {
@@ -129,11 +168,13 @@ describe("/watchlist", () => {
   });
 
   it("puts a card back in its place when the delete fails, and says so", async () => {
-    fetchMock.mockReturnValueOnce(answer({ watchlist: rows })).mockReturnValueOnce(answer({}, false));
+    const del = held();
+    fetchMock.mockReturnValueOnce(answer({ watchlist: rows })).mockReturnValueOnce(del.res);
     render(<WatchlistPage />);
     await userEvent.click(await screen.findByRole("button", { name: "Remove Blade Runner" }));
+    expect(cardTitles()).toEqual(["Arrival", "Contact"]);
+    del.settle(false);
     await waitFor(() => expect(cardTitles()).toEqual(["Arrival", "Blade Runner", "Contact"]));
-    const region = document.querySelector('[aria-live="polite"]') as HTMLElement;
-    expect(within(region).getByText("Couldn't remove Blade Runner.")).toBeInTheDocument();
+    expect(within(region()).getByText("Couldn't remove Blade Runner.")).toBeInTheDocument();
   });
 });
