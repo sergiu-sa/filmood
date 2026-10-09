@@ -7,13 +7,22 @@ import Icon from "@/components/ui/Icon";
 
 interface SwipeDeckProps {
   deck: DeckFilm[];
-  startIndex: number;
+  /** This player's votes by movie id; the deck never offers those films. */
+  votes: Record<string, SwipeVote>;
   onVote: (movieId: number, vote: SwipeVote) => void;
   disabled: boolean;
 }
 
 const SWIPE_THRESHOLD = 80;
 const SWIPE_Y_THRESHOLD = 60;
+
+// The first position at or after `from` without a vote. A refresh after a gap
+// must offer the missing card: the server only finishes a player who voted on every film.
+function firstUnvoted(deck: DeckFilm[], votes: Record<string, SwipeVote>, from: number) {
+  let i = from;
+  while (i < deck.length && votes[deck[i].id]) i++;
+  return i;
+}
 
 // Vote button config — keeps the JSX clean
 const VOTE_BUTTONS: {
@@ -65,11 +74,13 @@ const VOTE_BUTTONS: {
 
 export default function SwipeDeck({
   deck,
-  startIndex,
+  votes,
   onVote,
   disabled,
 }: SwipeDeckProps) {
-  const [currentIndex, setCurrentIndex] = useState(startIndex);
+  // Props only seed the index; after that it moves forward in the vote's timer,
+  // so a stale poll can never take the deck back to a card already swiped.
+  const [currentIndex, setCurrentIndex] = useState(() => firstUnvoted(deck, votes, 0));
   const [exitDirection, setExitDirection] = useState<"left" | "right" | "up" | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -77,19 +88,14 @@ export default function SwipeDeck({
   const [hoveredBtn, setHoveredBtn] = useState<SwipeVote | null>(null);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
   const votingRef = useRef(false);
-
-  useEffect(() => {
-    // Intentional: clamp the local index to the server-known startIndex so
-    // polling snapshots can only ever move the deck forward. Without the
-    // Math.max a stale poll that arrives after a successful vote would snap
-    // the card back to a movie the user already swiped. Documented in CLAUDE.md.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setCurrentIndex((prev) => Math.max(prev, startIndex));
-  }, [startIndex]);
+  // The card a vote acts on. Votes read this, not `currentIndex`: the window
+  // keydown listener can fire after a vote's timer, before React re-binds it.
+  const indexRef = useRef(currentIndex);
 
   const triggerVote = useCallback(
     (vote: SwipeVote) => {
-      if (votingRef.current || disabled || currentIndex >= deck.length) return;
+      const index = indexRef.current;
+      if (votingRef.current || disabled || index >= deck.length) return;
       votingRef.current = true;
       setIsVoting(true);
 
@@ -97,18 +103,19 @@ export default function SwipeDeck({
         vote === "no" ? "left" : vote === "yes" ? "right" : "up";
       setExitDirection(direction);
 
-      const movieId = deck[currentIndex].id;
+      const movieId = deck[index].id;
 
       setTimeout(() => {
         onVote(movieId, vote);
-        setCurrentIndex((prev) => prev + 1);
+        indexRef.current = firstUnvoted(deck, votes, index + 1);
+        setCurrentIndex(indexRef.current);
         setExitDirection(null);
         setDragOffset({ x: 0, y: 0 });
         votingRef.current = false;
         setIsVoting(false);
       }, 380);
     },
-    [currentIndex, deck, disabled, onVote],
+    [deck, disabled, onVote, votes],
   );
 
   // Keyboard controls
