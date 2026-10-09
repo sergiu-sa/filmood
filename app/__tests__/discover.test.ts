@@ -1,5 +1,4 @@
 import { NextRequest } from "next/server";
-import { TMDBError } from "@/lib/tmdb-fetch";
 import type { DiscoverResponse } from "@/lib/types";
 import { createMockSupabase } from "@/lib/__tests__/helpers/supabase-mock";
 
@@ -43,6 +42,7 @@ const providerList = {
 
 interface Setup {
   user?: { id: string } | null;
+  /** A body, or TMDB's status when it's a number. */
   tmdb?: (params: Params, path: string) => unknown;
   recordSearchEvent?: ReturnType<typeof vi.fn>;
   getSupabaseAdmin?: () => unknown;
@@ -71,7 +71,7 @@ async function setup({
   };
   const tmdbJson = vi.fn(async (path: string, params: Params = {}) => {
     const body = tmdb(params, path);
-    if (body instanceof Error) throw body;
+    if (typeof body === "number") throw new TMDBError(body, path);
     return body;
   });
   vi.doMock("@/lib/supabase-server", () => ({
@@ -90,6 +90,9 @@ async function setup({
     ...(await importOriginal<typeof import("@/lib/tmdb-fetch")>()),
     tmdbJson,
   }));
+  // From the registry the route loads: after vi.resetModules() a static import
+  // is another class, so the route's instanceof checks would never match it.
+  const { TMDBError } = await import("@/lib/tmdb-fetch");
   const { GET } = await import("@/app/api/movies/discover/route");
   const request = (query: string) =>
     GET(new NextRequest(`http://localhost/api/movies/discover?${query}`));
@@ -257,7 +260,7 @@ describe("GET /api/movies/discover", () => {
 
   it("turns a TMDB 401 into a 500 with a safe message", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    const { get } = await setup({ tmdb: () => new TMDBError(401, "/discover/movie") });
+    const { get } = await setup({ tmdb: () => 401 });
     expect(await get("mood=laugh")).toEqual({ status: 500, body: { error: "Failed to fetch films" } });
   });
 
@@ -460,20 +463,26 @@ describe("GET /api/movies/discover", () => {
       expect(probes[0].watch_region).toBeUndefined();
     });
 
-    // Failures surface: a broken read never quietly becomes Norway.
+    // Failures surface: a broken read never quietly becomes Norway. The list's
+    // path is fixed, so its 404 is TMDB moving the endpoint, our outage too.
     it.each([
       ["a database error", { user: { id: "user-1" }, getSupabaseAdmin: withSaved(null, { message: "permission denied" }) }],
       [
         "a provider-list failure",
-        { tmdb: (_p: Params, path: string) => (path === PROVIDERS_PATH ? new TMDBError(401, path) : fullPage()) },
+        { tmdb: (_p: Params, path: string) => (path === PROVIDERS_PATH ? 401 : fullPage()) },
       ],
-    ])("turns %s into a 500 with a safe message", async (_label, options) => {
-      vi.spyOn(console, "error").mockImplementation(() => {});
+      [
+        "a provider-list 404",
+        { tmdb: (_p: Params, path: string) => (path === PROVIDERS_PATH ? 404 : fullPage()) },
+      ],
+    ])("turns %s into a 500 with a safe message, logged", async (_label, options) => {
+      const logged = vi.spyOn(console, "error").mockImplementation(() => {});
       const { get } = await setup(options);
       expect(await get("mood=laugh&where=mine&services=viaplay")).toEqual({
         status: 500,
         body: { error: "Failed to fetch films" },
       });
+      expect(logged).toHaveBeenCalledWith("Failed to fetch films", expect.anything());
     });
   });
 

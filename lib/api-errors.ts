@@ -34,6 +34,9 @@ export function badRequest(message: string) {
  * routes to `internalError` and surfaces as a 500, so it keeps showing up in
  * 5xx alerting and never masquerades as this app's "not signed in" 401.
  *
+ * Only for a path built from the client's id (`/movie/{id}/...`). On a fixed
+ * path a 404 means TMDB moved the endpoint, our outage: use `internalError`.
+ *
  * Forwarding the raw status would also hand `NextResponse.json` values it
  * rejects: a 204 or 304 from an intermediary throws inside the caller's catch
  * block, turning a handled failure into an unhandled one.

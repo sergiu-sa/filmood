@@ -32,8 +32,8 @@ export class TMDBError extends Error {
  * (e.g. `/movie/123/images`), so person and search endpoints work too.
  *
  * Throws `TMDBError` on a non-OK response and a plain `Error` when the key is
- * missing or the path is malformed — pair with `tmdbError(error, fallback)`
- * from `lib/api-errors`.
+ * missing or the path is malformed. A route pairs it with `tmdbError` only when
+ * the path carries the client's id; otherwise with `internalError`.
  *
  * `revalidate` is explicit rather than baked in: movie metadata caches for a
  * day, but the query-driven list routes (search, discover, browse, trending)

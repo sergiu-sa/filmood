@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { mapTMDBFilm } from "@/lib/tmdb";
 import type { Film } from "@/lib/types";
 import { settleTMDB, tmdbJson } from "@/lib/tmdb-fetch";
-import { tmdbError, badRequest } from "@/lib/api-errors";
+import { internalError, badRequest } from "@/lib/api-errors";
 
 type RawCredit = Parameters<typeof mapTMDBFilm>[0] & {
   popularity: number;
@@ -103,6 +103,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ films });
   } catch (error) {
-    return tmdbError(error, "Failed to search films");
+    return internalError(error, "Failed to search films");
   }
 }

@@ -7,7 +7,7 @@ import { resolveWhere } from "@/lib/watchProviders";
 import { mulberry32, newSeed, parseSeed } from "@/lib/seededRandom";
 import { parseSource, recordSearchEvent } from "@/lib/searchLog";
 import { mapTMDBDiscoverFilm } from "@/lib/tmdb";
-import { badRequest, tmdbError } from "@/lib/api-errors";
+import { badRequest, internalError } from "@/lib/api-errors";
 import { getAuthUser, getSupabaseAdmin } from "@/lib/supabase-server";
 import { recordMoodPicks } from "@/lib/mood-history";
 import type { DiscoverResponse } from "@/lib/types";
@@ -120,6 +120,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(body);
   } catch (error) {
-    return tmdbError(error, "Failed to fetch films");
+    return internalError(error, "Failed to fetch films");
   }
 }
