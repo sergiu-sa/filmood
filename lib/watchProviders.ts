@@ -4,7 +4,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Filters } from "@/lib/moodFilters";
 import { parseServices, PLATFORMS, slugsFromNames, type PlatformSlug } from "@/lib/platforms";
-import { tmdbJson } from "@/lib/tmdb-fetch";
+import { TMDBError, tmdbJson } from "@/lib/tmdb-fetch";
 
 const PROVIDER_LIST_REVALIDATE = 86400;
 
@@ -17,7 +17,14 @@ export async function norwayProviderIds(): Promise<Map<PlatformSlug, number>> {
     "/watch/providers/movie",
     { watch_region: "NO", language: "en-US" },
     PROVIDER_LIST_REVALIDATE,
-  );
+  ).catch((error: unknown) => {
+    // A 404 here means TMDB dropped the endpoint, not that a film is missing:
+    // a plain Error, so tmdbError reports it as a 500 instead of forwarding it.
+    if (error instanceof TMDBError && error.status === 404) {
+      throw new Error("TMDB provider list missing", { cause: error });
+    }
+    throw error;
+  });
   const ids = new Map<PlatformSlug, number>();
   for (const platform of PLATFORMS) {
     const names = platform.tmdbNames.map((n) => n.toLowerCase());

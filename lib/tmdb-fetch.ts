@@ -57,10 +57,11 @@ export async function tmdbJson<T = Record<string, unknown>>(
     throw new Error(`Invalid TMDB path: ${path}`);
   }
 
-  url.searchParams.set("api_key", apiKey);
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value);
   }
+  // After the params, so a caller's `api_key` entry can't replace the real key.
+  url.searchParams.set("api_key", apiKey);
 
   // `no-store` rather than omitting the option: uncached must not depend on a
   // route happening to lack an `export const revalidate` segment config.

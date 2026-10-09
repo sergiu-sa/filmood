@@ -133,6 +133,18 @@ describe("resolveWhere", () => {
     expect(supabase.from).not.toHaveBeenCalled();
   });
 
+  // A 404 here is TMDB dropping the endpoint, our outage, so it must not reach
+  // tmdbError as the client's "no such film".
+  it("rejects a provider-list 404 as a plain error", async () => {
+    const { resolveWhere, tmdbJson } = await load();
+    const { TMDBError } = await import("@/lib/tmdb-fetch");
+    tmdbJson.mockRejectedValueOnce(new TMDBError(404, "/watch/providers/movie"));
+
+    const err = await resolveWhere(MINE, "netflix", null).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(err).not.toBeInstanceOf(TMDBError);
+  });
+
   it("rejects on a database error", async () => {
     const { resolveWhere } = await load();
     const { saved } = savedRow(null, { message: "permission denied" });

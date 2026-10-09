@@ -82,6 +82,7 @@ export async function GET(request: NextRequest) {
   if (!/^\d+$/.test(page) || Number(page) < 1 || Number(page) > 500) {
     return badRequest("Invalid page");
   }
+  if (genreId !== null && !/^\d+$/.test(genreId)) return badRequest("Invalid genre");
 
   if (!category) return badRequest("Missing 'category' query parameter");
 

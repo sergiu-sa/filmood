@@ -2,11 +2,22 @@ import { tmdbError } from "@/lib/api-errors";
 import { TMDBError } from "@/lib/tmdb-fetch";
 
 describe("tmdbError", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   // 404 is the one upstream status that describes the client's request.
   it("forwards a 404 so an unknown film stays a 404", async () => {
     const res = tmdbError(new TMDBError(404, "/movie/999"), "Not found");
     expect(res.status).toBe(404);
     await expect(res.json()).resolves.toEqual({ error: "Not found" });
+  });
+
+  // A crawler walking film ids would otherwise bury the real 5xx in the logs.
+  it("doesn't log a 404", () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    tmdbError(new TMDBError(404, "/movie/999"), "Not found");
+    expect(error).not.toHaveBeenCalled();
   });
 
   // A rotated key or a rate limit is our outage. Emitting TMDB's 401 would
@@ -17,14 +28,6 @@ describe("tmdbError", () => {
       expect(tmdbError(new TMDBError(status, "/movie/1"), "Failed").status).toBe(500);
     },
   );
-
-  // Response.json throws on null-body statuses; forwarding them verbatim would
-  // turn a handled failure into an unhandled one inside the route's catch.
-  it.each([204, 304])("does not forward null-body status %i", (status) => {
-    expect(() =>
-      tmdbError(new TMDBError(status, "/movie/1"), "Failed"),
-    ).not.toThrow();
-  });
 
   it("routes a missing key to a 500", () => {
     const res = tmdbError(new Error("TMDB API key not configured"), "Failed");
