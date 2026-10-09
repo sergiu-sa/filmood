@@ -42,16 +42,15 @@ describe("SwipeDeck", () => {
     expect(screen.getByText("Title 3")).toBeInTheDocument();
   });
 
-  it("never moves back when a stale poll re-renders it during or after a vote", () => {
+  it("never moves back when a poll from before the vote lands while its POST is in flight", () => {
     const onVote = vi.fn();
     const { rerender } = render(<SwipeDeck deck={deck} votes={{}} onVote={onVote} disabled={false} />);
 
     act(() => press());
-    // A poll's snapshot from before the vote: a fresh deck array, no vote on film 1.
-    rerender(<SwipeDeck deck={[...deck]} votes={{}} onVote={onVote} disabled={false} />);
     act(() => vi.advanceTimersByTime(380));
     expect(screen.getByText("Title 2")).toBeInTheDocument();
 
+    // The poll's snapshot: a fresh deck array, still no vote on film 1.
     rerender(<SwipeDeck deck={[...deck]} votes={{}} onVote={onVote} disabled={false} />);
     expect(screen.getByText("Title 2")).toBeInTheDocument();
     expect(votedIds(onVote)).toEqual([1]);

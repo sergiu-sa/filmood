@@ -1,13 +1,19 @@
 /**
  * @vitest-environment jsdom
  */
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import GroupSwipePage from "@/app/group/[code]/swipe/page";
 import type { DeckFilm } from "@/lib/types";
 
+// One object each across renders: the page refetches whenever `router` or `user` changes.
+const { router, auth } = vi.hoisted(() => ({
+  router: { push: vi.fn(), replace: vi.fn(), back: vi.fn() },
+  auth: { user: { id: "u1" }, loading: false },
+}));
+
 vi.mock("next/navigation", () => ({
   useParams: () => ({ code: "K7F2AB" }),
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
+  useRouter: () => router,
 }));
 
 vi.mock("next/link", () => ({
@@ -18,14 +24,18 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-vi.mock("@/components/AuthProvider", () => ({
-  useAuth: () => ({ user: { id: "u1" }, loading: false }),
-}));
+vi.mock("@/components/AuthProvider", () => ({ useAuth: () => auth }));
 vi.mock("@/lib/useParticipantId", () => ({ useParticipantId: () => ({ participantId: null, ready: true }) }));
 vi.mock("@/lib/getAuthToken", () => ({
   getAuthHeaders: async () => ({ "Content-Type": "application/json", Authorization: "Bearer t" }),
 }));
-vi.mock("@/lib/useGroupRealtime", () => ({ useGroupRealtime: () => {} }));
+// The page's refetch, as Realtime or the 2s poll would call it.
+let poll: () => Promise<void> = async () => {};
+vi.mock("@/lib/useGroupRealtime", () => ({
+  useGroupRealtime: ({ onUpdate }: { onUpdate: () => Promise<void> }) => {
+    poll = onUpdate;
+  },
+}));
 vi.mock("@/lib/useMediaQuery", () => ({ useMediaQuery: () => false }));
 
 // Fifteen films; "Card n" is the film at deck position n.
@@ -55,10 +65,11 @@ const swipeState = () =>
     sessionStatus: "swiping",
   });
 
+let answerGet: () => Promise<Response> = async () => swipeState();
 const fetchMock = vi.fn(async (_url: string, init?: RequestInit) =>
   init?.method === "POST"
     ? Response.json({ recorded: true, participantDone: false, allDone: false })
-    : swipeState(),
+    : answerGet(),
 );
 vi.stubGlobal("fetch", fetchMock);
 
@@ -71,6 +82,7 @@ const press = () => fireEvent.keyDown(window, { key: "ArrowRight" });
 describe("Group swipe page", () => {
   afterEach(() => {
     votedPositions = [];
+    answerGet = async () => swipeState();
     fetchMock.mockClear();
   });
 
@@ -86,5 +98,23 @@ describe("Group swipe page", () => {
     await screen.findByRole("heading", { name: "All films rated" });
 
     expect(postedIds()).toEqual([deck[10].id, deck[13].id]);
+  });
+
+  it("starts the deck only once its films and votes are in, after a failed first load", async () => {
+    answerGet = async () => Response.json({ error: "Failed to load swipe state" }, { status: 500 });
+    render(<GroupSwipePage />);
+    await screen.findByText("Failed to load swipe state");
+
+    // The poll clears the error and renders before its own GET answers.
+    votedPositions = [0];
+    let answer!: (r: Response) => void;
+    answerGet = () => new Promise((r) => (answer = r));
+    await act(async () => {
+      void poll();
+    });
+    answer(swipeState());
+
+    expect(await screen.findByText("Card 1")).toBeInTheDocument();
+    expect(screen.queryByText("Card 0")).toBeNull();
   });
 });

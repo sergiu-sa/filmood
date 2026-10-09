@@ -409,12 +409,16 @@ export default function GroupSwipePage() {
         }}
       >
         {!isDone ? (
-          <SwipeDeck
-            deck={deck}
-            votes={myVotes}
-            onVote={handleVote}
-            disabled={isDone}
-          />
+          // The deck picks its first card from `votes` once, on mount, so it waits for the
+          // films; they and the votes land in the same render.
+          deck.length > 0 && (
+            <SwipeDeck
+              deck={deck}
+              votes={myVotes}
+              onVote={handleVote}
+              disabled={isDone}
+            />
+          )
         ) : (
           /* Done state */
           <div
