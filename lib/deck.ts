@@ -144,10 +144,24 @@ export async function buildSharedDeck(
     return { mood, count, results };
   });
 
-  // Partial failure is survivable — the allocation below redistributes.
-  const { values, firstRejection } = await settleTMDB(fetchResults);
-  const moodResults = values.filter((v) => v !== undefined);
+  // Partial failure is survivable — the allocation redistributes. Size is the
+  // guard, not rejections: a thin deck beside one is TMDB's fault, worth a retry.
+  const { values } = await settleTMDB(
+    fetchResults,
+    (pools) => assembleDeck(pools.filter((p) => p !== undefined)).length < MIN_DECK_SIZE,
+  );
+  const deck = assembleDeck(values.filter((v) => v !== undefined));
 
+  // Thin from here means nothing rejected. That can be the services' fault, so it gets one more build on Norway.
+  if (deck.length < MIN_DECK_SIZE && providers.length > 0) return buildSharedDeck(participants);
+
+  // An over-constrained query answers 200 with few films, and a stored deck is final: the last submitter has to change the picks.
+  if (deck.length < MIN_DECK_SIZE) throw new DeckTooThinError(deck.length);
+
+  return deck;
+}
+
+function assembleDeck(moodResults: { mood: string; count: number; results: DeckFilm[] }[]): DeckFilm[] {
   // Build deck: pick films per mood allocation, dedup across moods.
   // If a film appears under multiple moods, merge the mood_keys.
   const seen = new Map<number, DeckFilm>();
@@ -201,13 +215,6 @@ export async function buildSharedDeck(
       }
     }
   }
-
-  // A thin deck with nothing rejected can be the services' fault, so it gets one more build on Norway.
-  if (deck.length < MIN_DECK_SIZE && providers.length > 0 && !firstRejection) return buildSharedDeck(participants);
-
-  // Size is the guard, not rejections: an over-constrained query answers 200 with few films, and a stored deck is final.
-  // With a rejection the cause is TMDB, worth a retry; without one it's the picks, which the last submitter has to change.
-  if (deck.length < MIN_DECK_SIZE) throw firstRejection ?? new DeckTooThinError(deck.length);
 
   return deck;
 }

@@ -139,6 +139,19 @@ describe("getRelatedFilms", () => {
       source: "similar",
     });
   });
+
+  it("keeps similar when recommendations are down", async () => {
+    mockTMDB({ "/movie/7/recommendations": 503, "/movie/7/similar": { results: [film(2, "/2.jpg")] } });
+
+    expect(await getRelatedFilms(7)).toMatchObject({ films: [{ id: 2 }], source: "similar" });
+  });
+
+  // Films without posters are left out, so they don't count as something to show.
+  it("rejects when one leg fails and the other has no film with a poster", async () => {
+    mockTMDB({ "/movie/7/recommendations": 503, "/movie/7/similar": { results: [film(2, null)] } });
+
+    await expect(getRelatedFilms(7)).rejects.toMatchObject({ status: 503 });
+  });
 });
 
 describe("getFilmDetail", () => {

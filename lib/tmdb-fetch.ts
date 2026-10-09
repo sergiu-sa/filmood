@@ -98,32 +98,41 @@ export async function tmdbJsonOptional<T = Record<string, unknown>>(
 }
 
 /**
- * Run several TMDB calls and keep whatever succeeded, alongside the first
- * failure if there was one.
+ * Run several TMDB calls, keep what succeeded, and throw only a total failure:
+ * when `isEmpty(values)` and anything rejected. A caller that must never throw
+ * passes `() => false`.
  *
- * Routes that combine calls should degrade on a partial failure and report a
- * total one — but "total" is not "every promise rejected". A 404 resolves to
+ * "Total" is the caller's rule, not "every promise rejected": a 404 resolves to
  * `{}` through `tmdbJsonOptional`, so one leg 404ing while the other times out
- * leaves nothing usable and no rejection to trip an all-rejected check. Hence
- * the caller states its own emptiness condition in one line:
+ * leaves nothing usable with only one rejection.
  *
- *     const { values, firstRejection } = await settleTMDB([a, b]);
- *     ...derive the result from values...
- *     if (result.length === 0 && firstRejection) throw firstRejection;
+ * `failure` is the first rejection that isn't a TMDB 404, else the first, so a
+ * 404 can't keep an outage out of 5xx alerting; boxed so a falsy reason still
+ * counts. Every rejection that isn't thrown is logged once, so a partial
+ * outage stays visible; the thrown one is the caller's to log.
  */
 export async function settleTMDB<T>(
   calls: Promise<T>[],
-): Promise<{ values: (T | undefined)[]; firstRejection: unknown | null }> {
+  isEmpty: (values: (T | undefined)[]) => boolean,
+): Promise<{ values: (T | undefined)[]; failure: { reason: unknown } | null }> {
   const settled = await Promise.allSettled(calls);
-  const rejected = settled.find(
-    (r): r is PromiseRejectedResult => r.status === "rejected",
-  );
-  return {
-    // Positional, with `undefined` for a rejected call. Compacting the array
-    // would silently shift every later result down a slot, so a caller reading
-    // `values[1]` after call 0 failed would get call 1's data under call 0's
-    // meaning — and no type error to catch it.
-    values: settled.map((r) => (r.status === "fulfilled" ? r.value : undefined)),
-    firstRejection: rejected ? rejected.reason : null,
-  };
+  // Positional, with `undefined` for a rejected call. Compacting the array
+  // would silently shift every later result down a slot, so a caller reading
+  // `values[1]` after call 0 failed would get call 1's data under call 0's
+  // meaning — and no type error to catch it.
+  const values = settled.map((r) => (r.status === "fulfilled" ? r.value : undefined));
+  const reasons = settled.flatMap((r) => (r.status === "rejected" ? [r.reason] : []));
+  if (reasons.length === 0) return { values, failure: null };
+
+  // An index, not `find`: a falsy reason would read as "not found".
+  const outage = reasons.findIndex((e) => !(e instanceof TMDBError && e.status === 404));
+  const at = outage === -1 ? 0 : outage;
+  const failure = { reason: reasons[at] };
+  const thrown = isEmpty(values);
+  const logged = thrown ? reasons.filter((_, i) => i !== at) : reasons;
+  if (logged.length > 0) {
+    console.error(`${reasons.length} of ${settled.length} TMDB calls failed`, logged);
+  }
+  if (thrown) throw failure.reason;
+  return { values, failure };
 }

@@ -177,6 +177,7 @@ async function suggestRemovals(
         pools.map((p) =>
           fetchPage(buildSearchParams(p.moodKey, withoutFilter(f, remove), p.tier, cap), 1),
         ),
+        () => false,
       );
       return { remove, total: values.reduce((sum, v) => sum + (v?.total ?? 0), 0) };
     }),
@@ -206,19 +207,20 @@ export async function runMoodSearch(
   // shared one would make the order depend on which TMDB call returned first.
   const poolRngs = moodKeys.map(() => mulberry32(1 + Math.floor(rng() * SEED_MAX)));
 
-  const { values, firstRejection } = await settleTMDB(
+  // Nothing to show plus a real failure is an outage, not "no matches". Read
+  // off the pools, not `blend`, which would draw from `rng` a second time.
+  const { values, failure } = await settleTMDB(
     moodKeys.map((key, i) => searchMood(key, f, poolRngs[i], cap)),
+    (settled) => settled.every((p) => !p?.films.length),
   );
   const pools = values.filter((p): p is MoodPool => p !== undefined);
   const films = blend(pools, rng);
-  // Nothing to show plus a real failure is an outage, not "no matches".
-  if (films.length === 0 && firstRejection) throw firstRejection;
 
   const thin = films.length < MIN_RESULTS && removable.length > 0;
   return {
     films,
     relaxed: Math.max(0, ...pools.map((p) => p.tier)) as Tier,
-    partial: firstRejection !== null,
+    partial: failure !== null,
     suggestions: thin ? await suggestRemovals(pools, f, removable, cap, films.length) : [],
     relatedMoods:
       films.length === 0

@@ -56,26 +56,19 @@ export async function GET(request: NextRequest) {
     const genreCounts = new Map<number, number>();
     if (movieIds.length > 0) {
       // Up to 30 concurrent lookups — the most rate-limit-prone call site in
-      // the app. A throttled few must not discard the rest, nor the mood data
-      // above, which never touched TMDB.
-      const { values, firstRejection } = await settleTMDB(
+      // the app. Never empty: topMoods above came from Postgres, so even a
+      // total TMDB outage degrades to "moods, no genres", not a 500.
+      const { values } = await settleTMDB(
         movieIds.map(async (id) => {
           const data = await tmdbJsonOptional<{ genres?: { id: number }[] }>(
             `/movie/${id}`,
           );
           return data.genres ?? [];
         }),
+        () => false,
       );
 
       const results = values.map((g) => g ?? []);
-
-      // Deliberately does not throw. topMoods above came from Postgres and is
-      // the more valuable half of this response, so a TMDB wobble degrades to
-      // "moods, no genres" rather than costing a small-watchlist user the
-      // whole panel. The rejection is logged so the outage is still visible.
-      if (firstRejection) {
-        console.error("Fingerprint genre lookup partially failed", firstRejection);
-      }
       for (const filmGenres of results) {
         for (const g of filmGenres) {
           genreCounts.set(g.id, (genreCounts.get(g.id) ?? 0) + 1);

@@ -181,6 +181,22 @@ describe("buildSharedDeck", () => {
     expect(error).toMatchObject({ status: 429 });
   });
 
+  // The route logs what the deck throws, so a log here would report the same failure twice.
+  it("leaves a thin deck's rejection unlogged for the route to log", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    global.fetch = vi.fn().mockImplementation((url: string) =>
+      Promise.resolve(
+        new URL(url).searchParams.get("with_genres") === "18"
+          ? { ok: false, status: 429, json: () => Promise.reject(new Error("x")) }
+          : { ok: true, json: () => Promise.resolve(fakeTMDBResponse(4)) },
+      ),
+    );
+
+    await expect(buildSharedDeck([{ mood_selections: ["laugh"] }, { mood_selections: ["cry"] }])).rejects.toMatchObject({ status: 429 });
+    expect(logged).not.toHaveBeenCalled();
+    logged.mockRestore();
+  });
+
   // An outage or a rotated key must NOT look like "no films matched": the
   // caller would write movie_deck: [] and flip the session to swiping, landing
   // the whole group on a zero-card deck with nothing reported.

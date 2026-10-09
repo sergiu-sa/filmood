@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { mapTMDBFilm } from "@/lib/tmdb";
 import type { Film } from "@/lib/types";
-import { tmdbJson } from "@/lib/tmdb-fetch";
+import { settleTMDB, tmdbJson } from "@/lib/tmdb-fetch";
 import { tmdbError, badRequest } from "@/lib/api-errors";
 
 type RawCredit = Parameters<typeof mapTMDBFilm>[0] & {
@@ -79,37 +79,24 @@ export async function GET(request: NextRequest) {
       films = (await searchPersonCredits(trimmed)).director;
     } else if (type === "all") {
       // One leg failing must not discard the other's completed lookups.
-      const [titleResult, personResult] = await Promise.allSettled([
-        searchByTitle(trimmed),
-        searchPersonCredits(trimmed),
-      ]);
-      const values: [Film[] | undefined, { actor: Film[]; director: Film[] } | undefined] = [
-        titleResult.status === "fulfilled" ? titleResult.value : undefined,
-        personResult.status === "fulfilled" ? personResult.value : undefined,
-      ];
-      const firstRejection =
-        titleResult.status === "rejected"
-          ? titleResult.reason
-          : personResult.status === "rejected"
-            ? personResult.reason
-            : null;
-
-      // Positional, not searched: a rejected leg leaves `undefined` here, and
-      // a shape predicate would match that hole before the leg that succeeded.
-      const titleFilms = values[0] ?? [];
-      const person = values[1] ?? { actor: [], director: [] };
+      // Nothing from either leg plus a real failure is an outage, not "no hits".
+      const { values } = await settleTMDB<Film[]>(
+        [
+          searchByTitle(trimmed),
+          searchPersonCredits(trimmed).then((p) => [...p.actor, ...p.director]),
+        ],
+        (legs) => legs.every((leg) => !leg?.length),
+      );
 
       const seen = new Set<number>();
-      films = [...titleFilms, ...person.actor, ...person.director]
+      films = values
+        .flatMap((leg) => leg ?? [])
         .filter((f: { id: number }) => {
           if (seen.has(f.id)) return false;
           seen.add(f.id);
           return true;
         })
         .slice(0, 20);
-
-      // Nothing from either leg plus a real failure is an outage, not "no hits".
-      if (films.length === 0 && firstRejection) throw firstRejection;
     } else {
       films = await searchByTitle(trimmed);
     }
