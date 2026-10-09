@@ -12,10 +12,12 @@ const film = (id: number) => ({
   popularity: id,
 });
 
-const searchAll = async () => {
-  const res = await GET(new NextRequest("http://localhost/api/movies/search?query=dune&type=all"));
+const search = async (query: string) => {
+  const res = await GET(new NextRequest(`http://localhost/api/movies/search?${query}`));
   return { status: res.status, body: await res.json() };
 };
+
+const searchAll = () => search("query=dune&type=all");
 
 let logged: ReturnType<typeof vi.spyOn>;
 
@@ -53,5 +55,23 @@ describe("GET /api/movies/search?type=all", () => {
     expect(status).toBe(200);
     expect(body.films.map((f: { id: number }) => f.id)).toEqual([1, 2]);
     expect(logged).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Every path here is fixed or holds an id TMDB just returned, so a 404 is TMDB
+// moving an endpoint: our outage, not the client's request.
+describe("GET /api/movies/search, TMDB 404", () => {
+  it.each([
+    ["the title search", "query=dune", { "/search/movie": 404 }],
+    [
+      "a person's credits",
+      "query=dune&type=all",
+      { "/search/movie": { results: [] }, "/search/person": { results: [{ id: 7 }] }, "/person/7/movie_credits": 404 },
+    ],
+  ])("on %s answers 500, logged", async (_label, query, answers) => {
+    mockTMDB(answers);
+
+    expect(await search(query)).toEqual({ status: 500, body: { error: "Failed to search films" } });
+    expect(logged).toHaveBeenCalledWith("Failed to search films", expect.objectContaining({ status: 404 }));
   });
 });

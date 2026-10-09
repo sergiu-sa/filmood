@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { tmdbError } from "@/lib/api-errors";
+import { internalError } from "@/lib/api-errors";
 import { tmdbJson } from "@/lib/tmdb-fetch";
 
 type RawTrendingFilm = {
@@ -32,6 +32,6 @@ export async function GET() {
 
     return NextResponse.json({ films });
   } catch (error) {
-    return tmdbError(error, "Failed to fetch trending films");
+    return internalError(error, "Failed to fetch trending films");
   }
 }
