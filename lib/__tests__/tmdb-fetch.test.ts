@@ -113,14 +113,24 @@ describe("tmdbJsonOptional", () => {
 });
 
 describe("settleTMDB", () => {
+  let logged: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    logged = vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    logged.mockRestore();
+  });
+
   // The bug this guards: compacting the array shifts every later result down a
   // slot, so a caller reading values[0] after call 0 failed silently gets call
   // 1's payload under call 0's meaning — with no type error to catch it.
   it("keeps results at their original index when an earlier call fails", async () => {
-    const { values } = await settleTMDB<{ tag: string }>([
-      Promise.reject(new Error("first fails")),
-      Promise.resolve({ tag: "second" }),
-    ]);
+    const { values } = await settleTMDB<{ tag: string }>(
+      [Promise.reject(new Error("first fails")), Promise.resolve({ tag: "second" })],
+      () => false,
+    );
 
     expect(values).toHaveLength(2);
     expect(values[0]).toBeUndefined();
@@ -128,23 +138,60 @@ describe("settleTMDB", () => {
   });
 
   it("reports the first rejection and keeps every success", async () => {
-    const { values, firstRejection } = await settleTMDB<number>([
-      Promise.resolve(1),
-      Promise.reject(new Error("boom")),
-      Promise.resolve(3),
-    ]);
+    const { values, failure } = await settleTMDB<number>(
+      [Promise.resolve(1), Promise.reject(new Error("boom")), Promise.resolve(3)],
+      () => false,
+    );
 
     expect(values).toEqual([1, undefined, 3]);
-    expect(firstRejection).toBeInstanceOf(Error);
+    expect(failure?.reason).toBeInstanceOf(Error);
   });
 
-  it("reports no rejection when everything succeeds", async () => {
-    const { values, firstRejection } = await settleTMDB([
-      Promise.resolve("a"),
-      Promise.resolve("b"),
-    ]);
+  it("reports no rejection when everything succeeds, and logs nothing", async () => {
+    const { values, failure } = await settleTMDB(
+      [Promise.resolve("a"), Promise.resolve("b")],
+      () => true,
+    );
 
     expect(values).toEqual(["a", "b"]);
-    expect(firstRejection).toBeNull();
+    expect(failure).toBeNull();
+    expect(logged).not.toHaveBeenCalled();
+  });
+
+  // A 404 at index 0 must not keep a real outage out of 5xx alerting.
+  it("throws the first rejection that isn't a 404, logging only the one it doesn't throw", async () => {
+    const result = settleTMDB(
+      [Promise.reject(new TMDBError(404, "/a")), Promise.reject(new TMDBError(503, "/b"))],
+      () => true,
+    );
+
+    await expect(result).rejects.toMatchObject({ status: 503 });
+    expect(logged).toHaveBeenCalledTimes(1);
+    expect(logged.mock.calls[0][1]).toEqual([expect.objectContaining({ status: 404 })]);
+  });
+
+  it("throws a falsy reason too, ahead of a 404", async () => {
+    const result = settleTMDB(
+      [Promise.reject(new TMDBError(404, "/a")), Promise.reject(undefined)],
+      () => true,
+    );
+
+    await expect(result).rejects.toBeUndefined();
+  });
+
+  // Callers read `failure !== null` as "partial", so an unboxed falsy reason would hide one.
+  it("reports a falsy reason it doesn't throw", async () => {
+    const { failure } = await settleTMDB([Promise.resolve(1), Promise.reject(undefined)], () => false);
+
+    expect(failure).toEqual({ reason: undefined });
+  });
+
+  it("resolves when the caller has something to show, logging the failure once", async () => {
+    const outage = new TMDBError(503, "/b");
+    const { failure } = await settleTMDB([Promise.resolve(1), Promise.reject(outage)], () => false);
+
+    expect(failure).toEqual({ reason: outage });
+    expect(logged).toHaveBeenCalledTimes(1);
+    expect(logged.mock.calls[0][1]).toEqual([outage]);
   });
 });

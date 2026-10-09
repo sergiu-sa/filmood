@@ -179,23 +179,9 @@ function pickReleaseDate(entries: ReleaseDateEntry[]): string | null {
   return dated[0] ?? null;
 }
 
-/** Provider list + certification + release date per country in one payload,
- *  so the client can switch regions without re-fetching. */
-export async function getRegionalAvailability(
-  id: number,
-): Promise<RegionalAvailabilityResponse> {
-  // Providers and release dates degrade independently — a film may have one
-  // and not the other.
-  const { values, firstRejection } = await settleTMDB<{
-    results?: ProvidersByCountry | ReleaseByCountry;
-  }>([
-    tmdbJsonOptional<{ results?: ProvidersByCountry }>(
-      `/movie/${id}/watch/providers`,
-    ),
-    tmdbJsonOptional<{ results?: ReleaseByCountry }>(
-      `/movie/${id}/release_dates`,
-    ),
-  ]);
+function mergeRegions(
+  values: ({ results?: ProvidersByCountry | ReleaseByCountry } | undefined)[],
+): Record<string, RegionAvailability> {
   const providersByCountry = (values[0]?.results ?? {}) as ProvidersByCountry;
   const releaseByCountry = (values[1]?.results ?? []) as ReleaseByCountry;
 
@@ -224,12 +210,31 @@ export async function getRegionalAvailability(
     };
     regions[country] = { ...existing, certification, release_date };
   }
+  return regions;
+}
 
-  // A 404 on one leg resolves to {}, so "every promise rejected" would miss
-  // the case where the other genuinely failed and nothing usable remains.
-  if (Object.keys(regions).length === 0 && firstRejection) {
-    throw firstRejection;
-  }
+/** Provider list + certification + release date per country in one payload,
+ *  so the client can switch regions without re-fetching. */
+export async function getRegionalAvailability(
+  id: number,
+): Promise<RegionalAvailabilityResponse> {
+  // Providers and release dates degrade independently — a film may have one
+  // and not the other. Empty is the merged map, so one leg's data keeps the
+  // other's outage from failing the section.
+  const { values } = await settleTMDB<{
+    results?: ProvidersByCountry | ReleaseByCountry;
+  }>(
+    [
+      tmdbJsonOptional<{ results?: ProvidersByCountry }>(
+        `/movie/${id}/watch/providers`,
+      ),
+      tmdbJsonOptional<{ results?: ReleaseByCountry }>(
+        `/movie/${id}/release_dates`,
+      ),
+    ],
+    (legs) => Object.keys(mergeRegions(legs)).length === 0,
+  );
+  const regions = mergeRegions(values);
 
   // Norway, like the rest of the app; the client's saved region wins over this.
   const defaultRegion = regions[DEFAULT_REGION]
@@ -364,19 +369,18 @@ type RawListResponse = {
 export async function getRelatedFilms(
   id: number,
 ): Promise<{ films: Film[]; source: "recommendations" | "similar" }> {
-  // A fallback pair: one leg failing must not discard the other.
-  const { values, firstRejection } = await settleTMDB([
-    tmdbJsonOptional<RawListResponse>(`/movie/${id}/recommendations`),
-    tmdbJsonOptional<RawListResponse>(`/movie/${id}/similar`),
-  ]);
+  // A fallback pair: one leg failing must not discard the other. Nothing
+  // usable plus a real failure is an outage, not "no related films".
+  const { values } = await settleTMDB(
+    [
+      tmdbJsonOptional<RawListResponse>(`/movie/${id}/recommendations`),
+      tmdbJsonOptional<RawListResponse>(`/movie/${id}/similar`),
+    ],
+    (legs) => !legs.some((leg) => leg?.results?.some((f) => f.poster_path)),
+  );
   const [rec, sim] = [0, 1].map((i) =>
     (values[i]?.results ?? []).filter((f) => f.poster_path),
   );
-
-  // Nothing usable plus a real failure is an outage, not "no related films".
-  if (rec.length === 0 && sim.length === 0 && firstRejection) {
-    throw firstRejection;
-  }
 
   const useRecommendations = rec.length > 0;
   const source: "recommendations" | "similar" = useRecommendations

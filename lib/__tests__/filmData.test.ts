@@ -6,19 +6,7 @@ import {
   getRelatedFilms,
 } from "@/lib/filmData";
 import { TMDBError } from "@/lib/tmdb-fetch";
-
-/** Answers each TMDB path with its body, or with the status when it's a number. Unlisted paths 404. */
-function mockTMDB(answers: Record<string, unknown>) {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (url: string) => {
-      const path = new URL(url).pathname.replace(/^\/3/, "");
-      const answer = path in answers ? answers[path] : 404;
-      const status = typeof answer === "number" ? answer : 200;
-      return { ok: status === 200, status, json: async () => answer };
-    }),
-  );
-}
+import { mockTMDB } from "@/lib/__tests__/helpers/tmdb-mock";
 
 const provider = (id: number, name: string) => ({
   provider_id: id,
@@ -104,6 +92,13 @@ describe("getRegionalAvailability", () => {
 
     await expect(getRegionalAvailability(7)).rejects.toMatchObject({ status: 503 });
   });
+
+  // The 404 leg resolves to {}, so "every leg rejected" would call this "available nowhere".
+  it("rejects when one leg 404s and the other is down", async () => {
+    mockTMDB({ "/movie/7/release_dates": 503 });
+
+    await expect(getRegionalAvailability(7)).rejects.toMatchObject({ status: 503 });
+  });
 });
 
 describe("getRelatedFilms", () => {
@@ -138,6 +133,19 @@ describe("getRelatedFilms", () => {
       films: [{ id: 2, title: "Film 2", poster_path: "/2.jpg", release_date: "2020-01-01", vote_average: 7, overview: "" }],
       source: "similar",
     });
+  });
+
+  it("keeps similar when recommendations are down", async () => {
+    mockTMDB({ "/movie/7/recommendations": 503, "/movie/7/similar": { results: [film(2, "/2.jpg")] } });
+
+    expect(await getRelatedFilms(7)).toMatchObject({ films: [{ id: 2 }], source: "similar" });
+  });
+
+  // Films without posters are left out, so they don't count as something to show.
+  it("rejects when one leg fails and the other has no film with a poster", async () => {
+    mockTMDB({ "/movie/7/recommendations": 503, "/movie/7/similar": { results: [film(2, null)] } });
+
+    await expect(getRelatedFilms(7)).rejects.toMatchObject({ status: 503 });
   });
 });
 
