@@ -40,7 +40,8 @@ export function badRequest(message: string) {
  */
 export function tmdbError(error: unknown, fallback: string) {
   if (error instanceof TMDBError && error.status === 404) {
-    console.error(fallback, error.message);
+    // Not logged: it's the client's request, and a crawler walking film ids
+    // would bury the real 5xx under it.
     return NextResponse.json({ error: fallback }, { status: 404 });
   }
   return internalError(error, fallback);

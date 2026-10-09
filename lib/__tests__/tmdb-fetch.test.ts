@@ -39,6 +39,12 @@ describe("tmdbJson", () => {
     expect(init).toEqual({ next: { revalidate: 86400 } });
   });
 
+  it("keeps the env key when params carry an api_key", async () => {
+    const spy = mockFetch(200);
+    await tmdbJson("/movie/42", { api_key: "evil" });
+    expect(new URL(spy.mock.calls[0][0]).searchParams.getAll("api_key")).toEqual(["test-key"]);
+  });
+
   // Explicit no-store, not an omitted option: "uncached" must not depend on a
   // route happening to lack an `export const revalidate`.
   it("asks for no-store when revalidate is false", async () => {
