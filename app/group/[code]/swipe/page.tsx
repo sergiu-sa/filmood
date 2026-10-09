@@ -26,7 +26,6 @@ export default function GroupSwipePage() {
   const { user, loading: authLoading } = useAuth();
 
   const [deck, setDeck] = useState<DeckFilm[]>([]);
-  const [startIndex, setStartIndex] = useState(0);
   const [participants, setParticipants] = useState<ParticipantStatus[]>([]);
   const [, setSessionStatus] = useState<string>("swiping");
   const [myVotes, setMyVotes] = useState<Record<string, SwipeVote>>({});
@@ -97,7 +96,6 @@ export default function GroupSwipePage() {
         }
         return merged;
       });
-      setStartIndex((prev) => Math.max(prev, data.progress.swiped));
 
       const currentPid = participantId;
       const me = data.participants.find((p: ParticipantStatus) => {
@@ -411,12 +409,16 @@ export default function GroupSwipePage() {
         }}
       >
         {!isDone ? (
-          <SwipeDeck
-            deck={deck}
-            startIndex={startIndex}
-            onVote={handleVote}
-            disabled={isDone}
-          />
+          // The deck picks its first card from `votes` once, on mount, so it waits for the
+          // films; they and the votes land in the same render.
+          deck.length > 0 && (
+            <SwipeDeck
+              deck={deck}
+              votes={myVotes}
+              onVote={handleVote}
+              disabled={isDone}
+            />
+          )
         ) : (
           /* Done state */
           <div
