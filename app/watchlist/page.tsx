@@ -51,6 +51,8 @@ export default function WatchlistPage() {
   const isTablet = useMediaQuery("(max-width: 900px)");
   const isNarrowDesktop = useMediaQuery("(max-width: 1100px)");
   const columns = isSmall ? 1 : isMedium ? 2 : isTablet ? 3 : isNarrowDesktop ? 4 : 5;
+  // One row of blank cards under the guest, empty and error messages; a single one looks like a card, not a shelf.
+  const ghosts = Math.max(columns, 2);
   const grid = {
     display: "grid",
     gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
@@ -112,7 +114,7 @@ export default function WatchlistPage() {
   let body: React.ReactNode;
   if (!authLoading && !user) {
     body = (
-      <Message text="Log in to see your watchlist.">
+      <Message text="Log in to see your watchlist." ghosts={ghosts}>
         <Link href="/login" style={primary}>Log in</Link>
         <Link href="/signup" style={secondary}>Sign up</Link>
       </Message>
@@ -130,7 +132,7 @@ export default function WatchlistPage() {
     );
   } else if (shown === null) {
     body = (
-      <Message text="Couldn't load your watchlist.">
+      <Message text="Couldn't load your watchlist." ghosts={ghosts}>
         <button
           type="button"
           onClick={() => {
@@ -139,7 +141,7 @@ export default function WatchlistPage() {
             setList(null);
             setAttempt((n) => n + 1);
           }}
-          style={{ ...primary, font: "inherit", fontWeight: 700, cursor: "pointer" }}
+          style={{ ...primary, fontFamily: "inherit", cursor: "pointer" }}
         >
           Try again
         </button>
@@ -147,7 +149,7 @@ export default function WatchlistPage() {
     );
   } else if (shown.length === 0) {
     body = (
-      <Message text="Nothing saved yet.">
+      <Message text="Nothing saved yet." ghosts={ghosts}>
         <Link href="/" style={primary}>Pick a mood</Link>
         <Link href="/browse" style={secondary}>Browse films</Link>
       </Message>
@@ -228,11 +230,62 @@ export default function WatchlistPage() {
   );
 }
 
-function Message({ text, children }: { text: string; children: React.ReactNode }) {
+/** The message centred over a row of blank cards in the grid's shape, fading into the page. */
+function Message({ text, ghosts, children }: { text: string; ghosts: number; children: React.ReactNode }) {
+  const bar = { display: "block", height: "10px", borderRadius: "4px", background: "var(--surface3)" } as const;
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "16px" }}>
-      <p style={{ margin: 0, fontSize: "15px", color: "var(--t2)" }}>{text}</p>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>{children}</div>
+    // All three layers share one grid cell, so a message taller than the shelf (text zoom) grows it instead of spilling out.
+    // The faded cards' opacity paints them as positioned layers, so the two layers over them need a position too.
+    <div style={{ display: "grid" }}>
+      <div
+        aria-hidden="true"
+        style={{ gridArea: "1 / 1", display: "grid", gridTemplateColumns: `repeat(${ghosts}, minmax(0, 1fr))`, gap: ghosts > 2 ? "14px" : "12px" }}
+      >
+        {Array.from({ length: ghosts }, (_, i) => (
+          <div
+            key={i}
+            style={{
+              opacity: 1 - i * 0.15,
+              borderRadius: "var(--r)",
+              border: "1px dashed var(--border-h)",
+              background: "var(--surface)",
+              overflow: "hidden",
+            }}
+          >
+            <div style={{ aspectRatio: "2/3", display: "grid", placeItems: "center", background: "var(--surface2)", color: "var(--t3)" }}>
+              <span style={{ display: "flex", opacity: 0.55 }}>
+                <Icon name="clapper" size={34} />
+              </span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", padding: "12px" }}>
+              <span style={{ ...bar, width: "70%" }} />
+              <span style={{ ...bar, width: "32%" }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ gridArea: "1 / 1", position: "relative", background: "linear-gradient(to bottom, transparent 18%, var(--bg) 78%)" }} />
+      <div
+        style={{
+          gridArea: "1 / 1",
+          alignSelf: "end",
+          position: "relative",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: "16px",
+          padding: ghosts > 2 ? "0 16px 34px" : "0 8px 18px",
+          textAlign: "center",
+        }}
+      >
+        <p
+          className="font-serif"
+          style={{ margin: 0, fontSize: "22px", fontWeight: 600, lineHeight: 1.3, color: "var(--t1)", textWrap: "balance" }}
+        >
+          {text}
+        </p>
+        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "10px" }}>{children}</div>
+      </div>
     </div>
   );
 }
