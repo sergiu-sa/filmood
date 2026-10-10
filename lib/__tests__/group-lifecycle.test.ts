@@ -424,6 +424,24 @@ describe("DELETE /api/group/[code]/leave", () => {
     expect(json.disbanded).toBe(true);
   });
 
+  // Every row id is visible to anyone with the code, so a guest id must not stand for the host's row.
+  it("matches a guest id against guest rows only, so the host's row id can't disband the session", async () => {
+    mockGetAuthUser.mockResolvedValue(null);
+    const supabase = createMockSupabase([
+      { data: { id: "s-1", host_id: "user-1", status: "lobby", created_at: new Date().toISOString() }, error: null },
+      { data: null, error: { code: "PGRST116" } },
+    ]);
+    mockGetSupabaseAdmin.mockReturnValue(supabase);
+
+    const req = mockRequest("DELETE", "/api/group/ABC123/leave", { participantId: "p-1" });
+    const { status } = await readResponse(await leaveSession(req, routeParams("ABC123")));
+    const participantQuery = supabase.from.mock.results[1].value;
+    expect(participantQuery.eq).toHaveBeenCalledWith("id", "p-1");
+    expect(participantQuery.is).toHaveBeenCalledWith("user_id", null);
+    expect(status).toBe(403);
+    expect(supabase.from).toHaveBeenCalledTimes(2);
+  });
+
   it("removes participant when non-host leaves", async () => {
     mockGetAuthUser.mockResolvedValue({ ...mockUser, id: "other-user" });
     const supabase = createMockSupabase([

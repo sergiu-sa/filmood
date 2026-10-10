@@ -60,10 +60,11 @@ export async function GET(
       return internalError(participantsError, "Failed to load participants");
     }
 
-    // Verify the caller is a participant in this session
+    // Verify the caller is a participant in this session. A guest id only stands for a guest
+    // row, the rule resolveParticipant applies everywhere else.
     const isParticipant = user
       ? participants.some((p) => p.user_id === user.id)
-      : participants.some((p) => p.id === participantIdParam);
+      : participants.some((p) => p.id === participantIdParam && p.user_id === null);
 
     if (!isParticipant) {
       return NextResponse.json(

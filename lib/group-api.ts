@@ -91,9 +91,11 @@ export async function resolveParticipant<
     .select(selectFields)
     .eq("session_id", sessionId);
 
+  // A guest's row id is its only credential, and anyone with the code sees every row id,
+  // so it must never act for a signed-in row: the host's would disband the session.
   const filteredQuery = user
     ? baseQuery.eq("user_id", user.id)
-    : baseQuery.eq("id", participantId!);
+    : baseQuery.eq("id", participantId!).is("user_id", null);
 
   const { data: participant, error: participantError } =
     await filteredQuery.single();

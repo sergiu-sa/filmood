@@ -1,10 +1,23 @@
-import { vi } from "vitest";
+import { vi, type Mock } from "vitest";
+import { createMockSupabase } from "./helpers/supabase-mock";
 
 vi.mock("@/lib/supabase-server", () => ({
   getSupabaseAdmin: vi.fn(),
 }));
+vi.mock("node:crypto", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("node:crypto")>()),
+  randomInt: vi.fn(),
+}));
 
-import { classifyTier, isSessionExpired, MAX_PARTICIPANTS, SESSION_EXPIRY_HOURS } from "@/lib/group";
+import { randomInt } from "node:crypto";
+import { getSupabaseAdmin } from "@/lib/supabase-server";
+import {
+  classifyTier,
+  generateUniqueCode,
+  isSessionExpired,
+  MAX_PARTICIPANTS,
+  SESSION_EXPIRY_HOURS,
+} from "@/lib/group";
 
 // ─── classifyTier ───────────────────────────────────
 
@@ -93,5 +106,21 @@ describe("group constants", () => {
 
   it("SESSION_EXPIRY_HOURS is 4", () => {
     expect(SESSION_EXPIRY_HOURS).toBe(4);
+  });
+});
+
+// ─── generateUniqueCode ─────────────────────────────
+
+describe("generateUniqueCode", () => {
+  // The code is the only gate to a session's participant ids, so a predictable generator would open it.
+  it("draws every character from crypto.randomInt", async () => {
+    const draws = [0, 1, 2, 30, 29, 8];
+    const draw = randomInt as unknown as Mock<(max: number) => number>;
+    draw.mockImplementation(() => draws.shift()!);
+    vi.mocked(getSupabaseAdmin).mockReturnValue(createMockSupabase([{ data: null, error: null }]) as never);
+
+    await expect(generateUniqueCode()).resolves.toBe("ABC98J");
+    expect(draw).toHaveBeenCalledTimes(6);
+    expect(draw).toHaveBeenCalledWith(31);
   });
 });

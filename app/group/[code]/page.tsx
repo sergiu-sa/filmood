@@ -98,6 +98,13 @@ export default function LobbyPage() {
       const data = await res.json();
 
       if (!res.ok) {
+        // Guests have no Realtime, so the poll is how they learn the host disbanded: a session that
+        // loaded before and is gone now goes back to /group, as onDelete does for signed-in players.
+        if (res.status === 404 && prevParticipantsRef.current.length > 0) {
+          redirectingRef.current = true;
+          router.replace("/group");
+          return;
+        }
         setError(data.error || "Failed to load session");
         return;
       }

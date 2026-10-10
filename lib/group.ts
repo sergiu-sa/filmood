@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import { getSupabaseAdmin } from "@/lib/supabase-server";
 
 // Characters that are easy to read and share aloud.
@@ -7,18 +8,22 @@ const CODE_LENGTH = 6;
 const MAX_PARTICIPANTS = 10;
 const SESSION_EXPIRY_HOURS = 4;
 
-/** Generate a random 6-char code like "HK7T4N" */
+/**
+ * Generate a random 6-char code like "HK7T4N". The code is all that stands between a
+ * stranger and a session's participant ids, so it comes from the CSPRNG: Math.random's
+ * state can be recovered from its outputs, and every new session would show some.
+ */
 function generateCode(): string {
   let code = "";
   for (let i = 0; i < CODE_LENGTH; i++) {
-    code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+    code += CODE_CHARS[randomInt(CODE_CHARS.length)];
   }
   return code;
 }
 
 /**
  * Generate a unique session code. Retries up to 5 times if a collision
- * is detected (extremely unlikely with 30^6 = 729 million combinations).
+ * is detected (extremely unlikely with 31^6 ≈ 887 million combinations).
  */
 export async function generateUniqueCode(): Promise<string> {
   const supabase = getSupabaseAdmin();
