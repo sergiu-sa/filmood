@@ -78,6 +78,14 @@ describe("FilmCard", () => {
     expect(screen.getByText("★ 8.8")).toBeInTheDocument();
   });
 
+  // A watchlist film whose lookup failed.
+  it("shows no rating or year when both are null", () => {
+    const { container } = render(<FilmCard {...baseFilm} releaseDate={null} voteAverage={null} />);
+    expect(container).not.toHaveTextContent("N/A");
+    expect(container).not.toHaveTextContent("0.0");
+    expect(container).not.toHaveTextContent("★");
+  });
+
   it("links to the correct film page", () => {
     render(<FilmCard {...baseFilm} />);
     expect(screen.getByRole("link")).toHaveAttribute("href", "/film/42");
