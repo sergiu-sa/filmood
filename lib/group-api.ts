@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { User } from "@supabase/supabase-js";
 import { isSessionExpired } from "@/lib/group";
+import { internalError } from "@/lib/api-errors";
 
 type ResolveResult<T> =
   | { session: T; error: null }
@@ -34,13 +35,19 @@ export async function resolveSession<
 
   const upperCode = code.toUpperCase();
 
+  // maybeSingle answers no row with data null, so an error is a failed read. Only a missing row may be
+  // a 404: the lobby reads a 404 after it has loaded as a disband and sends everyone to /group.
   const { data: session, error: sessionError } = await supabase
     .from("sessions")
     .select(selectFields)
     .eq("code", upperCode)
-    .single();
+    .maybeSingle();
 
-  if (sessionError || !session) {
+  if (sessionError) {
+    return { session: null, error: internalError(sessionError, "Failed to load session") };
+  }
+
+  if (!session) {
     return {
       session: null,
       error: NextResponse.json(

@@ -5,7 +5,6 @@ import { getSupabaseAdmin } from "@/lib/supabase-server";
 // Excluded: 0/O (zero vs oh), 1/I/L (one vs I vs L)
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH = 6;
-const MAX_PARTICIPANTS = 10;
 const SESSION_EXPIRY_HOURS = 4;
 
 /**
@@ -64,4 +63,4 @@ function classifyTier(
   return "miss";
 }
 
-export { MAX_PARTICIPANTS, SESSION_EXPIRY_HOURS, isSessionExpired, classifyTier };
+export { SESSION_EXPIRY_HOURS, isSessionExpired, classifyTier };

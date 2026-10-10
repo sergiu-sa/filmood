@@ -11,7 +11,7 @@ import LobbyActions from "@/components/group/LobbyActions";
 import InviteStrip from "@/components/group/InviteStrip";
 import ToastContainer from "@/components/group/Toast";
 import { useToasts } from "@/components/group/useToasts";
-import { MAX_PARTICIPANTS } from "@/lib/group";
+import { MAX_PARTICIPANTS } from "@/lib/constants";
 import type { GroupSession, SessionParticipant } from "@/lib/types";
 
 // Narrow projections of the canonical types in lib/types.ts — the lobby

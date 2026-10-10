@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
-import { MAX_PARTICIPANTS, isSessionExpired } from "@/lib/group";
+import { MAX_PARTICIPANTS } from "@/lib/constants";
+import { isSessionExpired } from "@/lib/group";
 import { internalError } from "@/lib/api-errors";
 
 // POST /api/group/join

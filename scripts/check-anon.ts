@@ -6,8 +6,9 @@
  *
  * Asks for every column of every public table with a count-only HEAD request, so no row is
  * ever printed. The group tables must refuse anon outright (migration 013). The server-only
- * tables may answer, but with no rows (RLS on, no policies). Exits 1 otherwise, or when a
- * column below no longer exists. The URL and anon key are loaded from .env.local.
+ * tables may answer, but with no rows (RLS on, no policies). Exits 1 otherwise, when a
+ * column below no longer exists, or when the key itself is refused. The URL and anon key are
+ * loaded from .env.local.
  */
 import path from "node:path";
 import { config as loadEnv } from "dotenv";
@@ -50,6 +51,15 @@ async function main() {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) {
     console.error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local");
+    process.exitCode = 1;
+    return;
+  }
+
+  // The gateway answers a rejected or retired key with 401 too, which would pass every table
+  // below. A table that can't exist reaches PostgREST only with a key it accepts: 404.
+  const control = await probe(url, key, "check_anon_no_such_table", "id");
+  if (control.status !== 404) {
+    console.error(`The key didn't reach the database (${control.status} where 404 was expected), so a 401 below would prove nothing.`);
     process.exitCode = 1;
     return;
   }

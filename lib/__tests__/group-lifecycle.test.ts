@@ -231,6 +231,27 @@ describe("GET /api/group/[code]", () => {
     for (const p of json.participants) expect(p).not.toHaveProperty("mood_selections");
     expect(json.participants[0]).toMatchObject({ id: "p-1", nickname: "Sergiu", user_id: "user-1" });
   });
+
+  // The lobby reads a 404 after it has loaded as a disband, so a failed read must not be one.
+  it("answers a failed session read with 500, not 404", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    mockGetSupabaseAdmin.mockReturnValue(createMockSupabase([{ data: null, error: { message: "timeout" } }]));
+
+    const req = mockRequest("GET", "/api/group/ABC123");
+    const { status } = await readResponse(await getSession(req, routeParams("ABC123")));
+    expect(status).toBe(500);
+  });
+
+  // .single() reports no row as an error (PGRST116), which would now read as a 500.
+  it("answers 404 when no session has the code, read with maybeSingle", async () => {
+    const supabase = createMockSupabase([{ data: null, error: null }]);
+    mockGetSupabaseAdmin.mockReturnValue(supabase);
+
+    const req = mockRequest("GET", "/api/group/ABC123");
+    const { status } = await readResponse(await getSession(req, routeParams("ABC123")));
+    expect(status).toBe(404);
+    expect(supabase.from.mock.results[0].value.maybeSingle).toHaveBeenCalled();
+  });
 });
 
 // ─── POST /api/group/[code]/ready ───────────────────

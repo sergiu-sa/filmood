@@ -11,11 +11,11 @@ vi.mock("node:crypto", async (importOriginal) => ({
 
 import { randomInt } from "node:crypto";
 import { getSupabaseAdmin } from "@/lib/supabase-server";
+import { MAX_PARTICIPANTS } from "@/lib/constants";
 import {
   classifyTier,
   generateUniqueCode,
   isSessionExpired,
-  MAX_PARTICIPANTS,
   SESSION_EXPIRY_HOURS,
 } from "@/lib/group";
 

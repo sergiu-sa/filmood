@@ -9,6 +9,7 @@ Filmood starts from how you want to feel rather than from a catalogue. Pick a mo
 ## Features
 
 **Solo**
+
 - **12 moods**, from *Need to laugh* to *Bend my mind*. Tap a mood, add a second on the results page, or describe what you want in your own words ("cozy 80s heist").
 - **Tune the results in place.** A bar above the films narrows by length, era and where it streams (down to *My services*, the ones you have: remembered on your device, or saved to your profile when signed in). Shuffle deals a fresh list; Back still returns the one you were looking at.
 - **Search and browse.** Search by title, actor or director. Browse trending, top rated, new releases, in cinemas, by genre, or streaming in Norway.
@@ -33,7 +34,7 @@ Next.js 16 (App Router) · React 19 · TypeScript 5 · Tailwind CSS 4 · Supabas
 - **The TMDB key never reaches the browser.** All film data is fetched on the server, by the app's own `/api/movies/*` routes or the film page as it renders, and one helper (`lib/tmdb-fetch.ts`) owns the key, URL building and caching. Upstream failures surface as errors instead of empty results.
 - **Moods are measured, not guessed.** Each mood is pure data turned into a TMDB query. `npm run check:moods` runs every mood against live TMDB, and prints how many films each one returns; `--keywords` verifies every keyword ID by name.
 - **Group sessions work for guests.** Guests carry a participant ID in `localStorage`; signed-in users send a Supabase JWT. One pair of helpers in `lib/group-api.ts` resolves both.
-- **Realtime with a safety net.** Supabase Realtime pushes session and participant changes, and a 2-second poll covers dropped connections and swipe counts.
+- **Realtime with a safety net.** Supabase Realtime pushes session and participant changes to signed-in players, and a 2-second poll carries guests, dropped connections and swipe counts.
 - **Optimistic swipes.** A vote leaves the screen immediately. A failed request retries once instead of snapping the card back.
 
 ## Run it locally
