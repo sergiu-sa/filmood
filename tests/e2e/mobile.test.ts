@@ -41,6 +41,28 @@ test.describe("Mobile — BottomSheet dashboard panel", () => {
     await expect(opener).toBeFocused();
   });
 
+  // Close hands focus back to the page's search box, whose focus used to reopen the sheet.
+  test("the sheet's box searches, and Close leaves the sheet closed", async ({ page }) => {
+    await page.goto("/");
+    const pageBox = page.getByRole("textbox", { name: /^Search films — / });
+    await pageBox.tap();
+    const sheet = page.getByRole("dialog", { name: "Panel" });
+    await expect(sheet).toBeFocused();
+
+    const box = sheet.getByRole("textbox", { name: "Search films", exact: true });
+    expect((await box.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await box.fill("quiet");
+    await expect(sheet.getByRole("link", { name: /Full search/ })).toHaveAttribute("href", "/browse?q=quiet");
+    await expect(pageBox).toHaveValue("quiet");
+
+    await sheet.getByRole("button", { name: "Close" }).tap();
+    await expect(pageBox).toBeFocused();
+    // The reopen came a frame after focus returned; give it several.
+    await page.waitForTimeout(300);
+    await expect(sheet).toHaveAttribute("inert", "");
+    await expect(page.locator("body")).not.toHaveCSS("overflow", "hidden");
+  });
+
   // WCAG 2.4.11: a tile scrolled into view by focus must not sit under the pinned describe field.
   test("tabbing through the sheet never hides a tile behind the describe field", async ({ page }) => {
     await page.goto("/");

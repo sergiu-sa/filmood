@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import type { Film } from "@/lib/types";
+import { useState, useRef } from "react";
 import Icon from "@/components/ui/Icon";
 
 // Compact toolbar variant — uses the shared BROWSE_CATEGORIES ids but
@@ -17,99 +16,35 @@ const BROWSE_CATEGORIES = [
   { id: "streaming-norway", label: "Streaming NO" },
 ] as const;
 
-type BrowseCategory = (typeof BROWSE_CATEGORIES)[number]["id"];
-
 interface SearchToolbarProps {
-  onResults: (films: Film[], keepOpen?: boolean) => void;
-  onActiveCategory: (category: string | null, genreId?: number | null) => void;
+  /** The box's text; the phone sheet's box edits the same query. */
+  query: string;
+  onQueryChange: (query: string) => void;
+  /** A search is in flight. */
+  loading?: boolean;
+  /** The pill to highlight; null while searching. */
+  activeCategory: string | null;
+  /** A pill picked, or null when the highlighted one is clicked again. */
+  onCategory: (category: string | null) => void;
   onExpand: () => void;
-  onCategoryFetch?: (category: string, genreId?: number) => void;
-  /** Fired on explicit user intent (Enter key or pill click) — parent scrolls to results. */
-  onSubmit?: () => void;
+  /** A sheet hands focus back to this box when it closes, so on phones focus must not reopen it. */
+  expandOnFocus?: boolean;
+  /** Enter: search now and show the results. */
+  onSubmit: () => void;
 }
 
 export default function SearchToolbar({
-  onResults,
-  onActiveCategory,
+  query,
+  onQueryChange,
+  loading = false,
+  activeCategory,
+  onCategory,
   onExpand,
-  onCategoryFetch,
+  expandOnFocus = true,
   onSubmit,
 }: SearchToolbarProps) {
-  const [query, setQuery] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<BrowseCategory | null>(
-    null,
-  );
   const [focused, setFocused] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    onActiveCategory(activeCategory, null);
-  }, [activeCategory]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const doSearch = useCallback(
-    async (q: string) => {
-      if (!q.trim()) {
-        onResults([]);
-        return;
-      }
-      abortRef.current?.abort();
-      const ctrl = new AbortController();
-      abortRef.current = ctrl;
-      setIsLoading(true);
-      setActiveCategory(null);
-      try {
-        const res = await fetch(
-          `/api/movies/search?query=${encodeURIComponent(q.trim())}&type=all`,
-          { signal: ctrl.signal },
-        );
-        const data = await res.json();
-        onResults(data.films ?? []);
-        onExpand();
-      } catch (err) {
-        if ((err as Error).name !== "AbortError") onResults([]);
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [onResults, onExpand],
-  );
-
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!query.trim()) {
-      onResults([]);
-      return;
-    }
-    debounceRef.current = setTimeout(() => doSearch(query), 400);
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [query]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleSubmit = async () => {
-    const q = query.trim();
-    if (!q) return;
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    await doSearch(q);
-    inputRef.current?.blur();
-    onSubmit?.();
-  };
-
-  const handleCategoryClick = (id: BrowseCategory) => {
-    if (activeCategory === id) {
-      setActiveCategory(null);
-      onResults([]);
-      return;
-    }
-    setActiveCategory(id);
-    setQuery("");
-    onExpand();
-    onCategoryFetch?.(id);
-    onSubmit?.();
-  };
 
   return (
     <div
@@ -132,20 +67,23 @@ export default function SearchToolbar({
           name="search-toolbar-input"
           type="text"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => onQueryChange(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
-              handleSubmit();
+              if (!query.trim()) return;
+              inputRef.current?.blur();
+              onSubmit();
             } else if (e.key === "Escape") {
               e.preventDefault();
-              setQuery("");
+              onQueryChange("");
               inputRef.current?.blur();
             }
           }}
+          onClick={onExpand}
           onFocus={() => {
             setFocused(true);
-            onExpand();
+            if (expandOnFocus) onExpand();
           }}
           onBlur={() => setFocused(false)}
           placeholder="Film, actor, director…  (press Enter to search)"
@@ -175,7 +113,7 @@ export default function SearchToolbar({
         >
           <Icon name="search" size={14} />
         </span>
-        {isLoading && (
+        {loading && (
           <span
             style={{
               position: "absolute",
@@ -197,7 +135,7 @@ export default function SearchToolbar({
           <button
             key={c.id}
             type="button"
-            onClick={() => handleCategoryClick(c.id)}
+            onClick={() => onCategory(activeCategory === c.id ? null : c.id)}
             style={{
               padding: "6px 11px",
               borderRadius: 999,
