@@ -34,17 +34,15 @@ function makeFilm(id: number, title: string): Film {
   };
 }
 
-// 19 films — first 18 are shown, 19th (ExtraFilm) should be capped out
-const FILMS: Film[] = Array.from(
-  { length: 18 },
-  (_, i) => makeFilm(i + 1, `Film ${String.fromCharCode(65 + i)}`), // Film A … Film R
+// 20 films, a full TMDB page: Film A … Film T
+const FILMS: Film[] = Array.from({ length: 20 }, (_, i) =>
+  makeFilm(i + 1, `Film ${String.fromCharCode(65 + i)}`),
 );
-const FILMS_PLUS_ONE = [...FILMS, makeFilm(19, "CappedFilm")];
 
 const defaultProps = {
   isOpen: true,
   embedded: true, // skip animation wrapper for simpler DOM assertions
-  films: FILMS_PLUS_ONE,
+  films: FILMS,
   activeCategory: null as string | null,
   activeGenre: null as number | null,
   onCategoryChange: vi.fn(),
@@ -82,11 +80,26 @@ describe("SearchPanel", () => {
     ).toBeInTheDocument();
   });
 
-  it('renders the "Full search" link pointing to /browse', () => {
+  it('points "Full search" at a bare /browse when nothing is chosen', () => {
     render(<SearchPanel {...defaultProps} />);
-    // The link text is "Full search" and href defaults to /browse (no active filters)
     const link = screen.getByRole("link", { name: /full search/i });
     expect(link).toHaveAttribute("href", "/browse");
+  });
+
+  it('"Full search" carries the search, so browse runs it', () => {
+    render(<SearchPanel {...defaultProps} query="the dark knight" />);
+    expect(screen.getByRole("link", { name: /full search/i })).toHaveAttribute(
+      "href",
+      "/browse?q=the+dark+knight",
+    );
+  });
+
+  it('"Full search" carries a category', () => {
+    render(<SearchPanel {...defaultProps} activeCategory="by-genre" activeGenre={35} />);
+    expect(screen.getByRole("link", { name: /full search/i })).toHaveAttribute(
+      "href",
+      "/browse?category=by-genre&genre=35",
+    );
   });
 
   it("renders the Close button", () => {
@@ -94,65 +107,48 @@ describe("SearchPanel", () => {
     expect(screen.getByRole("button", { name: /close/i })).toBeInTheDocument();
   });
 
-  // ── Film count cap ────────────────────────────────────────────────────────
-  it("caps displayed films at 18 even when more are passed", () => {
-    render(<SearchPanel {...defaultProps} />);
-    // Film 19 "CappedFilm" should NOT appear (capped at 18)
-    expect(screen.queryByText("CappedFilm")).not.toBeInTheDocument();
-    // Film A (first film) should appear
+  // ── Films and search ──────────────────────────────────────────────────────
+  it("shows every film of the page, and says how many", () => {
+    render(<SearchPanel {...defaultProps} query="film" />);
     expect(screen.getByText("Film A")).toBeInTheDocument();
+    expect(screen.getByText("Film T")).toBeInTheDocument();
+    expect(screen.getByText(/Showing/).textContent).toBe('Showing 20 films matching "film"');
   });
 
-  it("shows correct film count in footer (X of Y)", () => {
-    render(<SearchPanel {...defaultProps} />);
-    // 18 shown out of 19 total
-    const strongs = document.querySelectorAll("strong");
-    const values = Array.from(strongs).map((s) => s.textContent);
-    expect(values).toContain("18");
-    expect(values).toContain("19");
+  it("has no search box on desktop: the toolbar above is the search", () => {
+    render(<SearchPanel {...defaultProps} embedded={false} />);
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });
 
-  // ── Search filtering ──────────────────────────────────────────────────────
-  it("filters film list as the user types in the search input", async () => {
-    const user = userEvent.setup();
-    // Use a small set so we can assert absence clearly
-    render(
-      <SearchPanel
-        {...defaultProps}
-        films={[
-          makeFilm(1, "Inception"),
-          makeFilm(2, "Interstellar"),
-          makeFilm(3, "Dunkirk"),
-        ]}
-      />,
-    );
+  it("the phone sheet's box edits the search", async () => {
+    const onSearchTextChange = vi.fn();
+    render(<SearchPanel {...defaultProps} searchText="dun" onSearchTextChange={onSearchTextChange} />);
+    const input = screen.getByRole("textbox", { name: "Search films" });
+    expect(input).toHaveValue("dun");
 
-    const input = screen.getByPlaceholderText(/filter results/i);
-    await user.type(input, "Inter");
+    await userEvent.type(input, "e");
+    expect(onSearchTextChange).toHaveBeenLastCalledWith("dune");
 
-    // Only "Interstellar" contains "Inter"
-    expect(screen.getByText("Interstellar")).toBeInTheDocument();
-    expect(screen.queryByText("Inception")).not.toBeInTheDocument();
-    expect(screen.queryByText("Dunkirk")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Clear search" }));
+    expect(onSearchTextChange).toHaveBeenLastCalledWith("");
+    expect(input).toHaveFocus();
   });
 
-  it("shows empty state message when no films match the query", async () => {
-    const user = userEvent.setup();
-    render(<SearchPanel {...defaultProps} />);
-
-    const input = screen.getByPlaceholderText(/filter results/i);
-    await user.type(input, "xyzxyzxyz");
-
-    // The empty state renders when displayFilms.length === 0
-    expect(screen.getByText(/no films matching/i)).toBeInTheDocument();
+  it("says a search found nothing", () => {
+    render(<SearchPanel {...defaultProps} films={[]} query="xyzxyz" />);
+    expect(screen.getByText('No films matching "xyzxyz"')).toBeInTheDocument();
   });
 
-  it("shows all matched films in footer text when query matches all", async () => {
-    render(
-      <SearchPanel {...defaultProps} films={[makeFilm(1, "Inception")]} />,
-    );
-    // 1 film, <= 12 cap → "Showing 1 film"
-    expect(screen.getByText("1")).toBeInTheDocument();
+  it("shows a failed load as an error with Try again, not as films", async () => {
+    const onRetry = vi.fn();
+    render(<SearchPanel {...defaultProps} onRetry={onRetry} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Couldn't reach the film database.");
+    expect(screen.queryByText("Film A")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(onRetry).toHaveBeenCalledOnce();
+    // The button goes with the error, so focus moves to the panel's heading.
+    expect(screen.getByRole("heading", { level: 3, name: "Browse & Search" })).toHaveFocus();
   });
 
   // ── Category tabs ─────────────────────────────────────────────────────────

@@ -15,6 +15,10 @@ import type { Film } from "@/lib/types";
 export default function DashboardShell() {
   const [openPanel, setOpenPanel] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<Film[]>([]);
+  // The search box's text (the toolbar's, and the phone sheet's box), and the search the results answer.
+  const [query, setQuery] = useState("");
+  const [resultsQuery, setResultsQuery] = useState("");
+  const [panelError, setPanelError] = useState<{ retry: () => void } | null>(null);
   const [defaultResults, setDefaultResults] = useState<Film[]>([]);
   const [panelCategory, setPanelCategory] = useState<string | null>(null);
   const [panelGenre, setPanelGenre] = useState<number | null>(null);
@@ -84,20 +88,36 @@ export default function DashboardShell() {
   };
 
   const handleSearchResults = useCallback(
-    (films: Film[], keepOpen?: boolean) => {
-      // When the toolbar reports an empty result set (user cleared the query),
-      // fall back to the preloaded default list instead of collapsing the panel.
-      if (films.length === 0 && defaultResults.length > 0 && panelCategory === null) {
+    (films: Film[], q: string) => {
+      if (q) {
+        setSearchLoading(false);
+        setResultsQuery(q);
+        setPanelError(null);
+        setSearchResults(films);
+        return;
+      }
+      // Cleared by picking a category: that category's fetch owns the results.
+      if (panelCategory !== null && searchLoading) return;
+      setSearchLoading(false);
+      setResultsQuery("");
+      setPanelError(null);
+      // Cleared: fall back to the preloaded default list instead of collapsing the panel.
+      if (defaultResults.length > 0 && panelCategory === null) {
         setSearchResults(defaultResults);
         return;
       }
-      setSearchResults(films);
-      if (films.length === 0 && !keepOpen) {
-        setOpenPanel((prev) => (prev === "search" ? null : prev));
-      }
+      setSearchResults([]);
+      setOpenPanel((prev) => (prev === "search" ? null : prev));
     },
-    [defaultResults, panelCategory],
+    [defaultResults, panelCategory, searchLoading],
   );
+
+  const handleSearchFailed = useCallback((q: string, retry: () => void) => {
+    setSearchLoading(false);
+    setResultsQuery(q);
+    setSearchResults([]);
+    setPanelError({ retry });
+  }, []);
 
   // Called whenever SearchToolbar's active pill changes, to keep the panel's tabs in sync
   const handleActiveCategory = useCallback(
@@ -113,16 +133,22 @@ export default function DashboardShell() {
     async (category: string, genreId?: number) => {
       setPanelCategory(category);
       setPanelGenre(genreId ?? null);
+      // The category replaces the search, in both boxes and in Full search.
+      setQuery("");
+      setResultsQuery("");
+      setPanelError(null);
       setOpenPanel("search");
       setSearchLoading(true);
       try {
         const params = new URLSearchParams({ category });
         if (genreId) params.set("genre", String(genreId));
         const res = await fetch(`/api/movies/browse?${params.toString()}`);
+        if (!res.ok) throw new Error(`Browse failed: ${res.status}`);
         const data = await res.json();
         setSearchResults(data.films ?? []);
       } catch {
         setSearchResults([]);
+        setPanelError({ retry: () => handlePanelCategoryChange(category, genreId) });
       } finally {
         setSearchLoading(false);
       }
@@ -135,12 +161,24 @@ export default function DashboardShell() {
     <MoodPanel isOpen={true} embedded onClose={closePanel} />
   );
 
+  const retryPanel = panelError
+    ? () => {
+        setPanelError(null);
+        setSearchLoading(true);
+        panelError.retry();
+      }
+    : undefined;
+
   const searchPanelContent = (
     <SearchPanel
       isOpen={true}
       embedded
       films={searchResults}
       isLoading={searchLoading}
+      query={resultsQuery}
+      searchText={query}
+      onSearchTextChange={setQuery}
+      onRetry={retryPanel}
       activeCategory={panelCategory}
       activeGenre={panelGenre}
       onCategoryChange={handlePanelCategoryChange}
@@ -162,9 +200,13 @@ export default function DashboardShell() {
   return (
     <div id="dashboard" className="mx-auto" style={{ maxWidth: 1400 }}>
       <SearchToolbar
+        query={query}
+        onQueryChange={setQuery}
         onResults={handleSearchResults}
+        onFailed={handleSearchFailed}
         onActiveCategory={handleActiveCategory}
         onExpand={() => setOpenPanel("search")}
+        expandOnFocus={!isMobile}
         onCategoryFetch={handlePanelCategoryChange}
         onSubmit={handleSearchSubmit}
       />
@@ -210,6 +252,8 @@ export default function DashboardShell() {
             isOpen={openPanel === "search"}
             films={searchResults}
             isLoading={searchLoading}
+            query={resultsQuery}
+            onRetry={retryPanel}
             activeCategory={panelCategory}
             activeGenre={panelGenre}
             onCategoryChange={handlePanelCategoryChange}
