@@ -25,20 +25,47 @@ vi.mock("@/components/dashboard/SearchToolbar", () => ({
 vi.mock("@/components/dashboard/MoodPanel", () => ({ default: () => null }));
 
 /** A panel's Close, found by what sits beside it in that panel's footer. */
-const closeBeside = (text: string) => within(screen.getByText(text).parentElement!).getByRole("button", { name: "Close" });
+const closeBeside = async (text: string) =>
+  within((await screen.findByText(text)).parentElement!).getByRole("button", { name: "Close" });
 const film = (id: number, title: string) => ({ id, title, poster_path: null, release_date: "2020-01-01", vote_average: 7, overview: "" });
+const answer = (body: unknown, status = 200) => Promise.resolve(Response.json(body, { status }));
+const held = () => {
+  let settle: (r: Response) => void = () => {};
+  return { promise: new Promise<Response>((r) => (settle = r)), settle: (body: unknown) => settle(Response.json(body)) };
+};
+const card = (name: string) => screen.queryByRole("heading", { level: 3, name });
 const fullSearch = () => screen.getByRole("link", { name: /Full search/ });
-const answer = (body: unknown, status = 200) => Response.json(body, { status });
+
+const fetchMock = vi.fn();
+let onSearch: (q: string) => Promise<Response>;
+let onBrowse: (category: string) => Promise<Response>;
+const calls = (path: string) => fetchMock.mock.calls.filter(([url]) => String(url).startsWith(path)).length;
+
+beforeEach(() => {
+  fetchMock.mockReset();
+  fetchMock.mockImplementation((url: string) => {
+    const u = new URL(url, "http://localhost");
+    if (u.pathname === "/api/movies/search") return onSearch(u.searchParams.get("query")!);
+    if (u.pathname === "/api/movies/browse") return onBrowse(u.searchParams.get("category")!);
+    return answer({ films: [] });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  onSearch = () => answer({ films: [film(1, "Dune")] });
+  onBrowse = (category) => answer({ films: category === "top-rated" ? [film(2, "The Godfather")] : [] });
+});
+afterEach(() => vi.unstubAllGlobals());
+
+const openPanel = () => act(() => toolbar.props.onExpand());
+/** Types in the toolbar's box and presses Enter, which searches without the debounce. */
+const searchFor = (text: string) => {
+  act(() => toolbar.props.onQueryChange(text));
+  act(() => toolbar.props.onSubmit());
+};
 
 describe("DashboardShell, desktop", () => {
-  const fetchMock = vi.fn();
   beforeEach(() => {
     media.mobile = false;
-    fetchMock.mockReset();
-    fetchMock.mockImplementation(async () => answer({ films: [] }));
-    vi.stubGlobal("fetch", fetchMock);
   });
-  afterEach(() => vi.unstubAllGlobals());
 
   // Closed, a panel is inert, so focus on its Close would fall to <body>.
   it("hands focus back to the box after a panel's Close", async () => {
@@ -47,76 +74,141 @@ describe("DashboardShell, desktop", () => {
 
     const explore = screen.getByRole("button", { name: /^Discover together/ });
     await user.click(explore);
-    await user.click(closeBeside("Sessions expire after 4 hours"));
+    await user.click(await closeBeside("Sessions expire after 4 hours"));
     expect(explore).toHaveAttribute("aria-expanded", "false");
     expect(explore).toHaveFocus();
 
     const trending = screen.getByRole("button", { name: "Trending today" });
     await user.click(trending);
-    await user.click(closeBeside("No results"));
+    await user.click(await closeBeside("No results"));
     expect(trending).toHaveAttribute("aria-expanded", "false");
     expect(trending).toHaveFocus();
   });
 
-  it("Full search carries the toolbar's search; picking a category drops it", async () => {
+  it("Full search carries the search; picking a category replaces it", async () => {
     render(<DashboardShell />);
-    act(() => toolbar.props.onQueryChange("dune"));
-    act(() => toolbar.props.onResults([film(1, "Dune")], "dune"));
-    act(() => toolbar.props.onExpand());
-
+    openPanel();
+    searchFor("dune");
+    await screen.findByRole("heading", { level: 3, name: "Dune" });
     expect(fullSearch()).toHaveAttribute("href", "/browse?q=dune");
     expect(screen.getByText(/Showing/).textContent).toBe('Showing 1 film matching "dune"');
 
     await userEvent.click(screen.getByRole("button", { name: /Top Rated/ }));
+    await screen.findByRole("heading", { level: 3, name: "The Godfather" });
     expect(fullSearch()).toHaveAttribute("href", "/browse?category=top-rated");
     // The toolbar's box empties with it.
     expect(toolbar.props.query).toBe("");
   });
 
-  it("says a search found nothing instead of showing the preloaded list", async () => {
-    fetchMock.mockImplementation(async () => answer({ films: [film(9, "Trending film")] }));
+  it("a search over a category is the search alone; clearing it brings the category back at once", async () => {
     render(<DashboardShell />);
-    act(() => toolbar.props.onExpand());
-    const card = { level: 3, name: "Trending film" };
-    await screen.findByRole("heading", card);
+    openPanel();
+    await userEvent.click(screen.getByRole("button", { name: /Top Rated/ }));
+    await screen.findByRole("heading", { level: 3, name: "The Godfather" });
 
-    act(() => toolbar.props.onResults([], "xyzxyz"));
-    expect(screen.getByText('No films matching "xyzxyz"')).toBeInTheDocument();
-    expect(screen.queryByRole("heading", card)).not.toBeInTheDocument();
+    searchFor("dune");
+    await screen.findByRole("heading", { level: 3, name: "Dune" });
+    // Once the debounce holds "dune" too, only the empty box can bring the category back at once.
+    await act(() => new Promise((r) => setTimeout(r, 450)));
+    expect(screen.getByRole("heading", { level: 3, name: "Browse & Search" })).toBeInTheDocument();
+    expect(fullSearch()).toHaveAttribute("href", "/browse?q=dune");
+    expect(toolbar.props.activeCategory).toBeNull();
+
+    act(() => toolbar.props.onQueryChange(""));
+    expect(card("The Godfather")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Trending today" })).toHaveAttribute("aria-expanded", "true");
+    expect(calls("/api/movies/browse?category=top-rated")).toBe(1);
+  });
+
+  it("says a search found nothing instead of showing the list under it", async () => {
+    onBrowse = () => answer({ films: [film(9, "Trending film")] });
+    onSearch = () => answer({ films: [] });
+    render(<DashboardShell />);
+    openPanel();
+    await screen.findByRole("heading", { level: 3, name: "Trending film" });
+
+    searchFor("xyzxyz");
+    expect(await screen.findByText('No films matching "xyzxyz"')).toBeInTheDocument();
+    expect(card("Trending film")).not.toBeInTheDocument();
   });
 
   it("shows a failed search as an error; Try again runs it again", async () => {
+    onSearch = () => answer({ error: "Failed to search films" }, 500);
     render(<DashboardShell />);
-    const retry = vi.fn();
-    act(() => toolbar.props.onFailed("dune", retry));
-    act(() => toolbar.props.onExpand());
+    openPanel();
+    searchFor("dune");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't reach the film database.");
 
-    expect(screen.getByRole("alert")).toHaveTextContent("Couldn't reach the film database.");
+    onSearch = () => answer({ films: [film(1, "Dune")] });
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
-    expect(retry).toHaveBeenCalledOnce();
+    expect(await screen.findByRole("heading", { level: 3, name: "Dune" })).toBeInTheDocument();
+    expect(calls("/api/movies/search")).toBe(2);
   });
 
   it("shows a failed category as an error; Try again fetches it again", async () => {
     render(<DashboardShell />);
-    act(() => toolbar.props.onExpand());
-    fetchMock.mockImplementation(async () => answer({ error: "Failed to browse films" }, 500));
+    openPanel();
+    onBrowse = () => answer({ error: "Failed to browse films" }, 500);
     await userEvent.click(screen.getByRole("button", { name: /Top Rated/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't reach the film database.");
 
-    fetchMock.mockImplementation(async () => answer({ films: [film(2, "The Godfather")] }));
+    onBrowse = () => answer({ films: [film(2, "The Godfather")] });
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
-    expect(await screen.findByText("The Godfather")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 3, name: "The Godfather" })).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    expect(fetchMock).toHaveBeenLastCalledWith("/api/movies/browse?category=top-rated");
+  });
+
+  it("shows an outage when the panel first opens as an error", async () => {
+    onBrowse = () => answer({ error: "Failed to browse films" }, 500);
+    render(<DashboardShell />);
+    openPanel();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't reach the film database.");
+  });
+
+  it("never reopens a panel that was closed while its search was answering", async () => {
+    const search = held();
+    onSearch = () => search.promise;
+    render(<DashboardShell />);
+    openPanel();
+    searchFor("dune");
+    await waitFor(() => expect(calls("/api/movies/search")).toBe(1));
+
+    await userEvent.click(await closeBeside("Loading..."));
+    await act(async () => search.settle({ films: [film(1, "Dune")] }));
+    expect(screen.getByRole("button", { name: "Trending today" })).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("never lets a late category answer replace a newer search", async () => {
+    const topRated = held();
+    onBrowse = (category) => (category === "top-rated" ? topRated.promise : answer({ films: [] }));
+    render(<DashboardShell />);
+    openPanel();
+    await userEvent.click(screen.getByRole("button", { name: /Top Rated/ }));
+
+    searchFor("dune");
+    await screen.findByRole("heading", { level: 3, name: "Dune" });
+    await act(async () => topRated.settle({ films: [film(2, "The Godfather")] }));
+    expect(card("Dune")).toBeInTheDocument();
+    expect(card("The Godfather")).not.toBeInTheDocument();
+  });
+
+  it("tells the toolbar a search is in flight", async () => {
+    const search = held();
+    onSearch = () => search.promise;
+    render(<DashboardShell />);
+    openPanel();
+    searchFor("dune");
+    expect(toolbar.props.loading).toBe(true);
+
+    await act(async () => search.settle({ films: [film(1, "Dune")] }));
+    expect(toolbar.props.loading).toBe(false);
   });
 });
 
 describe("DashboardShell, phone", () => {
   beforeEach(() => {
     media.mobile = true;
-    vi.stubGlobal("fetch", vi.fn(async () => answer({ films: [] })));
   });
-  afterEach(() => vi.unstubAllGlobals());
 
   // The sheet hands focus back to the toolbar's box when it closes; opening on focus reopened it.
   it("tells the toolbar not to open the sheet on focus", () => {
@@ -126,11 +218,23 @@ describe("DashboardShell, phone", () => {
 
   it("the sheet's box edits the toolbar's search", async () => {
     render(<DashboardShell />);
-    act(() => toolbar.props.onExpand());
+    openPanel();
     const input = await screen.findByRole("textbox", { name: "Search films" });
     // The sheet takes focus a frame after it opens; a person taps the box after that.
     await waitFor(() => expect(screen.getByRole("dialog")).toHaveFocus());
     await userEvent.type(input, "dune");
     expect(toolbar.props.query).toBe("dune");
+  });
+
+  // An answer opening the sheet took focus from someone still typing in the toolbar.
+  it("typing in the toolbar leaves the sheet closed until Enter", async () => {
+    render(<DashboardShell />);
+    act(() => toolbar.props.onQueryChange("dune"));
+    await waitFor(() => expect(calls("/api/movies/search")).toBe(1));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.getByRole("dialog")).toHaveAttribute("inert");
+
+    act(() => toolbar.props.onSubmit());
+    expect(screen.getByRole("dialog")).not.toHaveAttribute("inert");
   });
 });

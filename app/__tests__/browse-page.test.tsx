@@ -27,7 +27,8 @@ const box = () => screen.getByRole("textbox", { name: "Search films" });
 const fetchMock = vi.fn();
 let onSearch: (query: string) => Promise<Response>;
 let onBrowse: (params: URLSearchParams) => Promise<Response>;
-const searches = () => fetchMock.mock.calls.map(([url]) => String(url)).filter((u) => u.startsWith("/api/movies/search"));
+const calls = (path: string) => fetchMock.mock.calls.map(([url]) => String(url)).filter((u) => u.startsWith(path));
+const searches = () => calls("/api/movies/search");
 
 /** Opens /browse with `query` as its search string, as a link or Back would. */
 function open(query = "") {
@@ -57,6 +58,11 @@ describe("/browse search", () => {
     expect(box()).toHaveValue("dune");
     expect(searches()).toEqual(["/api/movies/search?query=dune&type=all"]);
     expect(card("Trending film")).not.toBeInTheDocument();
+    // The category isn't fetched under a search nobody has cleared yet.
+    expect(calls("/api/movies/browse")).toEqual([]);
+
+    await userEvent.click(screen.getByRole("button", { name: "Clear search" }));
+    expect(await screen.findByRole("heading", { level: 3, name: "Trending film" })).toBeInTheDocument();
   });
 
   it("typing searches TMDB and keeps it in the URL; clearing brings the category back at once", async () => {

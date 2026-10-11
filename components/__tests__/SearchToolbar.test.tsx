@@ -2,36 +2,26 @@
  * @vitest-environment jsdom
  */
 import { useState } from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import SearchToolbar from "@/components/dashboard/SearchToolbar";
 
 const baseProps = {
-  onResults: vi.fn(),
-  onFailed: vi.fn(),
-  onActiveCategory: vi.fn(),
+  onCategory: vi.fn(),
   onExpand: vi.fn(),
+  onSubmit: vi.fn(),
 };
 
 // The shell owns the query; this stands in for it.
-function Toolbar(props: { expandOnFocus?: boolean }) {
+function Toolbar(props: { expandOnFocus?: boolean; activeCategory?: string | null; loading?: boolean }) {
   const [query, setQuery] = useState("");
-  return <SearchToolbar query={query} onQueryChange={setQuery} {...baseProps} {...props} />;
+  return <SearchToolbar query={query} onQueryChange={setQuery} activeCategory={null} {...baseProps} {...props} />;
 }
 
 const box = () => screen.getByPlaceholderText(/film, actor/i);
-const dune = [{ id: 1, title: "Dune" }];
-const answer = (body: unknown, status = 200) =>
-  Promise.resolve({ ok: status < 400, status, json: async () => body } as Response);
 
 describe("SearchToolbar", () => {
-  const fetchMock = vi.fn();
-  beforeEach(() => vi.stubGlobal("fetch", fetchMock));
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    fetchMock.mockReset();
-    vi.clearAllMocks();
-  });
+  afterEach(() => vi.clearAllMocks());
 
   it("renders the search input and category pills", () => {
     render(<Toolbar />);
@@ -40,10 +30,14 @@ describe("SearchToolbar", () => {
     expect(screen.getByText(/Top Rated/)).toBeInTheDocument();
   });
 
-  it("fires onExpand when a pill is clicked", () => {
-    render(<Toolbar />);
-    fireEvent.click(screen.getByText(/Trending/));
-    expect(baseProps.onExpand).toHaveBeenCalled();
+  it("picks a pill's category, and unpicks it when clicked again", () => {
+    const { rerender } = render(<Toolbar />);
+    fireEvent.click(screen.getByText(/Top Rated/));
+    expect(baseProps.onCategory).toHaveBeenLastCalledWith("top-rated");
+
+    rerender(<Toolbar activeCategory="top-rated" />);
+    fireEvent.click(screen.getByText(/Top Rated/));
+    expect(baseProps.onCategory).toHaveBeenLastCalledWith(null);
   });
 
   it("fires onExpand when the input receives focus", () => {
@@ -61,40 +55,20 @@ describe("SearchToolbar", () => {
     expect(baseProps.onExpand).toHaveBeenCalledOnce();
   });
 
-  it("reports the films with the search they answer", async () => {
-    fetchMock.mockImplementation(() => answer({ films: dune }));
+  it("Enter searches what's in the box, and nothing when it's empty", async () => {
     render(<Toolbar />);
-    await userEvent.type(box(), " dune ");
+    await userEvent.type(box(), "{Enter}");
+    expect(baseProps.onSubmit).not.toHaveBeenCalled();
 
-    await waitFor(() => expect(baseProps.onResults).toHaveBeenCalledWith(dune, "dune"));
-    expect(fetchMock).toHaveBeenCalledWith("/api/movies/search?query=dune&type=all", expect.anything());
+    await userEvent.type(box(), "dune{Enter}");
+    expect(baseProps.onSubmit).toHaveBeenCalledOnce();
   });
 
-  it("reports a failed search as a failure, not as no films", async () => {
-    fetchMock.mockImplementation(() => answer({ error: "Failed to search films" }, 500));
-    render(<Toolbar />);
-    await userEvent.type(box(), "dune");
-
-    await waitFor(() => expect(baseProps.onFailed).toHaveBeenCalledWith("dune", expect.any(Function)));
-    expect(baseProps.onResults).not.toHaveBeenCalledWith(expect.anything(), "dune");
-
-    fetchMock.mockImplementation(() => answer({ films: dune }));
-    baseProps.onFailed.mock.calls[0][1]();
-    await waitFor(() => expect(baseProps.onResults).toHaveBeenCalledWith(dune, "dune"));
-  });
-
-  it("drops an answer that lands after the box is cleared", async () => {
-    let settle: (r: Response) => void = () => {};
-    fetchMock.mockImplementation(() => new Promise<Response>((r) => (settle = r)));
-    render(<Toolbar />);
-    await userEvent.type(box(), "dune");
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
-
-    await userEvent.clear(box());
-    expect(baseProps.onResults).toHaveBeenLastCalledWith([], "");
-    settle({ ok: true, status: 200, json: async () => ({ films: dune }) } as Response);
-    await new Promise((r) => setTimeout(r, 0));
-
-    expect(baseProps.onResults).not.toHaveBeenCalledWith(dune, "dune");
+  it("shows a spinner while a search is in flight", () => {
+    const { container, rerender } = render(<Toolbar />);
+    const spinners = () => container.querySelectorAll('[style*="animation: spin"]').length;
+    expect(spinners()).toBe(0);
+    rerender(<Toolbar loading />);
+    expect(spinners()).toBe(1);
   });
 });

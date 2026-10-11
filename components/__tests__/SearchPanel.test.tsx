@@ -139,9 +139,26 @@ describe("SearchPanel", () => {
     expect(screen.getByText('No films matching "xyzxyz"')).toBeInTheDocument();
   });
 
+  it("Enter in the sheet's box searches now and keeps focus in the sheet", async () => {
+    const onSearchSubmit = vi.fn();
+    render(
+      <SearchPanel {...defaultProps} searchText="dune" onSearchTextChange={vi.fn()} onSearchSubmit={onSearchSubmit} />,
+    );
+    await userEvent.type(screen.getByRole("textbox", { name: "Search films" }), "{Enter}");
+    expect(onSearchSubmit).toHaveBeenCalledOnce();
+    // A blur dropped focus to <body>, outside the sheet's focus trap; the heading puts the keyboard away instead.
+    expect(screen.getByRole("heading", { level: 3, name: "Browse & Search" })).toHaveFocus();
+  });
+
   it("shows a failed load as an error with Try again, not as films", async () => {
     const onRetry = vi.fn();
-    render(<SearchPanel {...defaultProps} onRetry={onRetry} />);
+    render(
+      <SearchPanel
+        {...defaultProps}
+        error={{ message: "Couldn't reach the film database.", retryable: true }}
+        onRetry={onRetry}
+      />,
+    );
     expect(screen.getByRole("alert")).toHaveTextContent("Couldn't reach the film database.");
     expect(screen.queryByText("Film A")).not.toBeInTheDocument();
 

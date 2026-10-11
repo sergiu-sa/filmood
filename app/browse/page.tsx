@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from "react";
+import { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
+import { useFilms } from "@/lib/useFilms";
 import { useSearchParams } from "next/navigation";
 import Breadcrumb from "@/components/Breadcrumb";
 import FilmCard from "@/components/film/FilmCard";
@@ -12,6 +13,7 @@ import {
   type BrowseCategory,
 } from "@/lib/browseCategories";
 import Icon from "@/components/ui/Icon";
+import LoadFailed from "@/components/ui/LoadFailed";
 
 type SortOrder = "popularity" | "rating" | "newest" | "title";
 
@@ -53,18 +55,6 @@ function sortFilms(films: Film[], order: SortOrder): Film[] {
   }
 }
 
-type LoadError = { message: string; retryable: boolean };
-
-/** A 5xx or no answer is worth retrying; a 4xx is the route's own message, the same on a retry. */
-function loadError(status?: number, message?: string): LoadError {
-  if (status === undefined || status >= 500) {
-    return { message: "Couldn't reach the film database.", retryable: true };
-  }
-  return { message: message ?? "Couldn't load these films.", retryable: false };
-}
-
-type SearchAnswer = { query: string; attempt: number; films: Film[]; error: LoadError | null };
-
 function BrowseContent() {
   const searchParams = useSearchParams();
 
@@ -90,61 +80,14 @@ function BrowseContent() {
 
   const [activeTab, setActiveTab] = useState<BrowseCategory>(initialCategory);
   const [activeGenre, setActiveGenre] = useState<number | null>(initialGenre);
-  const [films, setFilms] = useState<Film[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [categoryError, setCategoryError] = useState<LoadError | null>(null);
   const [sortOrder, setSortOrder] = useState<SortOrder>("popularity");
   const [searchQuery, setSearchQuery] = useState(urlQuery);
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [inputFocused, setInputFocused] = useState(false);
-  const [gridKey, setGridKey] = useState(0);
+  const [categoryAttempt, setCategoryAttempt] = useState(0);
+  const [searchAttempt, setSearchAttempt] = useState(0);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  const fetchFilms = useCallback(
-    async (
-      category: BrowseCategory,
-      genreId: number | null,
-      pageNum: number,
-      signal?: AbortSignal,
-    ) => {
-      setIsLoading(true);
-      try {
-        const params = new URLSearchParams({ category, page: String(pageNum) });
-        if (genreId) params.set("genre", String(genreId));
-        const res = await fetch(`/api/movies/browse?${params.toString()}`, { signal });
-        const data = await res.json().catch(() => ({}));
-        if (signal?.aborted) return;
-        if (!res.ok) {
-          setFilms([]);
-          setCategoryError(loadError(res.status, data.error));
-          return;
-        }
-        setCategoryError(null);
-        setFilms(data.films ?? []);
-        // The route takes pages 1–500, TMDB's own limit.
-        setTotalPages(Math.min(data.totalPages ?? 1, 500));
-        setGridKey((k) => k + 1);
-      } catch {
-        if (signal?.aborted) return;
-        setFilms([]);
-        setCategoryError(loadError());
-      } finally {
-        if (!signal?.aborted) setIsLoading(false);
-      }
-    },
-    [],
-  );
-
-  // Try again bumps this; both fetches re-run, so every answer can be cancelled by a newer one.
-  const [attempt, setAttempt] = useState(0);
-
-  useEffect(() => {
-    const ctrl = new AbortController();
-    fetchFilms(activeTab, activeGenre, page, ctrl.signal);
-    return () => ctrl.abort();
-  }, [activeTab, activeGenre, page, attempt, fetchFilms]);
 
   // The box runs the same search as home's toolbar, and the URL keeps it (`q`)
   // so Back from a film and a shared link show the same search.
@@ -152,8 +95,8 @@ function BrowseContent() {
   // Cleared, the category comes back at once rather than after the debounce.
   const searching = query !== "" && searchQuery.trim() !== "";
 
-  // Back/Forward or a link changed `q` under the box: the box follows. Our own
-  // replaceState below writes the debounced query, so it never lands here.
+  // A link or Back changed `q` under the box: the box follows. Our own
+  // replaceState below lands here too, with the box's own debounced text, so it's left alone.
   const [seenUrlQuery, setSeenUrlQuery] = useState(urlQuery);
   if (urlQuery !== seenUrlQuery) {
     setSeenUrlQuery(urlQuery);
@@ -170,37 +113,22 @@ function BrowseContent() {
     window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
   }, [query]);
 
-  const [answer, setAnswer] = useState<SearchAnswer | null>(null);
-  useEffect(() => {
-    if (!query) return;
-    const ctrl = new AbortController();
-    (async () => {
-      let next: SearchAnswer;
-      try {
-        const res = await fetch(`/api/movies/search?query=${encodeURIComponent(query)}&type=all`, {
-          signal: ctrl.signal,
-        });
-        const data = await res.json().catch(() => ({}));
-        next = res.ok
-          ? { query, attempt, films: data.films ?? [], error: null }
-          : { query, attempt, films: [], error: loadError(res.status, data.error) };
-      } catch {
-        next = { query, attempt, films: [], error: loadError() };
-      }
-      // A newer query (or a cleared box) owns the grid now.
-      if (!ctrl.signal.aborted) setAnswer(next);
-    })();
-    return () => ctrl.abort();
-  }, [query, attempt]);
-  const searchLoading = answer?.query !== query || answer.attempt !== attempt;
-
-  const loading = searching ? searchLoading : isLoading;
-  const error = loading ? null : searching ? (answer?.error ?? null) : categoryError;
+  const categoryParams = new URLSearchParams({ category: activeTab, page: String(page) });
+  if (activeGenre) categoryParams.set("genre", String(activeGenre));
+  // Not fetched while searching; kept, so clearing the box shows it at once.
+  const category = useFilms(searching ? null : `/api/movies/browse?${categoryParams.toString()}`, categoryAttempt);
+  const search = useFilms(
+    searching ? `/api/movies/search?query=${encodeURIComponent(query)}&type=all` : null,
+    searchAttempt,
+  );
+  const { loading, error, films } = searching ? search : category;
+  // The route takes pages 1–500, TMDB's own limit.
+  const totalPages = Math.min(category.totalPages, 500);
 
   const retry = () => {
     // Try again unmounts with the error, so focus would fall to <body>.
     headingRef.current?.focus();
-    setAttempt((a) => a + 1);
+    (searching ? setSearchAttempt : setCategoryAttempt)((a) => a + 1);
   };
 
   const switchTab = (tab: BrowseCategory) => {
@@ -222,10 +150,7 @@ function BrowseContent() {
     window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   };
 
-  const displayFilms = useMemo(
-    () => sortFilms(searching ? (searchLoading ? [] : (answer?.films ?? [])) : films, sortOrder),
-    [searching, searchLoading, answer, films, sortOrder],
-  );
+  const displayFilms = useMemo(() => sortFilms(films, sortOrder), [films, sortOrder]);
 
   const currentTab = TABS.find((t) => t.id === activeTab) ?? TABS[0];
   const activeGenreLabel = GENRES.find((g) => g.id === activeGenre)?.label;
@@ -635,7 +560,7 @@ function BrowseContent() {
         <p role="status" className="sr-only">
           {loading || error ? "" : `${heading}: ${displayFilms.length > 0 ? filmCount : "no films"}`}
         </p>
-        <div className="browse-film-grid" key={gridKey}>
+        <div className="browse-film-grid">
           {loading
             ? Array.from({ length: 20 }).map((_, i) => (
                 <div
@@ -688,52 +613,7 @@ function BrowseContent() {
               ))}
         </div>
 
-        {error && (
-          <div role="alert" style={{ textAlign: "center", padding: "60px 20px" }}>
-            <div
-              style={{
-                width: "56px",
-                height: "56px",
-                borderRadius: "14px",
-                background: "var(--blue-soft)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                margin: "0 auto 16px",
-              }}
-            >
-              <span style={{ color: "var(--blue)", opacity: 0.7, display: "flex" }}>
-                <Icon name="search" size={24} />
-              </span>
-            </div>
-            <p style={{ fontSize: "15px", fontWeight: 500, color: "var(--t2)", margin: "0 0 14px" }}>
-              {error.message}
-            </p>
-            {error.retryable && (
-              <button
-                type="button"
-                onClick={retry}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  minHeight: "44px",
-                  boxSizing: "border-box",
-                  padding: "0 20px",
-                  borderRadius: "10px",
-                  border: "none",
-                  background: "var(--blue)",
-                  color: "var(--blue-on)",
-                  fontFamily: "inherit",
-                  fontSize: "13px",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                Try again
-              </button>
-            )}
-          </div>
-        )}
+        {error && <LoadFailed error={error} onRetry={retry} />}
 
         {/* Empty state */}
         {!loading && !error && displayFilms.length === 0 && (

@@ -10,6 +10,8 @@ import {
   type BrowseCategory,
 } from "@/lib/browseCategories";
 import Icon from "@/components/ui/Icon";
+import LoadFailed from "@/components/ui/LoadFailed";
+import type { LoadError } from "@/lib/useFilms";
 
 type SortOrder = "popularity" | "rating" | "newest" | "title";
 
@@ -92,7 +94,10 @@ interface SearchPanelProps {
   /** The phone sheet's search box, which edits the toolbar's query. Desktop has no box here. */
   searchText?: string;
   onSearchTextChange?: (text: string) => void;
-  /** Set while the last load failed: the panel shows the error with Try again. */
+  /** Enter in that box: search now. */
+  onSearchSubmit?: () => void;
+  /** The films failed to load; `onRetry` loads them again. */
+  error?: LoadError | null;
   onRetry?: () => void;
   activeCategory?: string | null;
   activeGenre?: number | null;
@@ -108,6 +113,8 @@ export default function SearchPanel({
   query = "",
   searchText = "",
   onSearchTextChange,
+  onSearchSubmit,
+  error = null,
   onRetry,
   activeCategory,
   activeGenre,
@@ -126,7 +133,7 @@ export default function SearchPanel({
   const gridKey = `${films.length}-${films[0]?.id ?? "empty"}`;
 
   const displayFilms = useMemo(() => sortFilms(films, sortOrder), [films, sortOrder]);
-  const failed = onRetry !== undefined;
+  const failed = error !== null;
 
   const handleCategoryClick = (catId: BrowseCategory) => {
     if (catId === "by-genre") {
@@ -320,8 +327,12 @@ export default function SearchPanel({
               enterKeyHint="search"
               value={searchText}
               onChange={(e) => onSearchTextChange(e.target.value)}
-              // The search runs as you type; Enter only puts the keyboard away.
-              onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter") return;
+                onSearchSubmit?.();
+                // Puts the phone keyboard away; a blur would drop focus out of the sheet.
+                headingRef.current?.focus();
+              }}
               onFocus={() => setInputFocused(true)}
               onBlur={() => setInputFocused(false)}
               placeholder="Film, actor, director…"
@@ -534,53 +545,15 @@ export default function SearchPanel({
       {/* Film grid / Loading / Error / Empty state */}
       {isLoading ? (
         <LoadingSkeleton />
-      ) : failed ? (
-        <div role="alert" style={{ textAlign: "center", padding: "48px 20px" }}>
-          <div
-            style={{
-              width: "56px",
-              height: "56px",
-              borderRadius: "14px",
-              background: "var(--blue-soft)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 16px",
-            }}
-          >
-            <span style={{ color: "var(--blue)", opacity: 0.7, display: "flex" }}>
-              <Icon name="search" size={24} />
-            </span>
-          </div>
-          <p style={{ fontSize: "14px", fontWeight: 500, color: "var(--t2)", margin: "0 0 14px" }}>
-            Couldn&apos;t reach the film database.
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              // Try again unmounts with the error, so focus would fall to <body>.
-              headingRef.current?.focus();
-              onRetry();
-            }}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              minHeight: "44px",
-              boxSizing: "border-box",
-              padding: "0 20px",
-              borderRadius: "10px",
-              border: "none",
-              background: "var(--blue)",
-              color: "var(--blue-on)",
-              fontFamily: "inherit",
-              fontSize: "13px",
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            Try again
-          </button>
-        </div>
+      ) : error ? (
+        <LoadFailed
+          error={error}
+          onRetry={() => {
+            // Try again unmounts with the error, so focus would fall to <body>.
+            headingRef.current?.focus();
+            onRetry?.();
+          }}
+        />
       ) : displayFilms.length > 0 ? (
         <div key={gridKey} className="search-grid-enter">
           <FilmGrid films={displayFilms} accentBase="var(--blue)" />

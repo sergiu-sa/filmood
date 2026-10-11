@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef, type RefObject } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useMediaQuery } from "@/lib/useMediaQuery";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
+import { useFilms } from "@/lib/useFilms";
 import MoodBox from "./MoodBox";
 import MoodPanel from "./MoodPanel";
 import TrendingBox from "./TrendingBox";
@@ -10,19 +12,26 @@ import SearchPanel from "./SearchPanel";
 import ExploreBox from "./ExploreBox";
 import ExplorePanel from "./ExplorePanel";
 import BottomSheet from "./BottomSheet";
-import type { Film } from "@/lib/types";
+
+const searchUrl = (q: string) => `/api/movies/search?query=${encodeURIComponent(q)}&type=all`;
+
+type Category = { id: string; genre: number | null };
+
+function listUrl(category: Category | null) {
+  const params = new URLSearchParams({ category: category?.id ?? "trending" });
+  if (category?.genre) params.set("genre", String(category.genre));
+  return `/api/movies/browse?${params.toString()}`;
+}
 
 export default function DashboardShell() {
   const [openPanel, setOpenPanel] = useState<string | null>(null);
-  const [searchResults, setSearchResults] = useState<Film[]>([]);
-  // The search box's text (the toolbar's, and the phone sheet's box), and the search the results answer.
+  // The search box's text: the toolbar's, and on phones the sheet's box too.
   const [query, setQuery] = useState("");
-  const [resultsQuery, setResultsQuery] = useState("");
-  const [panelError, setPanelError] = useState<{ retry: () => void } | null>(null);
-  const [defaultResults, setDefaultResults] = useState<Film[]>([]);
-  const [panelCategory, setPanelCategory] = useState<string | null>(null);
-  const [panelGenre, setPanelGenre] = useState<number | null>(null);
-  const [searchLoading, setSearchLoading] = useState(false);
+  // Enter searches the text at once instead of after the debounce.
+  const [submitted, setSubmitted] = useState("");
+  const [category, setCategory] = useState<Category | null>(null);
+  const [searchAttempt, setSearchAttempt] = useState(0);
+  const [listAttempt, setListAttempt] = useState(0);
 
   const isMobile = useMediaQuery("(max-width: 899px)");
   const searchResultsRef = useRef<HTMLDivElement>(null);
@@ -36,34 +45,20 @@ export default function DashboardShell() {
     }
   }, [isMobile]);
 
-  // Silently preload a default "trending" list so the search panel is never empty.
-  // Fires once when the panel first opens; pills/tabs stay unhighlighted.
-  useEffect(() => {
-    if (openPanel !== "search" || defaultResults.length > 0) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/movies/browse?category=trending");
-        const data = await res.json();
-        if (cancelled) return;
-        const films: Film[] = data.films ?? [];
-        setDefaultResults(films);
-        setSearchResults((prev) =>
-          prev.length === 0 && panelCategory === null ? films : prev,
-        );
-      } catch {
-        /* silent — panel falls back to existing empty state */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [openPanel, defaultResults.length, panelCategory]);
+  // The panel shows the search while the box has one, else the list under it: the
+  // picked category, or trending. Both are kept, so clearing the box shows the list at once.
+  const text = query.trim();
+  const debounced = useDebouncedValue(text, 400);
+  const q = text === submitted ? submitted : debounced;
+  const searching = q !== "" && text !== "";
+  const search = useFilms(searching ? searchUrl(q) : null, searchAttempt);
+  // Fetched once the panel has opened, not on every visit to home.
+  const list = useFilms(openPanel === "search" ? listUrl(category) : null, listAttempt);
+  const shown = searching ? search : list;
 
-  // Fired only on explicit search intent (Enter key, pill click) — desktop only.
-  // Small delay so the panel has re-rendered with fresh results before we scroll.
-  const handleSearchSubmit = useCallback(() => {
+  const scrollToPanel = useCallback(() => {
     if (isMobile) return;
+    // Small delay so the panel has opened before we scroll.
     setTimeout(() => {
       searchResultsRef.current?.scrollIntoView({
         // A behavior passed here beats globals.css's reduced-motion scroll-behavior.
@@ -72,6 +67,12 @@ export default function DashboardShell() {
       });
     }, 120);
   }, [isMobile]);
+
+  const submitSearch = () => {
+    setSubmitted(text);
+    setOpenPanel("search");
+    scrollToPanel();
+  };
 
   const togglePanel = (panel: string) => {
     setOpenPanel((prev) => (prev === panel ? null : panel));
@@ -82,106 +83,45 @@ export default function DashboardShell() {
   // A closed desktop panel is inert, so focus on its Close would fall to <body>.
   const exploreBoxRef = useRef<HTMLElement>(null);
   const trendingBoxRef = useRef<HTMLElement>(null);
-  const closeTo = (box: RefObject<HTMLElement | null>) => () => {
+  const closeSearch = () => {
     closePanel();
-    box.current?.focus();
+    trendingBoxRef.current?.focus();
+  };
+  const closeExplore = () => {
+    closePanel();
+    exploreBoxRef.current?.focus();
   };
 
-  const handleSearchResults = useCallback(
-    (films: Film[], q: string) => {
-      if (q) {
-        setSearchLoading(false);
-        setResultsQuery(q);
-        setPanelError(null);
-        setSearchResults(films);
-        return;
-      }
-      // Cleared by picking a category: that category's fetch owns the results.
-      if (panelCategory !== null && searchLoading) return;
-      setSearchLoading(false);
-      setResultsQuery("");
-      setPanelError(null);
-      // Cleared: fall back to the preloaded default list instead of collapsing the panel.
-      if (defaultResults.length > 0 && panelCategory === null) {
-        setSearchResults(defaultResults);
-        return;
-      }
-      setSearchResults([]);
-      setOpenPanel((prev) => (prev === "search" ? null : prev));
-    },
-    [defaultResults, panelCategory, searchLoading],
-  );
+  // A pill or a panel tab. Picking a category replaces the search, in both boxes and in Full search.
+  const selectCategory = (id: string | null, genre?: number) => {
+    setQuery("");
+    setCategory(id === null ? null : { id, genre: genre ?? null });
+    // A pill clicked again unpicks its category and closes the panel, as it always has.
+    setOpenPanel(id === null ? null : "search");
+  };
 
-  const handleSearchFailed = useCallback((q: string, retry: () => void) => {
-    setSearchLoading(false);
-    setResultsQuery(q);
-    setSearchResults([]);
-    setPanelError({ retry });
-  }, []);
-
-  // Called whenever SearchToolbar's active pill changes, to keep the panel's tabs in sync
-  const handleActiveCategory = useCallback(
-    (category: string | null, genreId?: number | null) => {
-      setPanelCategory(category);
-      setPanelGenre(genreId ?? null);
-    },
-    [],
-  );
-
-  // Called from SearchPanel tabs — fetches data and updates results
-  const handlePanelCategoryChange = useCallback(
-    async (category: string, genreId?: number) => {
-      setPanelCategory(category);
-      setPanelGenre(genreId ?? null);
-      // The category replaces the search, in both boxes and in Full search.
-      setQuery("");
-      setResultsQuery("");
-      setPanelError(null);
-      setOpenPanel("search");
-      setSearchLoading(true);
-      try {
-        const params = new URLSearchParams({ category });
-        if (genreId) params.set("genre", String(genreId));
-        const res = await fetch(`/api/movies/browse?${params.toString()}`);
-        if (!res.ok) throw new Error(`Browse failed: ${res.status}`);
-        const data = await res.json();
-        setSearchResults(data.films ?? []);
-      } catch {
-        setSearchResults([]);
-        setPanelError({ retry: () => handlePanelCategoryChange(category, genreId) });
-      } finally {
-        setSearchLoading(false);
-      }
-    },
-    [],
-  );
+  const retryPanel = () => (searching ? setSearchAttempt : setListAttempt)((a) => a + 1);
 
   // Panel content for bottom sheet (embedded mode, no animation wrapper)
   const moodPanelContent = (
     <MoodPanel isOpen={true} embedded onClose={closePanel} />
   );
 
-  const retryPanel = panelError
-    ? () => {
-        setPanelError(null);
-        setSearchLoading(true);
-        panelError.retry();
-      }
-    : undefined;
-
   const searchPanelContent = (
     <SearchPanel
       isOpen={true}
       embedded
-      films={searchResults}
-      isLoading={searchLoading}
-      query={resultsQuery}
+      films={shown.films}
+      isLoading={shown.loading}
+      query={searching ? q : ""}
+      error={shown.error}
+      onRetry={retryPanel}
       searchText={query}
       onSearchTextChange={setQuery}
-      onRetry={retryPanel}
-      activeCategory={panelCategory}
-      activeGenre={panelGenre}
-      onCategoryChange={handlePanelCategoryChange}
+      onSearchSubmit={submitSearch}
+      activeCategory={searching ? null : (category?.id ?? null)}
+      activeGenre={searching ? null : (category?.genre ?? null)}
+      onCategoryChange={selectCategory}
       onClose={closePanel}
     />
   );
@@ -202,13 +142,15 @@ export default function DashboardShell() {
       <SearchToolbar
         query={query}
         onQueryChange={setQuery}
-        onResults={handleSearchResults}
-        onFailed={handleSearchFailed}
-        onActiveCategory={handleActiveCategory}
+        loading={searching && search.loading}
+        activeCategory={searching ? null : (category?.id ?? null)}
+        onCategory={(id) => {
+          selectCategory(id);
+          if (id) scrollToPanel();
+        }}
         onExpand={() => setOpenPanel("search")}
         expandOnFocus={!isMobile}
-        onCategoryFetch={handlePanelCategoryChange}
-        onSubmit={handleSearchSubmit}
+        onSubmit={submitSearch}
       />
 
       <div
@@ -250,16 +192,17 @@ export default function DashboardShell() {
           <MoodPanel isOpen={openPanel === "mood"} onClose={closePanel} />
           <SearchPanel
             isOpen={openPanel === "search"}
-            films={searchResults}
-            isLoading={searchLoading}
-            query={resultsQuery}
+            films={shown.films}
+            isLoading={shown.loading}
+            query={searching ? q : ""}
+            error={shown.error}
             onRetry={retryPanel}
-            activeCategory={panelCategory}
-            activeGenre={panelGenre}
-            onCategoryChange={handlePanelCategoryChange}
-            onClose={closeTo(trendingBoxRef)}
+            activeCategory={searching ? null : (category?.id ?? null)}
+            activeGenre={searching ? null : (category?.genre ?? null)}
+            onCategoryChange={selectCategory}
+            onClose={closeSearch}
           />
-          <ExplorePanel isOpen={openPanel === "explore"} onClose={closeTo(exploreBoxRef)} />
+          <ExplorePanel isOpen={openPanel === "explore"} onClose={closeExplore} />
         </div>
       )}
 
