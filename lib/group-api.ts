@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { User } from "@supabase/supabase-js";
 import { isSessionExpired } from "@/lib/group";
+import { internalError } from "@/lib/api-errors";
 
 type ResolveResult<T> =
   | { session: T; error: null }
@@ -34,13 +35,19 @@ export async function resolveSession<
 
   const upperCode = code.toUpperCase();
 
+  // maybeSingle answers no row with data null, so an error is a failed read. Only a missing row may be
+  // a 404: the lobby reads a 404 after it has loaded as a disband and sends everyone to /group.
   const { data: session, error: sessionError } = await supabase
     .from("sessions")
     .select(selectFields)
     .eq("code", upperCode)
-    .single();
+    .maybeSingle();
 
-  if (sessionError || !session) {
+  if (sessionError) {
+    return { session: null, error: internalError(sessionError, "Failed to load session") };
+  }
+
+  if (!session) {
     return {
       session: null,
       error: NextResponse.json(
@@ -91,9 +98,11 @@ export async function resolveParticipant<
     .select(selectFields)
     .eq("session_id", sessionId);
 
+  // A guest's row id is its only credential, and anyone with the code sees every row id,
+  // so it must never act for a signed-in row: the host's would disband the session.
   const filteredQuery = user
     ? baseQuery.eq("user_id", user.id)
-    : baseQuery.eq("id", participantId!);
+    : baseQuery.eq("id", participantId!).is("user_id", null);
 
   const { data: participant, error: participantError } =
     await filteredQuery.single();

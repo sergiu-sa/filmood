@@ -35,7 +35,8 @@ export function useGroupRealtime({
     onDeleteRef.current = onDelete;
   });
 
-  // Realtime subscriptions
+  // Realtime subscriptions. Signed-in players only: anon can't read these tables (migration 013), and
+  // Realtime answers a filter on an unreadable column with a system error the channel ignores.
   useEffect(() => {
     if (!sessionId) return;
 

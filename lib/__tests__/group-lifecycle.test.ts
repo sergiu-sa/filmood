@@ -231,6 +231,27 @@ describe("GET /api/group/[code]", () => {
     for (const p of json.participants) expect(p).not.toHaveProperty("mood_selections");
     expect(json.participants[0]).toMatchObject({ id: "p-1", nickname: "Sergiu", user_id: "user-1" });
   });
+
+  // The lobby reads a 404 after it has loaded as a disband, so a failed read must not be one.
+  it("answers a failed session read with 500, not 404", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    mockGetSupabaseAdmin.mockReturnValue(createMockSupabase([{ data: null, error: { message: "timeout" } }]));
+
+    const req = mockRequest("GET", "/api/group/ABC123");
+    const { status } = await readResponse(await getSession(req, routeParams("ABC123")));
+    expect(status).toBe(500);
+  });
+
+  // .single() reports no row as an error (PGRST116), which would now read as a 500.
+  it("answers 404 when no session has the code, read with maybeSingle", async () => {
+    const supabase = createMockSupabase([{ data: null, error: null }]);
+    mockGetSupabaseAdmin.mockReturnValue(supabase);
+
+    const req = mockRequest("GET", "/api/group/ABC123");
+    const { status } = await readResponse(await getSession(req, routeParams("ABC123")));
+    expect(status).toBe(404);
+    expect(supabase.from.mock.results[0].value.maybeSingle).toHaveBeenCalled();
+  });
 });
 
 // ─── POST /api/group/[code]/ready ───────────────────
@@ -422,6 +443,24 @@ describe("DELETE /api/group/[code]/leave", () => {
     const { status, json } = await readResponse(await leaveSession(req, routeParams("ABC123")));
     expect(status).toBe(200);
     expect(json.disbanded).toBe(true);
+  });
+
+  // Every row id is visible to anyone with the code, so a guest id must not stand for the host's row.
+  it("matches a guest id against guest rows only, so the host's row id can't disband the session", async () => {
+    mockGetAuthUser.mockResolvedValue(null);
+    const supabase = createMockSupabase([
+      { data: { id: "s-1", host_id: "user-1", status: "lobby", created_at: new Date().toISOString() }, error: null },
+      { data: null, error: { code: "PGRST116" } },
+    ]);
+    mockGetSupabaseAdmin.mockReturnValue(supabase);
+
+    const req = mockRequest("DELETE", "/api/group/ABC123/leave", { participantId: "p-1" });
+    const { status } = await readResponse(await leaveSession(req, routeParams("ABC123")));
+    const participantQuery = supabase.from.mock.results[1].value;
+    expect(participantQuery.eq).toHaveBeenCalledWith("id", "p-1");
+    expect(participantQuery.is).toHaveBeenCalledWith("user_id", null);
+    expect(status).toBe(403);
+    expect(supabase.from).toHaveBeenCalledTimes(2);
   });
 
   it("removes participant when non-host leaves", async () => {

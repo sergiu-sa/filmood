@@ -527,6 +527,23 @@ describe("GET /api/group/[code]/results", () => {
     expect(status).toBe(403);
   });
 
+  it("takes a guest id for a guest row only, never a signed-in participant's", async () => {
+    mockGetAuthUser.mockResolvedValue(null);
+    const rows = () => [
+      { data: { id: "s-1", code: "ABC123", status: "done", movie_deck: fakeDeck, created_at: new Date().toISOString() }, error: null },
+      { data: [{ id: "p-1", user_id: "user-1", nickname: "Sergiu" }, { id: "p-2", user_id: null, nickname: "Guest" }], error: null },
+      { data: [], error: null },
+    ];
+
+    mockGetSupabaseAdmin.mockReturnValue(createMockSupabase(rows()));
+    const signedIn = await getResults(mockRequest("GET", "/api/group/ABC123/results?participantId=p-1"), routeParams("ABC123"));
+    expect(signedIn.status).toBe(403);
+
+    mockGetSupabaseAdmin.mockReturnValue(createMockSupabase(rows()));
+    const guest = await getResults(mockRequest("GET", "/api/group/ABC123/results?participantId=p-2"), routeParams("ABC123"));
+    expect(guest.status).toBe(200);
+  });
+
   it("returns tiered results with topPick on success", async () => {
     mockGetAuthUser.mockResolvedValue(mockUser);
     const participants = [

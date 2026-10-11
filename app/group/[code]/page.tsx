@@ -11,7 +11,7 @@ import LobbyActions from "@/components/group/LobbyActions";
 import InviteStrip from "@/components/group/InviteStrip";
 import ToastContainer from "@/components/group/Toast";
 import { useToasts } from "@/components/group/useToasts";
-import { MAX_PARTICIPANTS } from "@/lib/group";
+import { MAX_PARTICIPANTS } from "@/lib/constants";
 import type { GroupSession, SessionParticipant } from "@/lib/types";
 
 // Narrow projections of the canonical types in lib/types.ts — the lobby
@@ -98,6 +98,13 @@ export default function LobbyPage() {
       const data = await res.json();
 
       if (!res.ok) {
+        // Guests have no Realtime, so the poll is how they learn the host disbanded: a session that
+        // loaded before and is gone now goes back to /group, as onDelete does for signed-in players.
+        if (res.status === 404 && prevParticipantsRef.current.length > 0) {
+          redirectingRef.current = true;
+          router.replace("/group");
+          return;
+        }
         setError(data.error || "Failed to load session");
         return;
       }
