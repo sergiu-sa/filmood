@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { getAuthHeaders } from "@/lib/getAuthToken";
-import { moodMap } from "@/lib/moodMap";
+import { moodLabel, moodMap } from "@/lib/moodMap";
 import { ACCENT_VARS } from "@/lib/constants";
 import type { AccentColor } from "@/lib/types";
 import Icon from "@/components/ui/Icon";
@@ -22,11 +22,6 @@ interface Stats {
 function moodAccent(moodKey: string | null): AccentColor {
   if (!moodKey) return "gold";
   return (moodMap[moodKey]?.accentColor ?? "gold") as AccentColor;
-}
-
-function moodLabel(moodKey: string | null): string {
-  if (!moodKey) return "—";
-  return moodKey.charAt(0).toUpperCase() + moodKey.slice(1);
 }
 
 export default function ProfileHero({ user }: Props) {
@@ -67,6 +62,7 @@ export default function ProfileHero({ user }: Props) {
 
   const topMoodKey = stats?.topMood ?? null;
   const topMoodAccent = moodAccent(topMoodKey);
+  const topMoodLabel = topMoodKey ? moodLabel(topMoodKey) : "—";
 
   return (
     <section
@@ -203,7 +199,7 @@ export default function ProfileHero({ user }: Props) {
                 }}
               >
                 <Icon name="mark" size={11} />
-                {moodLabel(topMoodKey)}
+                {topMoodLabel}
               </span>
             </span>
           </div>
@@ -230,7 +226,7 @@ export default function ProfileHero({ user }: Props) {
           color="var(--blue)"
         />
         <Stat
-          value={moodLabel(topMoodKey)}
+          value={topMoodLabel}
           label="Top mood"
           color={ACCENT_VARS[topMoodAccent].text}
           italic
@@ -259,7 +255,8 @@ function Stat({
   return (
     <div
       className="px-3 py-3.5 text-center"
-      style={{ background: "var(--surface)" }}
+      // Values sit on the labels, so a two-line mood name doesn't push its label below the others.
+      style={{ background: "var(--surface)", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}
     >
       <div
         className="font-serif"
@@ -268,11 +265,10 @@ function Stat({
           fontStyle: italic ? "italic" : "normal",
           color,
           fontSize: italic ? "clamp(13px, 3vw, 16px)" : "clamp(15px, 4vw, 22px)",
-          lineHeight: 1,
+          lineHeight: italic ? 1.2 : 1,
           marginBottom: "6px",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
+          // Mood names are phrases, so they wrap; the counts keep the one-line ellipsis.
+          ...(italic ? { textWrap: "balance" } : { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }),
         }}
       >
         {value}

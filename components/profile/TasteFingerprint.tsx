@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { getAuthHeaders } from "@/lib/getAuthToken";
-import { moodMap } from "@/lib/moodMap";
+import { moodLabel, moodMap } from "@/lib/moodMap";
 import { ACCENT_VARS } from "@/lib/constants";
 import type { AccentColor } from "@/lib/types";
 import Icon from "@/components/ui/Icon";
@@ -33,10 +33,6 @@ const CHIP_ROTATION: AccentColor[] = [
   "teal",
   "ember",
 ];
-
-function moodLabel(key: string): string {
-  return key.charAt(0).toUpperCase() + key.slice(1);
-}
 
 function moodAccent(key: string): AccentColor {
   return (moodMap[key]?.accentColor ?? "gold") as AccentColor;
@@ -135,7 +131,7 @@ export default function TasteFingerprint() {
                   </span>
                   <span
                     style={{
-                      width: "120px",
+                      width: "132px",
                       fontSize: "13px",
                       fontWeight: 500,
                       color: "var(--t1)",
@@ -240,12 +236,11 @@ export default function TasteFingerprint() {
               letterSpacing: "0.1px",
             }}
           >
-            Films like{" "}
-            <em style={{ color: "var(--gold-text)" }}>{signature.title}</em> — your{" "}
+            Your top mood is{" "}
             <em style={{ color: ACCENT_VARS[moodAccent(topMoodKey)].text }}>
               {moodLabel(topMoodKey)}
-            </em>{" "}
-            picks.
+            </em>
+            : films like <em style={{ color: "var(--gold-text)" }}>{signature.title}</em>.
           </p>
         )}
       </Card>

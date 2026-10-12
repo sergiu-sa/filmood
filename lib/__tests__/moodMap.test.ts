@@ -1,6 +1,7 @@
 import {
   allMoods,
   LEGACY_MOOD_ALIASES,
+  moodLabel,
   moodMap,
   normalizeMoodKey,
   normalizeMoodKeys,
@@ -101,5 +102,17 @@ describe("normalizeMoodKeys", () => {
     expect(
       normalizeMoodKeys(["weird", "cry", "bogus", "beautiful", "thoughtful", "laugh"]),
     ).toEqual(["mindbending", "cry", "laugh"]);
+  });
+});
+
+describe("moodLabel", () => {
+  it("shows a key as the name the pickers use, retired keys included", () => {
+    expect(moodLabel("easy")).toBe("Need a hug");
+    expect(moodLabel("dark")).toBe("Go dark");
+    expect(moodLabel("beautiful")).toBe("Need to let it out");
+  });
+
+  it("shows an unknown key as stored", () => {
+    expect(moodLabel("constructor")).toBe("constructor");
   });
 });
