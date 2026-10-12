@@ -214,6 +214,12 @@ export function normalizeMoodKey(raw: string): string | null {
   return Object.hasOwn(moodMap, alias) ? alias : null;
 }
 
+/** A mood's name as the pickers show it ("easy" → "Need a hug"); an unknown key is shown as stored. */
+export function moodLabel(raw: string): string {
+  const key = normalizeMoodKey(raw);
+  return key ? moodMap[key].tagLabel : raw;
+}
+
 /** Normalise, drop unknowns, dedupe — order preserved. */
 export function normalizeMoodKeys(raw: string[]): string[] {
   const keys = raw.map(normalizeMoodKey).filter((k): k is string => k !== null);

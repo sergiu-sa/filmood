@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import { getAuthHeaders } from "@/lib/getAuthToken";
-import { moodMap } from "@/lib/moodMap";
+import { moodLabel, moodMap } from "@/lib/moodMap";
 import { ACCENT_VARS } from "@/lib/constants";
 import type { AccentColor } from "@/lib/types";
 
@@ -48,10 +48,6 @@ function moodAccent(key: string): AccentColor {
   return (moodMap[key]?.accentColor ?? "gold") as AccentColor;
 }
 
-function moodLabel(key: string): string {
-  return key.charAt(0).toUpperCase() + key.slice(1);
-}
-
 interface RowProps {
   event: TimelineEvent;
 }
@@ -79,7 +75,7 @@ function Row({ event }: RowProps) {
       accent = moodAccent(mood);
       body = (
         <>
-          Picked{" "}
+          Picked the mood{" "}
           <em
             className="font-serif"
             style={{
@@ -89,8 +85,8 @@ function Row({ event }: RowProps) {
             }}
           >
             {moodLabel(mood)}
-          </em>{" "}
-          in a session.
+          </em>
+          .
         </>
       );
       break;
