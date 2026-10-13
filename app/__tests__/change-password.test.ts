@@ -1,3 +1,4 @@
+import { NextRequest } from "next/server";
 import { mockRequest, mockUser, readResponse } from "@/lib/__tests__/helpers/supabase-mock";
 
 const mockUpdateUserById = vi.fn();
@@ -34,6 +35,11 @@ describe("POST /api/account/change-password", () => {
     expect(status).toBe(400);
     expect(json.error).toBe(message);
     expect(mockUpdateUserById).not.toHaveBeenCalled();
+  });
+
+  it("answers a body of null with a 400", async () => {
+    const res = await POST(new NextRequest("http://localhost/api/account/change-password", { method: "POST", body: "null" }));
+    expect(res.status).toBe(400);
   });
 
   // Supabase's own rule may be stricter than ours (symbols, leaked passwords): that's the user's input, not a 500.

@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
 
   let body: { currentPassword?: unknown; newPassword?: unknown };
   try {
-    body = await request.json();
+    body = (await request.json()) ?? {};
   } catch {
     return badRequest("Invalid JSON body");
   }

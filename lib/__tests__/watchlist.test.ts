@@ -75,7 +75,7 @@ describe("POST /api/watchlist/add", () => {
   });
 
   // A fraction or a negative would reach Postgres' integer column and come back as a 500.
-  it.each([1.5, -5, 0])("returns 400 for movie_id %s", async (movie_id) => {
+  it.each([1.5, -5, 0, 3000000000])("returns 400 for movie_id %s", async (movie_id) => {
     mockGetAuthUser.mockResolvedValue(mockUser);
     const req = mockRequest("POST", "/api/watchlist/add", { movie_id, movie_title: "Fight Club" });
     expect((await addToWatchlist(req)).status).toBe(400);
@@ -144,7 +144,7 @@ describe("DELETE /api/watchlist/remove", () => {
     expect(status).toBe(400);
   });
 
-  it.each([1.5, -5])("returns 400 for movie_id %s", async (movie_id) => {
+  it.each([1.5, -5, 3000000000])("returns 400 for movie_id %s", async (movie_id) => {
     mockGetAuthUser.mockResolvedValue(mockUser);
     const req = mockRequest("DELETE", "/api/watchlist/remove", { movie_id });
     expect((await removeFromWatchlist(req)).status).toBe(400);
