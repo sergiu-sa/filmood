@@ -60,6 +60,37 @@ describe("lobby page", () => {
     expect(screen.queryByText("Session not found")).toBeNull();
   });
 
+  it("keeps the lobby on screen when one poll fails, and catches up on the next", async () => {
+    render(<LobbyPage />);
+    await screen.findByText("Guest");
+
+    answer = () => Response.json({ error: "Failed to load session" }, { status: 500 });
+    await act(() => poll());
+    expect(screen.getByRole("heading", { name: "Group lobby" })).toBeInTheDocument();
+    expect(screen.queryByText("Failed to load session")).toBeNull();
+
+    answer = () =>
+      Response.json({
+        session: { id: "s1", code: "K7F2AB", host_id: "u1", status: "lobby", created_at: new Date().toISOString() },
+        participants: [
+          { id: "p1", nickname: "Host", user_id: "u1", is_ready: true, has_swiped: false, joined_at: "", has_submitted: false },
+          { id: "p2", nickname: "Guest", user_id: null, is_ready: false, has_swiped: false, joined_at: "", has_submitted: false },
+        ],
+      });
+    await act(() => poll());
+    expect(screen.getByText("1/2 ready")).toBeInTheDocument();
+  });
+
+  it("says the session expired when a poll after loading answers 410", async () => {
+    render(<LobbyPage />);
+    await screen.findByText("Guest");
+
+    answer = () => Response.json({ error: "Session expired" }, { status: 410 });
+    await act(() => poll());
+    expect(screen.getByText("Session expired")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Group lobby" })).toBeNull();
+  });
+
   it("says the session wasn't found when it never loaded", async () => {
     answer = gone;
     render(<LobbyPage />);

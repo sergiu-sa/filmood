@@ -1,4 +1,5 @@
 import { vi } from "vitest";
+import { NextRequest } from "next/server";
 import {
   createMockSupabase,
   mockRequest,
@@ -33,6 +34,9 @@ import { DELETE as leaveSession } from "@/app/api/group/[code]/leave/route";
 function routeParams(code: string) {
   return { params: Promise.resolve({ code }) };
 }
+
+const inserts = (supabase: ReturnType<typeof createMockSupabase>) =>
+  supabase.from.mock.results.filter((r) => (r.value.insert as ReturnType<typeof vi.fn>).mock.calls.length).length;
 
 // ─── POST /api/group/create ─────────────────────────
 
@@ -83,6 +87,13 @@ describe("POST /api/group/join", () => {
     expect(status).toBe(400);
   });
 
+  it("returns 400 when a guest's nickname is only spaces", async () => {
+    mockGetAuthUser.mockResolvedValue(null);
+    const req = mockRequest("POST", "/api/group/join", { code: "ABC123", nickname: "   " });
+    const { status } = await readResponse(await joinSession(req));
+    expect(status).toBe(400);
+  });
+
   it("returns 400 when nickname is too short", async () => {
     mockGetAuthUser.mockResolvedValue(null);
     const req = mockRequest("POST", "/api/group/join", { code: "ABC123", nickname: "A" });
@@ -97,16 +108,46 @@ describe("POST /api/group/join", () => {
     expect(status).toBe(400);
   });
 
-  it("returns 404 when session not found", async () => {
+  it("returns 400 for a body that isn't JSON", async () => {
     mockGetAuthUser.mockResolvedValue(null);
-    const supabase = createMockSupabase([
-      { data: null, error: { message: "not found" } },
-    ]);
+    const req = new NextRequest("http://localhost/api/group/join", { method: "POST", body: "{" });
+    const { status } = await readResponse(await joinSession(req));
+    expect(status).toBe(400);
+  });
+
+  it("returns 404 when no session has the code, read with maybeSingle", async () => {
+    mockGetAuthUser.mockResolvedValue(null);
+    const supabase = createMockSupabase([{ data: null, error: null }]);
     mockGetSupabaseAdmin.mockReturnValue(supabase);
 
     const req = mockRequest("POST", "/api/group/join", { code: "XXXXXX", nickname: "Guest" });
-    const { status } = await readResponse(await joinSession(req));
+    const { status, json } = await readResponse(await joinSession(req));
     expect(status).toBe(404);
+    expect(json.error).toBe("Session not found. Check the code and try again.");
+  });
+
+  it("answers a failed session read with 500, not 404", async () => {
+    mockGetAuthUser.mockResolvedValue(null);
+    const supabase = createMockSupabase([{ data: null, error: { code: "57014", message: "timeout" } }]);
+    mockGetSupabaseAdmin.mockReturnValue(supabase);
+
+    const req = mockRequest("POST", "/api/group/join", { code: "ABC123", nickname: "Guest" });
+    const { status } = await readResponse(await joinSession(req));
+    expect(status).toBe(500);
+  });
+
+  it("answers a failed participant count with 500, rather than skip the cap", async () => {
+    mockGetAuthUser.mockResolvedValue(null);
+    const supabase = createMockSupabase([
+      { data: { id: "s-1", status: "lobby", created_at: new Date().toISOString() }, error: null },
+      { data: null, error: { code: "57014", message: "timeout" }, count: null },
+    ]);
+    mockGetSupabaseAdmin.mockReturnValue(supabase);
+
+    const req = mockRequest("POST", "/api/group/join", { code: "ABC123", nickname: "Guest" });
+    const { status } = await readResponse(await joinSession(req));
+    expect(status).toBe(500);
+    expect(inserts(supabase)).toBe(0);
   });
 
   it("returns 410 when session is expired", async () => {
@@ -147,12 +188,12 @@ describe("POST /api/group/join", () => {
     expect(status).toBe(400);
   });
 
-  it("returns existing participant when auth user re-joins", async () => {
+  it("returns existing participant when auth user re-joins, even into a full session", async () => {
     mockGetAuthUser.mockResolvedValue(mockUser);
     const supabase = createMockSupabase([
       { data: { id: "s-1", status: "lobby", created_at: new Date().toISOString() }, error: null },
-      { data: null, error: null, count: 3 },
       { data: { id: "part-1" }, error: null },
+      { data: null, error: null, count: 8 },
     ]);
     mockGetSupabaseAdmin.mockReturnValue(supabase);
 
@@ -160,6 +201,78 @@ describe("POST /api/group/join", () => {
     const { status, json } = await readResponse(await joinSession(req));
     expect(status).toBe(200);
     expect(json.participantId).toBe("part-1");
+    expect(inserts(supabase)).toBe(0);
+  });
+
+  it("gives a guest who joins again with their stored id the same seat, under the name just typed", async () => {
+    mockGetAuthUser.mockResolvedValue(null);
+    const supabase = createMockSupabase([
+      { data: { id: "s-1", status: "lobby", created_at: new Date().toISOString() }, error: null },
+      { data: { id: "p-old" }, error: null },
+      { data: null, error: null },
+    ]);
+    mockGetSupabaseAdmin.mockReturnValue(supabase);
+
+    const req = mockRequest("POST", "/api/group/join", { code: "ABC123", nickname: " Sergiu ", participantId: "p-old" });
+    const { status, json } = await readResponse(await joinSession(req));
+    expect(status).toBe(200);
+    expect(json.participantId).toBe("p-old");
+    expect(inserts(supabase)).toBe(0);
+
+    const seat = supabase.from.mock.results[1].value;
+    expect(seat.eq).toHaveBeenCalledWith("id", "p-old");
+    expect(seat.is).toHaveBeenCalledWith("user_id", null);
+    const rename = supabase.from.mock.results[2].value;
+    expect(rename.update).toHaveBeenCalledWith({ nickname: "Sergiu" });
+    expect(rename.eq).toHaveBeenCalledWith("id", "p-old");
+  });
+
+  it("answers a failed rename with 500", async () => {
+    mockGetAuthUser.mockResolvedValue(null);
+    const supabase = createMockSupabase([
+      { data: { id: "s-1", status: "lobby", created_at: new Date().toISOString() }, error: null },
+      { data: { id: "p-old" }, error: null },
+      { data: null, error: { code: "57014", message: "timeout" } },
+    ]);
+    mockGetSupabaseAdmin.mockReturnValue(supabase);
+
+    const req = mockRequest("POST", "/api/group/join", { code: "ABC123", nickname: "Sergiu", participantId: "p-old" });
+    const { status } = await readResponse(await joinSession(req));
+    expect(status).toBe(500);
+  });
+
+  it.each([
+    ["isn't a seat in this session", { data: null, error: null }],
+    ["isn't a uuid", { data: null, error: { code: "22P02", message: "invalid input syntax for type uuid" } }],
+  ])("seats a guest whose stored id %s", async (_, seatRead) => {
+    mockGetAuthUser.mockResolvedValue(null);
+    const supabase = createMockSupabase([
+      { data: { id: "s-1", status: "lobby", created_at: new Date().toISOString() }, error: null },
+      seatRead,
+      { data: null, error: null, count: 3 },
+      { data: { id: "part-new" }, error: null },
+    ]);
+    mockGetSupabaseAdmin.mockReturnValue(supabase);
+
+    const req = mockRequest("POST", "/api/group/join", { code: "ABC123", nickname: "Guest", participantId: "p-other-session" });
+    const { status, json } = await readResponse(await joinSession(req));
+    expect(status).toBe(200);
+    expect(json.participantId).toBe("part-new");
+    expect(inserts(supabase)).toBe(1);
+  });
+
+  it("answers a failed seat read with 500 instead of seating them again", async () => {
+    mockGetAuthUser.mockResolvedValue(null);
+    const supabase = createMockSupabase([
+      { data: { id: "s-1", status: "lobby", created_at: new Date().toISOString() }, error: null },
+      { data: null, error: { code: "57014", message: "timeout" } },
+    ]);
+    mockGetSupabaseAdmin.mockReturnValue(supabase);
+
+    const req = mockRequest("POST", "/api/group/join", { code: "ABC123", nickname: "Guest", participantId: "p-old" });
+    const { status } = await readResponse(await joinSession(req));
+    expect(status).toBe(500);
+    expect(inserts(supabase)).toBe(0);
   });
 
   it("creates new participant for guest", async () => {
@@ -272,6 +385,19 @@ describe("POST /api/group/[code]/ready", () => {
     const { status, json } = await readResponse(await toggleReady(req, routeParams("ABC123")));
     expect(status).toBe(200);
     expect(json.is_ready).toBe(true);
+  });
+
+  it("answers a failed participant read with 500, not 'You are not in this session'", async () => {
+    mockGetAuthUser.mockResolvedValue(mockUser);
+    const supabase = createMockSupabase([
+      { data: { id: "s-1", status: "lobby", created_at: new Date().toISOString() }, error: null },
+      { data: null, error: { code: "57014", message: "timeout" } },
+    ]);
+    mockGetSupabaseAdmin.mockReturnValue(supabase);
+
+    const req = mockRequest("POST", "/api/group/ABC123/ready", {});
+    const { status } = await readResponse(await toggleReady(req, routeParams("ABC123")));
+    expect(status).toBe(500);
   });
 
   it("returns 400 when session is not in lobby", async () => {
@@ -450,7 +576,7 @@ describe("DELETE /api/group/[code]/leave", () => {
     mockGetAuthUser.mockResolvedValue(null);
     const supabase = createMockSupabase([
       { data: { id: "s-1", host_id: "user-1", status: "lobby", created_at: new Date().toISOString() }, error: null },
-      { data: null, error: { code: "PGRST116" } },
+      { data: null, error: null },
     ]);
     mockGetSupabaseAdmin.mockReturnValue(supabase);
 
