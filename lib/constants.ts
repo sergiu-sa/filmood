@@ -1,8 +1,9 @@
 import type { AccentColor } from "./types";
 
-// Here, not in lib/group.ts, because the lobby needs it and lib/group.ts would bring node:crypto's
+// Here, not in lib/group.ts, because the group pages need them and lib/group.ts would bring node:crypto's
 // browser polyfill into the page.
 export const MAX_PARTICIPANTS = 10;
+export const SESSION_EXPIRY_HOURS = 4;
 
 /**
  * Consistent avatar colors for participants across all group pages.

@@ -178,6 +178,54 @@ describe("POST /api/group/join", () => {
     expect(status).toBe(400);
   });
 
+  it("gives a guest their seat back mid-game, under the name the others have seen", async () => {
+    mockGetAuthUser.mockResolvedValue(null);
+    const supabase = createMockSupabase([
+      { data: { id: "s-1", status: "swiping", created_at: new Date().toISOString() }, error: null },
+      { data: { id: GUEST_ID }, error: null },
+    ]);
+    mockGetSupabaseAdmin.mockReturnValue(supabase);
+
+    const req = mockRequest("POST", "/api/group/join", { code: "ABC123", nickname: "Other name", participantId: GUEST_ID });
+    const { status, json } = await readResponse(await joinSession(req));
+    expect(status).toBe(200);
+    expect(json.participantId).toBe(GUEST_ID);
+    expect(supabase.from).toHaveBeenCalledTimes(2);
+  });
+
+  it("gives a signed-in player their seat back mid-game", async () => {
+    mockGetAuthUser.mockResolvedValue(mockUser);
+    const supabase = createMockSupabase([
+      { data: { id: "s-1", status: "mood", created_at: new Date().toISOString() }, error: null },
+      { data: { id: "part-1" }, error: null },
+    ]);
+    mockGetSupabaseAdmin.mockReturnValue(supabase);
+
+    const req = mockRequest("POST", "/api/group/join", { code: "ABC123" });
+    const { status, json } = await readResponse(await joinSession(req));
+    expect(status).toBe(200);
+    expect(json.participantId).toBe("part-1");
+    expect(inserts(supabase)).toBe(0);
+  });
+
+  it.each([
+    ["a guest whose stored id has no seat", null, { participantId: GUEST_ID, nickname: "Guest" }],
+    ["a signed-in user with no seat", mockUser, {}],
+  ])("still refuses %s once the session has started", async (_, user, body) => {
+    mockGetAuthUser.mockResolvedValue(user);
+    const supabase = createMockSupabase([
+      { data: { id: "s-1", status: "mood", created_at: new Date().toISOString() }, error: null },
+      { data: null, error: null },
+    ]);
+    mockGetSupabaseAdmin.mockReturnValue(supabase);
+
+    const req = mockRequest("POST", "/api/group/join", { code: "ABC123", ...body });
+    const { status, json } = await readResponse(await joinSession(req));
+    expect(status).toBe(400);
+    expect(json.error).toBe("This session has already started");
+    expect(inserts(supabase)).toBe(0);
+  });
+
   it("returns 400 when session is full", async () => {
     mockGetAuthUser.mockResolvedValue(null);
     const supabase = createMockSupabase([

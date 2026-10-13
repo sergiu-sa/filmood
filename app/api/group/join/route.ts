@@ -44,13 +44,9 @@ export async function POST(request: NextRequest) {
         : sessionErr;
     }
 
-    // Only allow joining during lobby phase
-    if (session.status !== "lobby") {
-      return badRequest("This session has already started");
-    }
-
-    // Joining a lobby again gets the seat back: a guest's by the id this browser stored, so a second join
-    // doesn't leave a seat that is never ready and blocks the start. Before the cap, since they already count.
+    // Joining again gets the seat back, a guest's by the id this browser stored: in the lobby a second seat would
+    // never be ready and block the start, and mid-game it's how a closed tab gets back in. Before the cap and the
+    // lobby check, since a seated player already counts and is already in the game.
     const { participant: existing, error: seatErr } = await resolveParticipant(
       supabase,
       session.id,
@@ -60,7 +56,8 @@ export async function POST(request: NextRequest) {
     if (seatErr?.status === 500) return seatErr;
 
     if (existing) {
-      if (!user) {
+      // Mid-game the others have already seen the name.
+      if (!user && session.status === "lobby") {
         const { error: renameError } = await supabase
           .from("session_participants")
           .update({ nickname: trimmedNickname })
@@ -72,6 +69,10 @@ export async function POST(request: NextRequest) {
         participantId: existing.id,
         code: upperCode,
       });
+    }
+
+    if (session.status !== "lobby") {
+      return badRequest("This session has already started");
     }
 
     // Check participant count

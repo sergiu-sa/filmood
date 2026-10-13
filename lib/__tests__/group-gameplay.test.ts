@@ -49,8 +49,8 @@ const defaultDeck = [
 ];
 
 import { DeckTooThinError } from "@/lib/deck";
-import { POST as submitMood } from "@/app/api/group/[code]/mood/route";
-import { GET as getSwipeState, POST as submitSwipe } from "@/app/api/group/[code]/swipe/route";
+import { PATCH as startWithout, POST as submitMood } from "@/app/api/group/[code]/mood/route";
+import { GET as getSwipeState, PATCH as finishWithout, POST as submitSwipe } from "@/app/api/group/[code]/swipe/route";
 import { GET as getResults } from "@/app/api/group/[code]/results/route";
 
 function routeParams(code: string) {
@@ -363,6 +363,120 @@ describe("POST /api/group/[code]/mood", () => {
   });
 });
 
+// ─── PATCH /api/group/[code]/mood ───────────────────
+
+describe("PATCH /api/group/[code]/mood", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockBuildSharedDeck.mockResolvedValue(defaultDeck);
+    mockGroupProviders.mockResolvedValue([]);
+  });
+
+  const inMood = { data: { id: "s-1", host_id: "user-1", status: "mood", created_at: new Date().toISOString() }, error: null };
+  const ok = { data: null, error: null };
+  const host = { id: "p-1", user_id: "user-1", mood_selections: ["laugh"] };
+  const lockedGuest = { id: "p-2", user_id: null, mood_selections: ["cry"] };
+  const stalledUser = { id: "p-3", user_id: "user-3", mood_selections: null };
+  const stalledGuest = { id: "p-4", user_id: null, mood_selections: null };
+
+  async function carryOn(responses: unknown[], user: unknown = mockUser) {
+    mockGetAuthUser.mockResolvedValue(user);
+    const supabase = createMockSupabase(responses as { data: unknown; error: unknown }[]);
+    mockGetSupabaseAdmin.mockReturnValue(supabase);
+    const req = mockRequest("PATCH", "/api/group/ABC123/mood");
+    return { ...(await readResponse(await startWithout(req, routeParams("ABC123")))), supabase };
+  }
+  const call = (supabase: ReturnType<typeof createMockSupabase>, n: number) => supabase.from.mock.results[n].value;
+
+  it("returns 401 when not signed in", async () => {
+    const { status, supabase } = await carryOn([], null);
+    expect(status).toBe(401);
+    expect(supabase.from).not.toHaveBeenCalled();
+  });
+
+  it("refuses anyone but the host", async () => {
+    const { status } = await carryOn([{ ...inMood, data: { ...inMood.data, host_id: "someone-else" } }]);
+    expect(status).toBe(403);
+  });
+
+  it("refuses a session that isn't picking moods", async () => {
+    const { status } = await carryOn([{ ...inMood, data: { ...inMood.data, status: "swiping" } }]);
+    expect(status).toBe(400);
+  });
+
+  it("asks the host to lock in first, since their own seat would go", async () => {
+    const { status, json, supabase } = await carryOn([inMood, { data: [{ ...host, mood_selections: null }, lockedGuest], error: null }]);
+    expect(status).toBe(400);
+    expect(json.error).toBe("Lock in your own picks first");
+    expect(mockBuildSharedDeck).not.toHaveBeenCalled();
+    expect(supabase.from).toHaveBeenCalledTimes(2);
+  });
+
+  it("builds the deck from who locked in, removes the rest, then moves the session to swiping", async () => {
+    const { status, json, supabase } = await carryOn([
+      inMood,
+      { data: [host, lockedGuest, stalledUser, stalledGuest], error: null },
+      ok,
+      ok,
+    ]);
+    expect(status).toBe(200);
+    expect(json.removed).toBe(2);
+
+    expect(mockBuildSharedDeck.mock.calls[0][0]).toEqual([host, lockedGuest]);
+    // A stalled player's saved services don't narrow a deck they won't see.
+    expect(mockGroupProviders).toHaveBeenCalledWith(supabase, ["user-1"]);
+
+    const remove = call(supabase, 2);
+    expect(supabase.from).toHaveBeenNthCalledWith(3, "session_participants");
+    expect(remove.delete).toHaveBeenCalled();
+    expect(remove.in).toHaveBeenCalledWith("id", ["p-3", "p-4"]);
+    // Only while still without picks: one that locked in since the read keeps its seat.
+    expect(remove.is).toHaveBeenCalledWith("mood_selections", null);
+
+    const flip = call(supabase, 3);
+    expect(supabase.from).toHaveBeenNthCalledWith(4, "sessions");
+    expect(flip.update).toHaveBeenCalledWith({ movie_deck: defaultDeck, status: "swiping" });
+    expect(flip.eq).toHaveBeenCalledWith("status", "mood");
+  });
+
+  // A seat deleted with its account mid-mood leaves everyone else locked in and no deck: the same press builds it.
+  it("builds the deck with nobody to remove", async () => {
+    const { status, json, supabase } = await carryOn([inMood, { data: [host, lockedGuest], error: null }, ok]);
+    expect(status).toBe(200);
+    expect(json.removed).toBe(0);
+    expect(supabase.from).toHaveBeenCalledTimes(3);
+    expect(call(supabase, 2).update).toHaveBeenCalledWith({ movie_deck: defaultDeck, status: "swiping" });
+  });
+
+  it("answers a thin deck with 422 and removes nobody", async () => {
+    mockBuildSharedDeck.mockRejectedValue(new DeckTooThinError(2));
+    const { status, json, supabase } = await carryOn([inMood, { data: [host, stalledGuest], error: null }]);
+    expect(status).toBe(422);
+    expect(json.error).toBe("Nothing fits everyone's picks together. Try a different mood.");
+    expect(supabase.from).toHaveBeenCalledTimes(2);
+  });
+
+  it("answers a failed removal with 500 and leaves the session in mood", async () => {
+    const { status, supabase } = await carryOn([
+      inMood,
+      { data: [host, stalledGuest], error: null },
+      { data: null, error: { code: "57014", message: "timeout" } },
+    ]);
+    expect(status).toBe(500);
+    expect(supabase.from).toHaveBeenCalledTimes(3);
+  });
+
+  it("answers a failed deck write with 500", async () => {
+    const { status } = await carryOn([
+      inMood,
+      { data: [host, stalledGuest], error: null },
+      ok,
+      { data: null, error: { code: "57014", message: "timeout" } },
+    ]);
+    expect(status).toBe(500);
+  });
+});
+
 // ─── GET /api/group/[code]/swipe ────────────────────
 
 describe("GET /api/group/[code]/swipe", () => {
@@ -383,7 +497,7 @@ describe("GET /api/group/[code]/swipe", () => {
   it("returns swipe state for swiping session", async () => {
     mockGetAuthUser.mockResolvedValue(mockUser);
     const supabase = createMockSupabase([
-      { data: { id: "s-1", status: "swiping", movie_deck: fakeDeck, created_at: new Date().toISOString() }, error: null },
+      { data: { id: "s-1", host_id: "user-1", status: "swiping", movie_deck: fakeDeck, created_at: new Date().toISOString() }, error: null },
       { data: { id: "p-1", has_swiped: false }, error: null },
       { data: [{ movie_id: 1, vote: "yes" }], error: null },
       { data: [{ id: "p-1", user_id: "user-1", nickname: "Sergiu", has_swiped: false }], error: null },
@@ -397,6 +511,8 @@ describe("GET /api/group/[code]/swipe", () => {
     expect(json.deck).toHaveLength(2);
     expect(json.swipes).toHaveLength(1);
     expect(json.sessionStatus).toBe("swiping");
+    // The host's page offers to finish without the others.
+    expect(json.hostId).toBe("user-1");
   });
 
   // A deleted account takes its seat with it (014), so the last vote may already have been cast by everyone left.
@@ -508,6 +624,76 @@ describe("POST /api/group/[code]/swipe", () => {
     expect(status).toBe(200);
     expect(json.recorded).toBe(true);
     expect(json.progress.swiped).toBe(1);
+  });
+});
+
+// ─── PATCH /api/group/[code]/swipe ──────────────────
+
+describe("PATCH /api/group/[code]/swipe", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const swiping = { data: { id: "s-1", host_id: "user-1", status: "swiping", created_at: new Date().toISOString() }, error: null };
+  const ok = { data: null, error: null };
+  const host = { id: "p-1", user_id: "user-1", has_swiped: true };
+  const finishedGuest = { id: "p-2", user_id: null, has_swiped: true };
+  const stalled = { id: "p-3", user_id: null, has_swiped: false };
+
+  async function finish(responses: unknown[], user: unknown = mockUser) {
+    mockGetAuthUser.mockResolvedValue(user);
+    const supabase = createMockSupabase(responses as { data: unknown; error: unknown }[]);
+    mockGetSupabaseAdmin.mockReturnValue(supabase);
+    const req = mockRequest("PATCH", "/api/group/ABC123/swipe");
+    return { ...(await readResponse(await finishWithout(req, routeParams("ABC123")))), supabase };
+  }
+
+  it("returns 401 when not signed in", async () => {
+    const { status } = await finish([], null);
+    expect(status).toBe(401);
+  });
+
+  it("refuses anyone but the host", async () => {
+    const { status } = await finish([{ ...swiping, data: { ...swiping.data, host_id: "someone-else" } }]);
+    expect(status).toBe(403);
+  });
+
+  it("refuses a session that isn't swiping", async () => {
+    const { status } = await finish([{ ...swiping, data: { ...swiping.data, status: "done" } }]);
+    expect(status).toBe(400);
+  });
+
+  it("asks the host to finish first, since their own seat would go", async () => {
+    const { status, json, supabase } = await finish([swiping, { data: [{ ...host, has_swiped: false }, stalled], error: null }]);
+    expect(status).toBe(400);
+    expect(json.error).toBe("Finish your own votes first");
+    expect(supabase.from).toHaveBeenCalledTimes(2);
+  });
+
+  it("removes who hasn't finished, votes and all, then finishes the session", async () => {
+    const { status, json, supabase } = await finish([swiping, { data: [host, finishedGuest, stalled], error: null }, ok, ok]);
+    expect(status).toBe(200);
+    expect(json.removed).toBe(1);
+
+    const remove = supabase.from.mock.results[2].value;
+    expect(supabase.from).toHaveBeenNthCalledWith(3, "session_participants");
+    expect(remove.delete).toHaveBeenCalled();
+    expect(remove.in).toHaveBeenCalledWith("id", ["p-3"]);
+    // One that finished since the read keeps its seat and counts.
+    expect(remove.eq).toHaveBeenCalledWith("has_swiped", false);
+
+    const flip = supabase.from.mock.results[3].value;
+    expect(supabase.from).toHaveBeenNthCalledWith(4, "sessions");
+    expect(flip.update).toHaveBeenCalledWith({ status: "done" });
+    expect(flip.eq).toHaveBeenCalledWith("status", "swiping");
+  });
+
+  it("answers a failed removal with 500 and leaves the session swiping", async () => {
+    const { status, supabase } = await finish([
+      swiping,
+      { data: [host, stalled], error: null },
+      { data: null, error: { code: "57014", message: "timeout" } },
+    ]);
+    expect(status).toBe(500);
+    expect(supabase.from).toHaveBeenCalledTimes(3);
   });
 });
 

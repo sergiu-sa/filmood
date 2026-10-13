@@ -1,4 +1,5 @@
 import { after, NextRequest, NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
 import { MAX_MOODS, normalizeMoodKeys } from "@/lib/moodMap";
 import { MAX_TEXT_LENGTH, resolveMoodText } from "@/lib/moodResolver";
@@ -8,7 +9,35 @@ import { buildSharedDeck, DeckTooThinError } from "@/lib/deck";
 import { groupProviders } from "@/lib/watchProviders";
 import { badRequest, internalError } from "@/lib/api-errors";
 import { recordMoodPicks } from "@/lib/mood-history";
-import type { EraKey, TimeKey } from "@/lib/types";
+import type { EraKey, TempoKey, TimeKey } from "@/lib/types";
+
+interface PickRow {
+  mood_selections: string[] | null;
+  era: EraKey | null;
+  time: TimeKey | null;
+  tempo: TempoKey | null;
+  extra_keywords: number[] | null;
+  user_id: string | null;
+}
+
+const hasPicks = (p: { mood_selections: string[] | null }) => (p.mood_selections?.length ?? 0) > 0;
+
+// The deck of everyone who has locked in, on the services the signed-in ones among them saved.
+async function buildDeck(supabase: SupabaseClient, rows: PickRow[]) {
+  const locked = rows.filter(hasPicks);
+  return buildSharedDeck(locked, await groupProviders(supabase, locked.flatMap((p) => p.user_id ?? [])));
+}
+
+function deckFailed(error: unknown) {
+  // The picks have to change, so a retry as-is would build the same thin deck.
+  if (error instanceof DeckTooThinError) {
+    return NextResponse.json(
+      { error: "Nothing fits everyone's picks together. Try a different mood." },
+      { status: 422 },
+    );
+  }
+  return internalError(error, "Failed to build the movie deck");
+}
 
 // POST /api/group/[code]/mood
 // Save a participant's private mood selections (two at most) + optional
@@ -167,9 +196,7 @@ export async function POST(
     };
 
     const total = allParticipants.length;
-    const submitted = allParticipants.filter(
-      (p) => p.mood_selections && p.mood_selections.length > 0,
-    ).length;
+    const submitted = allParticipants.filter(hasPicks).length;
 
     if (submitted < total) {
       recordPicks();
@@ -183,17 +210,10 @@ export async function POST(
     // All done — build the shared deck using mood_selections plus refinements.
     let deck;
     try {
-      const userIds = allParticipants.flatMap((p) => p.user_id ?? []);
-      deck = await buildSharedDeck(allParticipants, await groupProviders(supabase, userIds));
+      deck = await buildDeck(supabase, allParticipants);
     } catch (deckError) {
       await rollBack();
-      if (deckError instanceof DeckTooThinError) {
-        return NextResponse.json(
-          { error: "Nothing fits everyone's picks together. Try a different mood." },
-          { status: 422 },
-        );
-      }
-      return internalError(deckError, "Failed to build the movie deck");
+      return deckFailed(deckError);
     }
 
     // Atomic compare-and-set on session.status so simultaneous last-submitters
@@ -221,5 +241,79 @@ export async function POST(
     });
   } catch (error) {
     return internalError(error, "Failed to submit moods");
+  }
+}
+
+// PATCH /api/group/[code]/mood
+// The host starts swiping without the players who haven't locked in: their seats go, and the deck is built
+// from everyone else's picks. With nobody left to remove (a seat deleted with its account), it builds the
+// deck that no last lock-in is coming to build.
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ code: string }> },
+) {
+  const user = await getAuthUser(request);
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { code } = await params;
+
+  try {
+    const supabase = getSupabaseAdmin();
+
+    const { session, error: sessionErr } = await resolveSession<{
+      id: string; host_id: string; status: string; created_at: string;
+    }>(supabase, code, "id, host_id, status, created_at");
+    if (sessionErr) return sessionErr;
+
+    if (session.host_id !== user.id) {
+      return NextResponse.json({ error: "Only the host can start without the others" }, { status: 403 });
+    }
+
+    if (session.status !== "mood") {
+      return NextResponse.json({ error: "Session is not in mood selection phase" }, { status: 400 });
+    }
+
+    const { data: rows, error: loadErr } = await supabase
+      .from("session_participants")
+      .select("id, mood_selections, era, time, tempo, extra_keywords, user_id")
+      .eq("session_id", session.id);
+    if (loadErr || !rows) return internalError(loadErr, "Failed to load participants");
+
+    if (!rows.some((p) => p.user_id === user.id && hasPicks(p))) {
+      return badRequest("Lock in your own picks first");
+    }
+
+    let deck;
+    try {
+      deck = await buildDeck(supabase, rows);
+    } catch (deckError) {
+      return deckFailed(deckError);
+    }
+
+    // Removed before the status moves, so a failed write can be retried. Only seats still without picks: one
+    // that locked in since the read keeps its seat, though its moods missed this deck.
+    const leftOut = rows.filter((p) => !hasPicks(p)).map((p) => p.id);
+    if (leftOut.length > 0) {
+      const { error: removeErr } = await supabase
+        .from("session_participants")
+        .delete()
+        .in("id", leftOut)
+        .is("mood_selections", null);
+      if (removeErr) return internalError(removeErr, "Failed to remove players");
+    }
+
+    // The same compare-and-set as a last lock-in, which may be writing its own deck at this moment.
+    const { error: deckError } = await supabase
+      .from("sessions")
+      .update({ movie_deck: deck, status: "swiping" })
+      .eq("id", session.id)
+      .eq("status", "mood");
+    if (deckError) return internalError(deckError, "Failed to build deck");
+
+    return NextResponse.json({ removed: leftOut.length });
+  } catch (error) {
+    return internalError(error, "Failed to start without the others");
   }
 }

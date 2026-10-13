@@ -1,11 +1,11 @@
 import { randomInt } from "node:crypto";
 import { getSupabaseAdmin } from "@/lib/supabase-server";
+import { SESSION_EXPIRY_HOURS } from "@/lib/constants";
 
 // Characters that are easy to read and share aloud.
 // Excluded: 0/O (zero vs oh), 1/I/L (one vs I vs L)
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH = 6;
-const SESSION_EXPIRY_HOURS = 4;
 
 /**
  * Generate a random 6-char code like "HK7T4N". The code is all that stands between a
