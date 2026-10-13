@@ -105,9 +105,15 @@ export async function resolveParticipant<
     : baseQuery.eq("id", participantId!).is("user_id", null);
 
   const { data: participant, error: participantError } =
-    await filteredQuery.single();
+    await filteredQuery.maybeSingle();
 
-  if (participantError || !participant) {
+  // A failed read isn't "not in this session": join would seat them a second time. 22P02 is a guest id
+  // that isn't a uuid, which can't match a row.
+  if (participantError && participantError.code !== "22P02") {
+    return { participant: null, error: internalError(participantError, "Failed to load participant") };
+  }
+
+  if (!participant) {
     return {
       participant: null,
       error: NextResponse.json(

@@ -105,6 +105,8 @@ export default function SessionJoin({ initialCode = "" }: SessionJoinProps) {
       const body: Record<string, string> = { code };
       if (!user) {
         body.nickname = nickname.trim();
+        const stored = localStorage.getItem("participantId");
+        if (stored) body.participantId = stored;
       }
 
       const res = await fetch("/api/group/join", {

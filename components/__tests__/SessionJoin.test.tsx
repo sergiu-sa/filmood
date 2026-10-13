@@ -47,7 +47,10 @@ beforeEach(() => {
   } as unknown as Response);
 });
 
-afterEach(() => vi.clearAllMocks());
+afterEach(() => {
+  vi.clearAllMocks();
+  localStorage.clear();
+});
 
 describe("SessionJoin", () => {
   // ── Code validation ────────────────────────────────────────────────────
@@ -133,6 +136,16 @@ describe("SessionJoin", () => {
       expect(body.code).toBe("DEF456");
       expect(body.nickname).toBe("Alice");
     });
+  });
+
+  it("sends a guest's stored participant id, so joining again keeps their seat", async () => {
+    localStorage.setItem("participantId", "p-old");
+    renderWithCode();
+    await typeNickname("Alice");
+    fireEvent.click(screen.getByRole("button", { name: /join session/i }));
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+    const calls = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(JSON.parse(calls[0][1].body)).toEqual({ code: "ABC123", nickname: "Alice", participantId: "p-old" });
   });
 
   it("navigates to /group/[code] on success", async () => {

@@ -74,6 +74,11 @@ test.describe("Group session", () => {
     const join = await page.request.post("/api/group/join", { data: { code, nickname: "Guest" } });
     expect(join.ok()).toBe(true);
     const { participantId } = await join.json();
+    // Joining again from the same browser keeps the seat and takes the new name; a second seat would never be ready.
+    const again = await page.request.post("/api/group/join", { data: { code, nickname: "Guest Two", participantId } });
+    expect((await again.json()).participantId).toBe(participantId);
+    const lobby = await (await page.request.get(`/api/group/${code}`)).json();
+    expect(lobby.participants.map((p: { nickname: string }) => p.nickname)).toEqual([expect.any(String), "Guest Two"]);
     const ready = await page.request.post(`/api/group/${code}/ready`, { data: { participantId } });
     expect(ready.ok()).toBe(true);
 

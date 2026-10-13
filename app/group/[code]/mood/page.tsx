@@ -84,7 +84,8 @@ export default function GroupMoodPage() {
           router.replace("/group");
           return;
         }
-        setError(data.error || "Failed to load session");
+        // Once loaded, error is the lock-in's alert: a 5xx is a blip the next poll catches up on, a 410 still shows.
+        if (!loadedRef.current || res.status < 500) setError(data.error || "Failed to load session");
         return;
       }
 
@@ -133,7 +134,7 @@ export default function GroupMoodPage() {
         setPhase((prev) => prev === "building" ? prev : "waiting");
       }
     } catch {
-      setError("Something went wrong");
+      if (!loadedRef.current) setError("Something went wrong");
     } finally {
       setLoading(false);
     }

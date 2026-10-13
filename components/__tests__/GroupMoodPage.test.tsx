@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import GroupMoodPage from "@/app/group/[code]/mood/page";
 import { allMoods } from "@/lib/moodMap";
 
@@ -236,6 +236,25 @@ describe("Group mood page", () => {
     await screen.findByText(/3 people/);
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("How do you feel?");
     expect(lockIn()).toHaveTextContent("Lock in 1 mood");
+  });
+
+  it("puts no alert above Lock in for a failed poll once the page has loaded", async () => {
+    await renderPage();
+    answerGet = async () => Response.json({ error: "Failed to load session" }, { status: 500 });
+    await act(() => poll());
+    answerGet = async () => {
+      throw new TypeError("Failed to fetch");
+    };
+    await act(() => poll());
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("How do you feel?");
+  });
+
+  it("says the session expired when a poll after loading answers 410", async () => {
+    await renderPage();
+    answerGet = async () => Response.json({ error: "Session expired" }, { status: 410 });
+    await act(() => poll());
+    expect(screen.getByRole("alert")).toHaveTextContent("Session expired");
   });
 
   it("hands the echo the picked tiles and the page's Era", async () => {

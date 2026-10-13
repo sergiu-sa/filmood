@@ -105,10 +105,13 @@ export default function LobbyPage() {
           router.replace("/group");
           return;
         }
+        // Once loaded, a 5xx is a blip the next poll catches up on; anything else, like a 410, still shows.
+        if (res.status >= 500 && prevParticipantsRef.current.length > 0) return;
         setError(data.error || "Failed to load session");
         return;
       }
 
+      setError(null);
       setSessionData(data.session);
 
       diffParticipants(prevParticipantsRef.current, data.participants);
@@ -128,7 +131,7 @@ export default function LobbyPage() {
         return;
       }
     } catch {
-      setError("Something went wrong");
+      if (prevParticipantsRef.current.length === 0) setError("Something went wrong");
     } finally {
       setLoading(false);
     }
