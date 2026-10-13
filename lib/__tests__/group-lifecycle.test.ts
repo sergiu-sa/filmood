@@ -408,9 +408,13 @@ describe("POST /api/group/[code]/ready", () => {
   it.each([
     ["a long string", "x".repeat(100_000)],
     ["an array holding one", ["x".repeat(100_000)]],
+    // The filter would stringify it to the uuid and match that guest's seat.
+    ["an array holding a guest's uuid", [GUEST_ID]],
+    ["a uuid with more after it", `${GUEST_ID}x`],
+    ["a uuid with more before it", `x${GUEST_ID}`],
   ])("refuses a guest id that is %s without asking the database", async (_, participantId) => {
     mockGetAuthUser.mockResolvedValue(null);
-    // Supabase's gateway answers a URL this long with a 414 that has no error code.
+    // What a query would get: for the long ids, Supabase's gateway answers 414 with no error code.
     const supabase = createMockSupabase([
       { data: { id: "s-1", status: "lobby", created_at: new Date().toISOString() }, error: null },
       { data: null, error: { message: "URI Too Long" } },

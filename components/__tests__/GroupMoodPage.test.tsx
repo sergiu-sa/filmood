@@ -299,6 +299,18 @@ describe("Group mood page", () => {
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
   });
 
+  it("ignores polls once Back to lobby is clicked, since the page is leaving", async () => {
+    answerGet = async () => Response.json({ error: "Failed to load session" }, { status: 500 });
+    render(<GroupMoodPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Back to lobby" }));
+    expect(router.push).toHaveBeenCalledWith("/group/K7F2AB");
+
+    answerGet = async () => session(selfSubmitted);
+    await act(() => poll());
+    expect(screen.getByRole("button", { name: "Back to lobby" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+  });
+
   it("doesn't move focus to the heading when the recovering poll sends the page elsewhere", async () => {
     answerGet = async () => Response.json({ error: "Failed to load session" }, { status: 500 });
     render(<GroupMoodPage />);
