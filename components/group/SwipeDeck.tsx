@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useLayoutEffect } from "react";
 import type { DeckFilm, SwipeVote } from "@/lib/types";
 import SwipeCard from "./SwipeCard";
 import Icon from "@/components/ui/Icon";
@@ -22,6 +22,12 @@ function firstUnvoted(deck: DeckFilm[], votes: Record<string, SwipeVote>, from: 
   let i = from;
   while (i < deck.length && votes[deck[i].id]) i++;
   return i;
+}
+
+// After the last card, back to one whose vote the page took back (its POST failed twice).
+function nextUnvoted(deck: DeckFilm[], votes: Record<string, SwipeVote>, from: number) {
+  const next = firstUnvoted(deck, votes, from);
+  return next < deck.length ? next : firstUnvoted(deck, votes, 0);
 }
 
 // Vote button config — keeps the JSX clean
@@ -91,6 +97,12 @@ export default function SwipeDeck({
   // The card a vote acts on. Votes read this, not `currentIndex`: the window
   // keydown listener can fire after a vote's timer, before React re-binds it.
   const indexRef = useRef(currentIndex);
+  // The timer reads the newest votes: one taken back during the exit must still be offered.
+  // A layout effect, so no timer runs between a render and the ref catching up.
+  const votesRef = useRef(votes);
+  useLayoutEffect(() => {
+    votesRef.current = votes;
+  }, [votes]);
 
   const triggerVote = useCallback(
     (vote: SwipeVote) => {
@@ -107,7 +119,8 @@ export default function SwipeDeck({
 
       setTimeout(() => {
         onVote(movieId, vote);
-        indexRef.current = firstUnvoted(deck, votes, index + 1);
+        // This vote reaches `votes` only on the next render.
+        indexRef.current = nextUnvoted(deck, { ...votesRef.current, [movieId]: vote }, index + 1);
         setCurrentIndex(indexRef.current);
         setExitDirection(null);
         setDragOffset({ x: 0, y: 0 });
@@ -115,7 +128,7 @@ export default function SwipeDeck({
         setIsVoting(false);
       }, 380);
     },
-    [deck, disabled, onVote, votes],
+    [deck, disabled, onVote],
   );
 
   // Keyboard controls
@@ -202,7 +215,7 @@ export default function SwipeDeck({
 
         <SwipeCard
           film={currentFilm}
-          index={currentIndex}
+          position={Math.min(Object.keys(votes).length + 1, deck.length)}
           total={deck.length}
           exitDirection={exitDirection}
           dragOffset={dragOffset}

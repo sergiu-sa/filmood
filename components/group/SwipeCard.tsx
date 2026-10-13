@@ -10,7 +10,8 @@ import Icon from "@/components/ui/Icon";
 
 interface SwipeCardProps {
   film: DeckFilm;
-  index: number;
+  /** The number on the badge: counts votes, like the page's strip, not the card's place in the deck. */
+  position: number;
   total: number;
   exitDirection: "left" | "right" | "up" | null;
   dragOffset: { x: number; y: number };
@@ -29,7 +30,7 @@ const EXIT_TRANSFORMS: Record<string, string> = {
 
 export default function SwipeCard({
   film,
-  index,
+  position,
   total,
   exitDirection,
   dragOffset,
@@ -193,7 +194,7 @@ export default function SwipeCard({
             color: "rgba(255,255,255,0.75)",
           }}
         >
-          {index + 1} / {total}
+          {position} / {total}
         </div>
       </div>
 

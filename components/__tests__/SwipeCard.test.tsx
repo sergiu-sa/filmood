@@ -26,7 +26,7 @@ const mockFilm: DeckFilm = {
 
 const baseProps = {
   film: mockFilm,
-  index: 0,
+  position: 1,
   total: 5,
   exitDirection: null as "left" | "right" | "up" | null,
   dragOffset: { x: 0, y: 0 },
@@ -54,8 +54,8 @@ describe("SwipeCard", () => {
     expect(screen.getByText("8.8")).toBeInTheDocument();
   });
 
-  it("renders the card counter (index + 1 / total)", () => {
-    render(<SwipeCard {...baseProps} index={2} total={10} />);
+  it("renders the card counter (position / total)", () => {
+    render(<SwipeCard {...baseProps} position={3} total={10} />);
     expect(screen.getByText("3 / 10")).toBeInTheDocument();
   });
 

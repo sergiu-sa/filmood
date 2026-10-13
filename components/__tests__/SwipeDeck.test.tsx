@@ -55,4 +55,46 @@ describe("SwipeDeck", () => {
     expect(screen.getByText("Title 2")).toBeInTheDocument();
     expect(votedIds(onVote)).toEqual([1]);
   });
+
+  it("offers a card whose vote was taken back after the last one", () => {
+    const onVote = vi.fn();
+    const { rerender } = render(<SwipeDeck deck={deck} votes={{}} onVote={onVote} disabled={false} />);
+
+    act(() => press());
+    act(() => vi.advanceTimersByTime(380));
+    rerender(<SwipeDeck deck={deck} votes={{ 1: "yes" }} onVote={onVote} disabled={false} />);
+    act(() => press());
+    act(() => vi.advanceTimersByTime(380));
+    // Film 1's POST failed twice: the page takes its vote back.
+    rerender(<SwipeDeck deck={deck} votes={{ 2: "yes" }} onVote={onVote} disabled={false} />);
+    expect(screen.getByText("Title 3")).toBeInTheDocument();
+
+    act(() => press());
+    act(() => vi.advanceTimersByTime(380));
+    rerender(<SwipeDeck deck={deck} votes={{ 2: "yes", 3: "yes" }} onVote={onVote} disabled={false} />);
+
+    expect(votedIds(onVote)).toEqual([1, 2, 3]);
+    expect(screen.getByText("Title 1")).toBeInTheDocument();
+    expect(screen.getByText("3 / 3")).toBeInTheDocument();
+  });
+
+  it("finds a vote taken back while the last card is leaving", () => {
+    const onVote = vi.fn();
+    const pair = deck.slice(0, 2);
+    const { rerender } = render(<SwipeDeck deck={pair} votes={{ 1: "yes" }} onVote={onVote} disabled={false} />);
+
+    act(() => press());
+    rerender(<SwipeDeck deck={pair} votes={{}} onVote={onVote} disabled={false} />);
+    act(() => vi.advanceTimersByTime(380));
+
+    expect(votedIds(onVote)).toEqual([2]);
+    expect(screen.getByText("Title 1")).toBeInTheDocument();
+  });
+
+  it("numbers the card by the votes cast, not its place in the deck", () => {
+    render(<SwipeDeck deck={deck} votes={{ 1: "yes", 3: "no" }} onVote={vi.fn()} disabled={false} />);
+
+    expect(screen.getByText("Title 2")).toBeInTheDocument();
+    expect(screen.getByText("3 / 3")).toBeInTheDocument();
+  });
 });
