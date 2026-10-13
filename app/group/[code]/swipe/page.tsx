@@ -29,7 +29,10 @@ export default function GroupSwipePage() {
   const [participants, setParticipants] = useState<ParticipantStatus[]>([]);
   const [, setSessionStatus] = useState<string>("swiping");
   const [myVotes, setMyVotes] = useState<Record<string, SwipeVote>>({});
-  const [isDone, setIsDone] = useState(false);
+  /** The server says this player is done. */
+  const [finished, setFinished] = useState(false);
+  /** The film whose vote failed twice and went back in the deck. */
+  const [lostVoteId, setLostVoteId] = useState<number | null>(null);
   const [allDone, setAllDone] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -111,7 +114,7 @@ export default function GroupSwipePage() {
         return p.id === currentPid;
       });
       if (me?.has_swiped || data.progress.swiped >= data.progress.total) {
-        setIsDone(true);
+        setFinished(true);
       }
 
       const everyoneDone = data.participants.every(
@@ -121,7 +124,7 @@ export default function GroupSwipePage() {
 
       if (data.sessionStatus === "done") {
         setAllDone(true);
-        setIsDone(true);
+        setFinished(true);
       }
     } catch {
       setError("Something went wrong");
@@ -134,12 +137,8 @@ export default function GroupSwipePage() {
     if (!authLoading && participantIdReady) fetchSwipeState();
   }, [authLoading, participantIdReady, fetchSwipeState]);
 
-  // Detect local completion — all cards in the deck have a vote
-  useEffect(() => {
-    if (deck.length > 0 && Object.keys(myVotes).length >= deck.length) {
-      setIsDone(true);
-    }
-  }, [myVotes, deck.length]);
+  // Not state: a vote taken back has to bring the deck back.
+  const isDone = finished || (deck.length > 0 && Object.keys(myVotes).length >= deck.length);
 
   // Realtime + polling
   useGroupRealtime({
@@ -176,47 +175,31 @@ export default function GroupSwipePage() {
 
   const handleVote = useCallback(
     async (movieId: number, vote: SwipeVote) => {
-      // Optimistic — the card is already gone from SwipeDeck, so we never
-      // roll this back. If the POST fails we retry once; the polling will
-      // eventually sync the server state regardless.
+      // Optimistic: the card is already gone from SwipeDeck. A failed POST is
+      // retried once; only if that fails too does the vote come out, which puts the card back.
       setMyVotes((prev) => ({ ...prev, [String(movieId)]: vote }));
 
-      try {
-        const res = await sendVote(movieId, vote);
+      const saved = async (res: Response) => {
+        // 409: the server already has a vote on this film.
+        if (res.status === 409) return true;
+        if (!res.ok) return false;
+        const data = await res.json();
+        if (data.participantDone) setFinished(true);
+        if (data.allDone) setAllDone(true);
+        return true;
+      };
+      const attempt = () => sendVote(movieId, vote).then(saved).catch(() => false);
 
-        if (res.ok) {
-          const data = await res.json();
-          if (data.participantDone) setIsDone(true);
-          if (data.allDone) setAllDone(true);
-          return;
-        }
+      if (await attempt()) return;
+      await new Promise((r) => setTimeout(r, 800));
+      if (await attempt()) return;
 
-        // 409 = already recorded, nothing to retry
-        if (res.status === 409) return;
-
-        // Other server error — retry once after a short delay
-        await new Promise((r) => setTimeout(r, 800));
-        const retry = await sendVote(movieId, vote);
-        if (retry.ok) {
-          const data = await retry.json();
-          if (data.participantDone) setIsDone(true);
-          if (data.allDone) setAllDone(true);
-        }
-      } catch {
-        // Network error — retry once
-        try {
-          await new Promise((r) => setTimeout(r, 800));
-          const retry = await sendVote(movieId, vote);
-          if (retry.ok) {
-            const data = await retry.json();
-            if (data.participantDone) setIsDone(true);
-            if (data.allDone) setAllDone(true);
-          }
-        } catch {
-          // Both attempts failed — the optimistic vote stays in myVotes
-          // so the done screen still shows. Polling will sync server state.
-        }
-      }
+      setMyVotes((prev) => {
+        const rest = { ...prev };
+        delete rest[String(movieId)];
+        return rest;
+      });
+      setLostVoteId(movieId);
     },
     [sendVote],
   );
@@ -228,6 +211,12 @@ export default function GroupSwipePage() {
     },
     { yes: 0, no: 0, maybe: 0 } as Record<SwipeVote, number>,
   );
+
+  // Only while the film has no vote: voting again, or a poll that finds the server had it after all, ends it.
+  const lostTitle =
+    lostVoteId === null || myVotes[String(lostVoteId)]
+      ? null
+      : (deck.find((film) => film.id === lostVoteId)?.title ?? "this film");
 
   const finishedCount = participants.filter((p) => p.has_swiped).length;
   const totalParticipants = participants.length;
@@ -409,7 +398,7 @@ export default function GroupSwipePage() {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          padding: "24px 20px 32px",
+          padding: "0 20px 32px",
           maxWidth: "820px",
           width: "100%",
           margin: "0 auto",
@@ -417,6 +406,38 @@ export default function GroupSwipePage() {
           zIndex: 2,
         }}
       >
+        <p
+          aria-live="polite"
+          className="font-sans"
+          style={{
+            display: "flex",
+            alignItems: "baseline",
+            gap: "8px",
+            width: "100%",
+            minHeight: "20px",
+            margin: "0 0 4px",
+            fontSize: "13px",
+            color: "var(--t2)",
+          }}
+        >
+          {lostTitle && (
+            <>
+              <span
+                aria-hidden="true"
+                style={{
+                  width: "6px",
+                  height: "6px",
+                  borderRadius: "50%",
+                  background: "var(--rose)",
+                  flexShrink: 0,
+                  transform: "translateY(-1px)",
+                }}
+              />
+              Your vote on {lostTitle} didn&apos;t save, so it&apos;s back in the deck.
+            </>
+          )}
+        </p>
+
         {!isDone ? (
           // The deck picks its first card from `votes` once, on mount, so it waits for the
           // films; they and the votes land in the same render.

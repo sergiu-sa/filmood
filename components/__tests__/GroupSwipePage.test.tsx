@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import GroupSwipePage from "@/app/group/[code]/swipe/page";
 import type { DeckFilm } from "@/lib/types";
 
@@ -65,11 +65,12 @@ const swipeState = () =>
     sessionStatus: "swiping",
   });
 
+const recorded = async () => Response.json({ recorded: true, participantDone: false, allDone: false });
 let answerGet: () => Promise<Response> = async () => swipeState();
+const failed = async () => Response.json({ error: "Failed to record vote" }, { status: 500 });
+let answerPost: (movieId: number) => Promise<Response> = recorded;
 const fetchMock = vi.fn(async (_url: string, init?: RequestInit) =>
-  init?.method === "POST"
-    ? Response.json({ recorded: true, participantDone: false, allDone: false })
-    : answerGet(),
+  init?.method === "POST" ? answerPost(JSON.parse(String(init.body)).movieId) : answerGet(),
 );
 vi.stubGlobal("fetch", fetchMock);
 
@@ -78,11 +79,14 @@ const postedIds = () =>
     .filter(([, init]) => init?.method === "POST")
     .map(([, init]) => JSON.parse(String(init?.body)).movieId);
 const press = () => fireEvent.keyDown(window, { key: "ArrowRight" });
+// Room past each vote's 380 ms exit when the whole suite runs at once.
+const slow = { timeout: 3000 };
 
 describe("Group swipe page", () => {
   afterEach(() => {
     votedPositions = [];
     answerGet = async () => swipeState();
+    answerPost = recorded;
     fetchMock.mockClear();
   });
 
@@ -116,5 +120,94 @@ describe("Group swipe page", () => {
 
     expect(await screen.findByText("Card 1")).toBeInTheDocument();
     expect(screen.queryByText("Card 0")).toBeNull();
+  });
+
+  it("puts the last card back when its vote fails twice", async () => {
+    votedPositions = Array.from({ length: 14 }, (_, n) => n);
+    answerPost = failed;
+    render(<GroupSwipePage />);
+
+    await screen.findByText("Card 14");
+    press();
+    // The vote's 380 ms exit, then the POST and one retry 800 ms later.
+    await waitFor(() => expect(postedIds()).toEqual([deck[14].id, deck[14].id]), slow);
+    expect(await screen.findByText("Card 14")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "All films rated" })).toBeNull();
+    expect(screen.getByText("Your vote on Card 14 didn't save, so it's back in the deck.")).toBeInTheDocument();
+  });
+
+  it("offers a card whose vote failed after the last one, and finishes once it saves", async () => {
+    votedPositions = Array.from({ length: 12 }, (_, n) => n);
+    answerPost = (id) => (id === deck[12].id ? failed() : recorded());
+    render(<GroupSwipePage />);
+
+    await screen.findByText("Card 12");
+    press();
+    await screen.findByText("Card 13", {}, slow);
+    await screen.findByText("Your vote on Card 12 didn't save, so it's back in the deck.", {}, slow);
+    press();
+    await screen.findByText("Card 14", {}, slow);
+    press();
+    expect(await screen.findByText("Card 12", {}, slow)).toBeInTheDocument();
+
+    answerPost = recorded;
+    press();
+    await screen.findByRole("heading", { name: "All films rated" }, slow);
+    expect(postedIds()).toEqual([deck[12].id, deck[12].id, deck[13].id, deck[14].id, deck[12].id]);
+    expect(screen.queryByText(/didn't save/)).toBeNull();
+  });
+
+  it("keeps a vote whose retry finds it already recorded", async () => {
+    votedPositions = Array.from({ length: 14 }, (_, n) => n);
+    let calls = 0;
+    answerPost = async () =>
+      ++calls === 1 ? failed() : Response.json({ error: "Already voted on this movie" }, { status: 409 });
+    render(<GroupSwipePage />);
+
+    await screen.findByText("Card 14");
+    press();
+    await waitFor(() => expect(postedIds()).toHaveLength(2), slow);
+    // Past the retry's answer: nothing comes back.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.getByRole("heading", { name: "All films rated" })).toBeInTheDocument();
+    expect(screen.queryByText(/didn't save/)).toBeNull();
+  });
+
+  it("drops the note once a poll brings the vote back from the server", async () => {
+    // The last vote of the session: the server records it and finishes the session, but the answer is lost,
+    // and the retry is refused because the session is no longer swiping.
+    votedPositions = Array.from({ length: 14 }, (_, n) => n);
+    let calls = 0;
+    answerPost = async () => {
+      if (++calls === 1) throw new TypeError("Failed to fetch");
+      return Response.json({ error: "Session is not in swiping phase" }, { status: 400 });
+    };
+    render(<GroupSwipePage />);
+
+    await screen.findByText("Card 14");
+    press();
+    await screen.findByText("Your vote on Card 14 didn't save, so it's back in the deck.", {}, slow);
+
+    votedPositions = Array.from({ length: 15 }, (_, n) => n);
+    answerGet = async () => {
+      const state = await swipeState().json();
+      return Response.json({ ...state, sessionStatus: "done" });
+    };
+    await act(async () => {
+      await poll();
+    });
+
+    expect(await screen.findByRole("button", { name: /see group results/i })).toBeInTheDocument();
+    expect(screen.queryByText(/didn't save/)).toBeNull();
+  });
+
+  it("numbers the card as the strip does after a gap", async () => {
+    // 13 votes, none on 10 or 13: the strip counts votes, so this is film 14.
+    votedPositions = [14, 12, 11, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0];
+    render(<GroupSwipePage />);
+
+    await screen.findByText("Card 10");
+    expect(screen.getByText(/^Film/)).toHaveTextContent("Film 14 of 15");
+    expect(screen.getByText(/^\d+ \/ 15$/)).toHaveTextContent("14 / 15");
   });
 });
