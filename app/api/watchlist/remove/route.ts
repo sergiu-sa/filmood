@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
-import { internalError } from "@/lib/api-errors";
+import { badRequest, internalError } from "@/lib/api-errors";
+import { parseTMDBId } from "@/lib/tmdb";
 
 // DELETE /api/watchlist/remove
 // Removes a film from the user's watchlist.
@@ -11,15 +12,13 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await request.json();
-  const { movie_id } = body;
+  // A body of `null` parses but can't be destructured.
+  const body: unknown = await request.json().catch(() => null);
+  if (!body || typeof body !== "object") return badRequest("Invalid JSON body");
+  const { movie_id: rawId } = body as Record<string, unknown>;
+  const movie_id = parseTMDBId(String(rawId));
 
-  if (!movie_id || typeof movie_id !== "number") {
-    return NextResponse.json(
-      { error: "movie_id is required and must be a number" },
-      { status: 400 },
-    );
-  }
+  if (movie_id === null) return badRequest("movie_id must be a positive integer");
 
   // Delete only the row matching this user + this movie
   const { error } = await getSupabaseAdmin()

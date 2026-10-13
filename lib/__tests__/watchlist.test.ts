@@ -1,4 +1,5 @@
 import { vi } from "vitest";
+import { NextRequest } from "next/server";
 import {
   createMockSupabase,
   mockRequest,
@@ -63,44 +64,56 @@ describe("POST /api/watchlist/add", () => {
     expect(status).toBe(400);
   });
 
-  it("returns 409 when film is already in watchlist", async () => {
+  it.each(["not json", "null"])("returns 400 for the body %s", async (raw) => {
     mockGetAuthUser.mockResolvedValue(mockUser);
 
-    const supabase = createMockSupabase([
-      { data: { id: "existing-row" }, error: null },
-    ]);
-    mockGetSupabaseAdmin.mockReturnValue(supabase);
-
-    const req = mockRequest("POST", "/api/watchlist/add", {
-      movie_id: 550,
-      movie_title: "Fight Club",
-      poster_path: "/poster.jpg",
-    });
+    const req = new NextRequest("http://localhost/api/watchlist/add", { method: "POST", body: raw });
 
     const { status, json } = await readResponse(await addToWatchlist(req));
-    expect(status).toBe(409);
-    expect(json.error).toBe("Film already in watchlist");
+    expect(status).toBe(400);
+    expect(json.error).toBe("Invalid JSON body");
   });
 
-  it("returns 201 with the new entry on success", async () => {
+  // A fraction or a negative would reach Postgres' integer column and come back as a 500.
+  it.each([1.5, -5, 0, 3000000000])("returns 400 for movie_id %s", async (movie_id) => {
+    mockGetAuthUser.mockResolvedValue(mockUser);
+    const req = mockRequest("POST", "/api/watchlist/add", { movie_id, movie_title: "Fight Club" });
+    expect((await addToWatchlist(req)).status).toBe(400);
+  });
+
+  // The same request answers the same whether or not the film was saved before: 015's unique index keeps one row.
+  it("saves with on-conflict-do-nothing and answers 201", async () => {
     mockGetAuthUser.mockResolvedValue(mockUser);
 
-    const newEntry = { id: "entry-1", movie_id: 550, movie_title: "Fight Club" };
-    const supabase = createMockSupabase([
-      { data: null, error: null },
-      { data: newEntry, error: null },
-    ]);
+    const supabase = createMockSupabase([{ data: null, error: null }]);
     mockGetSupabaseAdmin.mockReturnValue(supabase);
 
     const req = mockRequest("POST", "/api/watchlist/add", {
       movie_id: 550,
       movie_title: "Fight Club",
-      poster_path: "/poster.jpg",
+      poster_path: { not: "a path" },
     });
 
     const { status, json } = await readResponse(await addToWatchlist(req));
     expect(status).toBe(201);
-    expect(json.entry).toEqual(newEntry);
+    expect(json.success).toBe(true);
+    const chain = supabase.from.mock.results[0].value as { upsert: ReturnType<typeof vi.fn> };
+    expect(chain.upsert).toHaveBeenCalledWith(
+      { user_id: mockUser.id, movie_id: 550, movie_title: "Fight Club", poster_path: null },
+      { onConflict: "user_id,movie_id", ignoreDuplicates: true },
+    );
+  });
+
+  it("returns 500 when the save fails", async () => {
+    mockGetAuthUser.mockResolvedValue(mockUser);
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockGetSupabaseAdmin.mockReturnValue(createMockSupabase([{ data: null, error: { message: "boom" } }]));
+
+    const req = mockRequest("POST", "/api/watchlist/add", { movie_id: 550, movie_title: "Fight Club" });
+
+    const { status } = await readResponse(await addToWatchlist(req));
+    expect(status).toBe(500);
+    logged.mockRestore();
   });
 });
 
@@ -129,6 +142,22 @@ describe("DELETE /api/watchlist/remove", () => {
 
     const { status } = await readResponse(await removeFromWatchlist(req));
     expect(status).toBe(400);
+  });
+
+  it.each([1.5, -5, 3000000000])("returns 400 for movie_id %s", async (movie_id) => {
+    mockGetAuthUser.mockResolvedValue(mockUser);
+    const req = mockRequest("DELETE", "/api/watchlist/remove", { movie_id });
+    expect((await removeFromWatchlist(req)).status).toBe(400);
+  });
+
+  it.each(["not json", "null"])("returns 400 for the body %s", async (raw) => {
+    mockGetAuthUser.mockResolvedValue(mockUser);
+
+    const req = new NextRequest("http://localhost/api/watchlist/remove", { method: "DELETE", body: raw });
+
+    const { status, json } = await readResponse(await removeFromWatchlist(req));
+    expect(status).toBe(400);
+    expect(json.error).toBe("Invalid JSON body");
   });
 
   it("returns 200 on successful removal", async () => {

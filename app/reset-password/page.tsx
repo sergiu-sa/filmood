@@ -6,6 +6,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/AuthProvider";
 import {
+  PASSWORD_HINT,
   resetPasswordSchema,
   type ResetPasswordFormData,
 } from "@/lib/validations";
@@ -179,7 +180,8 @@ export default function ResetPasswordPage() {
                     onChange={(e) =>
                       setFormData({ ...formData, password: e.target.value })
                     }
-                    placeholder="At least 8 characters"
+                    aria-describedby="reset-password-hint"
+                    aria-invalid={fieldErrors.password ? true : undefined}
                     className={authInputClass(!!fieldErrors.password)}
                     style={{ background: "var(--surface)", color: "var(--t1)" }}
                   />
@@ -195,14 +197,13 @@ export default function ResetPasswordPage() {
                     <Icon name={showPassword ? "eye-off" : "eye"} size={16} />
                   </button>
                 </div>
-                {fieldErrors.password && (
-                  <p
-                    className="mt-1 text-[11px]"
-                    style={{ color: "var(--rose)" }}
-                  >
-                    {fieldErrors.password[0]}
-                  </p>
-                )}
+                <p
+                  id="reset-password-hint"
+                  className="mt-1 text-[11px]"
+                  style={{ color: fieldErrors.password ? "var(--rose)" : "var(--t3)" }}
+                >
+                  {fieldErrors.password?.[0] ?? PASSWORD_HINT}
+                </p>
               </div>
 
               <div>

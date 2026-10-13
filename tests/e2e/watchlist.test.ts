@@ -38,6 +38,10 @@ test("a saved film is on /watchlist until Remove deletes it", async ({ page, req
   // A run whose cleanup never ran can have left the film saved.
   expect((await request.delete("/api/watchlist/remove", { headers, ...removeFilm })).ok()).toBe(true);
   expect((await request.post("/api/watchlist/add", { headers, data: FILM })).status()).toBe(201);
+  // A second save answers the same and keeps one row (unique index, migration 015).
+  expect((await request.post("/api/watchlist/add", { headers, data: FILM })).status()).toBe(201);
+  const { watchlist } = await (await request.get("/api/watchlist", { headers })).json();
+  expect(watchlist.filter((row: { movie_id: number }) => row.movie_id === FILM.movie_id)).toHaveLength(1);
 
   const card = page.getByRole("heading", { level: 3, name: FILM.movie_title });
   await page.goto("/watchlist");

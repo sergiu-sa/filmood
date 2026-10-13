@@ -399,6 +399,27 @@ describe("GET /api/group/[code]/swipe", () => {
     expect(json.sessionStatus).toBe("swiping");
   });
 
+  // A deleted account takes its seat with it (014), so the last vote may already have been cast by everyone left.
+  it("finishes a swiping session once every remaining participant has swiped", async () => {
+    mockGetAuthUser.mockResolvedValue(mockUser);
+    const supabase = createMockSupabase([
+      { data: { id: "s-1", status: "swiping", movie_deck: fakeDeck, created_at: new Date().toISOString() }, error: null },
+      { data: { id: "p-1", has_swiped: true }, error: null },
+      { data: [], error: null },
+      { data: [{ id: "p-1", user_id: "user-1", nickname: "Sergiu", has_swiped: true }], error: null },
+      { data: null, error: null },
+    ]);
+    mockGetSupabaseAdmin.mockReturnValue(supabase);
+
+    const req = mockRequest("GET", "/api/group/ABC123/swipe");
+    const { json } = await readResponse(await getSwipeState(req, routeParams("ABC123")));
+    expect(json.sessionStatus).toBe("done");
+    const update = supabase.from.mock.results[4].value as { update: ReturnType<typeof vi.fn>; eq: ReturnType<typeof vi.fn> };
+    expect(supabase.from).toHaveBeenNthCalledWith(5, "sessions");
+    expect(update.update).toHaveBeenCalledWith({ status: "done" });
+    expect(update.eq).toHaveBeenCalledWith("status", "swiping");
+  });
+
   it("returns swipe state for done session", async () => {
     mockGetAuthUser.mockResolvedValue(mockUser);
     const supabase = createMockSupabase([

@@ -58,12 +58,13 @@ export function mapTMDBProvider(raw: TMDBProviderRaw): Provider {
  * isn't a positive integer. Used by `/api/movies/[id]/*` route handlers to
  * fail fast with a 400 instead of forwarding arbitrary strings into TMDB
  * URLs (where they'd 404 via a slower path, or worse, survive as path
- * traversal into an adjacent endpoint).
+ * traversal into an adjacent endpoint). Capped at Postgres's `integer` max,
+ * the type of every movie_id column, so a bigger id is a 400, not a 500.
  */
 export function parseTMDBId(raw: string): number | null {
   if (!/^\d+$/.test(raw)) return null;
   const id = Number(raw);
-  return Number.isSafeInteger(id) && id > 0 ? id : null;
+  return id > 0 && id <= 2147483647 ? id : null;
 }
 
 /**

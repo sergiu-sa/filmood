@@ -4,6 +4,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import SignupPage from "@/app/signup/page";
+import { PASSWORD_HINT } from "@/lib/validations";
 
 // ── Module mocks ───────────────────────────────────────────────────────────
 const mockPush = vi.fn();
@@ -69,11 +70,8 @@ async function fillSignupForm({
   const user = userEvent.setup();
   await user.type(screen.getByPlaceholderText("Your name"), name);
   await user.type(screen.getByPlaceholderText("you@example.com"), email);
-  // Password and confirm-password share the same placeholder pattern — grab all
-  const [pwdInput, confirmInput] =
-    screen.getAllByPlaceholderText(/character|re-enter/i);
-  await user.type(pwdInput, password);
-  await user.type(confirmInput, confirm);
+  await user.type(screen.getByLabelText(/^password$/i), password);
+  await user.type(screen.getByLabelText(/^confirm password$/i), confirm);
 }
 
 function submitForm() {
@@ -103,10 +101,13 @@ describe("SignupPage", () => {
     render(<SignupPage />);
     expect(screen.getByPlaceholderText("Your name")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("you@example.com")).toBeInTheDocument();
-    expect(
-      screen.getByPlaceholderText(/at least 8 characters/i),
-    ).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/re-enter/i)).toBeInTheDocument();
+  });
+
+  // The rule stays on screen while typing, which a placeholder doesn't, and is read with the field.
+  it("shows the password rule under the field", () => {
+    render(<SignupPage />);
+    expect(screen.getByLabelText(/^password$/i)).toHaveAccessibleDescription(PASSWORD_HINT);
   });
 
   // ── Validation errors ─────────────────────────────────────────────────
@@ -128,19 +129,17 @@ describe("SignupPage", () => {
     });
   });
 
-  it("shows password error when password is < 8 characters", async () => {
+  it("replaces the rule with what a password without a number is missing", async () => {
     render(<SignupPage />);
-    const user = userEvent.setup();
-    await user.type(screen.getByPlaceholderText("Your name"), "Alice");
-    await user.type(screen.getByPlaceholderText("you@example.com"), "a@b.com");
-    await user.type(
-      screen.getByPlaceholderText(/at least 8 characters/i),
-      "123",
-    );
+    await fillSignupForm({ password: "abcdefgh", confirm: "abcdefgh" });
     submitForm();
     await waitFor(() => {
-      expect(screen.getByText(/at least 8 characters/i)).toBeInTheDocument();
+      expect(screen.getByText("Add a number.")).toHaveStyle({ color: "var(--rose)" });
     });
+    const password = screen.getByLabelText(/^password$/i);
+    expect(password).toHaveAccessibleDescription("Add a number.");
+    expect(password).toHaveAttribute("aria-invalid", "true");
+    expect(mockSignUp).not.toHaveBeenCalled();
   });
 
   it("shows 'Passwords do not match' when confirm password differs", async () => {

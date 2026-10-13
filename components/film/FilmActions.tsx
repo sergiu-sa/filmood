@@ -99,10 +99,7 @@ export default function FilmActions({
             poster_path: posterPath,
           }),
         });
-        // 409 = already saved server-side; treat as success and keep saved=true.
-        if (!res.ok && res.status !== 409) {
-          throw new Error(`Add failed: ${res.status}`);
-        }
+        if (!res.ok) throw new Error(`Add failed: ${res.status}`);
       }
     } catch (err) {
       console.error("watchlist toggle failed", err);

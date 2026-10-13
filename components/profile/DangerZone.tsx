@@ -82,7 +82,7 @@ export default function DangerZone() {
       key: "delete",
       icon: "trash",
       title: "Delete account",
-      sub: "Removes your account, watchlist, mood history, preferences, and viewing log. Group sessions you joined remain visible to other participants but no longer linked to you.",
+      sub: "Removes your account, watchlist, mood history, preferences, and viewing log, the group sessions you host, and your place in the ones you joined.",
       label: "Delete",
       danger: true,
       confirmLabel: "Yes, delete my account",

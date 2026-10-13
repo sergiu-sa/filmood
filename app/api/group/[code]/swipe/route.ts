@@ -54,6 +54,14 @@ export async function GET(
     const deck: DeckFilm[] = session.movie_deck ?? [];
     const votedIds = new Set((swipes ?? []).map((s) => s.movie_id));
 
+    // Only a vote finishes a session, so one whose last unfinished player deleted their account (014 removes the
+    // seat) would never finish: everyone left is done and the results route keeps answering "not ready".
+    let sessionStatus = session.status;
+    if (sessionStatus === "swiping" && allParticipants?.length && allParticipants.every((p) => p.has_swiped)) {
+      await supabase.from("sessions").update({ status: "done" }).eq("id", session.id).eq("status", "swiping");
+      sessionStatus = "done";
+    }
+
     return NextResponse.json({
       sessionId: session.id,
       deck,
@@ -68,7 +76,7 @@ export async function GET(
         nickname: p.nickname,
         has_swiped: p.has_swiped,
       })),
-      sessionStatus: session.status,
+      sessionStatus,
     });
   } catch (error) {
     return internalError(error, "Failed to load swipe state");
