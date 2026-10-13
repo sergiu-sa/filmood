@@ -5,6 +5,7 @@ import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { getAuthHeaders } from "@/lib/getAuthToken";
 import Icon from "@/components/ui/Icon";
+import { passwordProblem, PASSWORD_HINT } from "@/lib/validations";
 
 interface Props {
   user: User;
@@ -59,8 +60,9 @@ export default function AccountSettings({ user }: Props) {
       setPwError("Enter your current password.");
       return;
     }
-    if (newPassword.length < 8) {
-      setPwError("Password must be at least 8 characters.");
+    const problem = passwordProblem(newPassword);
+    if (problem) {
+      setPwError(problem);
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -163,8 +165,11 @@ export default function AccountSettings({ user }: Props) {
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               className="w-full bg-transparent text-[13px] font-medium text-(--t1) outline-none"
-              placeholder="At least 8 characters"
+              aria-describedby="profile-newpw-hint"
             />
+            <p id="profile-newpw-hint" className="m-0 text-[10px] text-(--t3)">
+              {PASSWORD_HINT}
+            </p>
             <label
               htmlFor="profile-confirmpw"
               className="mt-1 text-[10px] text-(--t3)"

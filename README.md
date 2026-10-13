@@ -49,7 +49,7 @@ cp .env.example .env.local   # then fill in the four values
 npm run dev                  # http://localhost:3000
 ```
 
-`.env.local` needs `NEXT_PUBLIC_SUPABASE_URL` (the project URL, without `/rest/v1`), `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` and `TMDB_API_KEY`. The last two are server-only.
+`.env.local` needs `NEXT_PUBLIC_SUPABASE_URL` (the project URL, without `/rest/v1`), `NEXT_PUBLIC_SUPABASE_ANON_KEY` (the publishable key, `sb_publishable_…`), `SUPABASE_SERVICE_ROLE_KEY` (the secret key, `sb_secret_…`) and `TMDB_API_KEY`. The last two are server-only. The two key names predate Supabase's publishable and secret keys.
 
 **Database:** in the Supabase SQL editor, run every file in `supabase/migrations/` in numeric order. They create the watchlist, group session, mood history, streaming preference and film view tables and lock them down with row-level security. `supabase/seed_group_session.sql` adds optional sample data for trying the group flow.
 

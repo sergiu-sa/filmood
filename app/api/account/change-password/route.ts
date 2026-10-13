@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getAuthUser, getSupabaseAdmin } from "@/lib/supabase-server";
 import { internalError, badRequest } from "@/lib/api-errors";
-
-const MIN_LENGTH = 8;
+import { authErrorMessage } from "@/lib/auth-errors";
+import { passwordProblem } from "@/lib/validations";
 
 /**
  * Verify the caller knows their current password before we let them set a new one.
@@ -57,11 +57,11 @@ export async function POST(request: NextRequest) {
   if (typeof currentPassword !== "string" || currentPassword.length === 0) {
     return badRequest("currentPassword is required");
   }
-  if (typeof newPassword !== "string" || newPassword.length < MIN_LENGTH) {
-    return badRequest(
-      `newPassword must be a string of at least ${MIN_LENGTH} characters`,
-    );
+  if (typeof newPassword !== "string") {
+    return badRequest("newPassword is required");
   }
+  const problem = passwordProblem(newPassword);
+  if (problem) return badRequest(problem);
   if (newPassword === currentPassword) {
     return badRequest("New password must differ from the current one");
   }
@@ -89,6 +89,8 @@ export async function POST(request: NextRequest) {
       user.id,
       { password: newPassword },
     );
+    // Supabase applies its own password rule here too (422 weak_password), which may be stricter than ours.
+    if (error?.code === "weak_password") return badRequest(authErrorMessage(error));
     if (error) return internalError(error, "Failed to update password");
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -37,6 +37,7 @@ export default function GroupSwipePage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const { participantId, ready: participantIdReady } = useParticipantId();
   const redirectingRef = useRef(false);
+  const loadedRef = useRef(false);
 
   const fetchSwipeState = useCallback(async () => {
     if (redirectingRef.current) return;
@@ -55,6 +56,12 @@ export default function GroupSwipePage() {
       });
 
       if (!res.ok) {
+        // Gone after it loaded: the host deleted their account, which removes the session mid-game. Same as a disband.
+        if (res.status === 404 && loadedRef.current) {
+          redirectingRef.current = true;
+          router.replace("/group");
+          return;
+        }
         const data = await res.json();
         if (data.error === "Session is not in swiping phase") {
           const lobbyRes = await fetch(`/api/group/${code}`);
@@ -80,6 +87,7 @@ export default function GroupSwipePage() {
       }
 
       const data = await res.json();
+      loadedRef.current = true;
 
       if (data.sessionId && !sessionId) {
         setSessionId(data.sessionId);
@@ -138,6 +146,7 @@ export default function GroupSwipePage() {
     sessionId,
     channelPrefix: "swipe",
     onUpdate: fetchSwipeState,
+    onDelete: () => router.replace("/group"),
     paused: loading,
   });
 

@@ -11,6 +11,10 @@ export async function loginAsTestUser(page: Page) {
     );
   }
 
+  await loginAs(page, email, password);
+}
+
+export async function loginAs(page: Page, email: string, password: string) {
   await page.goto("/login");
   await page.getByLabel(/email address/i).fill(email);
   await page.getByLabel(/^password$/i).fill(password);

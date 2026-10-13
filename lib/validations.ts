@@ -11,6 +11,20 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Password is required"), // Can't be empty (no length check for login — the account already exists)
 });
 
+// Supabase's password rule (Auth → Password security: minimum 8, "Letters and digits"), checked before anything is
+// sent. Its letters are a–z and A–Z only, so [A-Za-z], not \p{L}: "æøåæøå12" is refused there too.
+export const PASSWORD_HINT = "At least 8 characters, with a letter and a number.";
+
+// Forms show the first message only, so the order of the checks is the order a person is asked to fix them.
+const passwordSchema = z
+  .string()
+  .min(8, "Use at least 8 characters.")
+  .regex(/[A-Za-z]/, "Add a letter.")
+  .regex(/[0-9]/, "Add a number.");
+
+export const passwordProblem = (password: string): string | null =>
+  passwordSchema.safeParse(password).error?.issues[0]?.message ?? null;
+
 // Signup Schema
 
 export const signupSchema = z
@@ -25,8 +39,7 @@ export const signupSchema = z
       .min(1, "Email is required")
       .email("Please enter a valid email"),
 
-    // 8-char floor matches resetPasswordSchema and /api/account/change-password.
-    password: z.string().min(8, "Password must be at least 8 characters"),
+    password: passwordSchema,
 
     confirmPassword: z.string().min(8, "Please confirm your password"),
   })
@@ -44,10 +57,9 @@ export const forgotPasswordSchema = z.object({
     .email("Please enter a valid email"),
 });
 
-// 8-char floor, matching signupSchema and /api/account/change-password.
 export const resetPasswordSchema = z
   .object({
-    password: z.string().min(8, "Password must be at least 8 characters"),
+    password: passwordSchema,
     confirmPassword: z.string().min(8, "Please confirm your password"),
   })
   .refine((data) => data.password === data.confirmPassword, {

@@ -3,11 +3,10 @@ import { getAuthUser, getSupabaseAdmin } from "@/lib/supabase-server";
 import { internalError } from "@/lib/api-errors";
 
 // DELETE /api/account/delete
-// Permanently deletes the signed-in user. Cascade rules on the Supabase
-// tables (watchlists / mood_history / streaming_preferences / film_views
-// all reference auth.users(id) on delete cascade) take care of associated
-// data. Group session participations are kept (they're shared with other
-// users) but the user_id column will be nulled by the cascade.
+// Permanently deletes the signed-in user. Every table that references
+// auth.users(id) cascades: watchlists, mood_history, streaming_preferences,
+// film_views, and since migration 014 the sessions they hosted (everyone else's
+// pages go back to /group) and their seat and votes in other sessions.
 export async function DELETE(request: NextRequest) {
   const user = await getAuthUser(request);
   if (!user) {

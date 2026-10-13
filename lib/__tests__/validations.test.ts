@@ -1,4 +1,4 @@
-import { loginSchema, signupSchema } from "@/lib/validations";
+import { loginSchema, signupSchema, resetPasswordSchema } from "@/lib/validations";
 
 describe("loginSchema", () => {
   it("accepts valid email and password", () => {
@@ -85,5 +85,30 @@ describe("signupSchema", () => {
   it("rejects invalid email in signup", () => {
     const result = signupSchema.safeParse({ ...validData, email: "bad-email" });
     expect(result.success).toBe(false);
+  });
+});
+
+// Supabase's "Letters and digits" rule counts only a–z and A–Z as letters, so æøå alone don't pass.
+describe.each([
+  ["signupSchema", (password: string) => signupSchema.safeParse({ name: "Sergiu", email: "s@example.com", password, confirmPassword: password })],
+  ["resetPasswordSchema", (password: string) => resetPasswordSchema.safeParse({ password, confirmPassword: password })],
+])("%s password rule", (_name, parse) => {
+  // The form shows the first message, so "abc" asks for the length before the number.
+  it.each([
+    ["abcdefgh", "Add a number."],
+    ["12345678", "Add a letter."],
+    ["æøåæøå12", "Add a letter."],
+    ["abcd123", "Use at least 8 characters."],
+    ["abc", "Use at least 8 characters."],
+  ])("rejects %s with %s", (password, message) => {
+    const result = parse(password);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.find((i) => i.path[0] === "password")?.message).toBe(message);
+    }
+  });
+
+  it("accepts abcd1234", () => {
+    expect(parse("abcd1234").success).toBe(true);
   });
 });

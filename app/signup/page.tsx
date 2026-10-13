@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/AuthProvider";
-import { signupSchema, type SignupFormData } from "@/lib/validations";
+import { PASSWORD_HINT, signupSchema, type SignupFormData } from "@/lib/validations";
 import { authErrorMessage } from "@/lib/auth-errors";
 import AuthCinemaPanel from "@/components/auth/AuthCinemaPanel";
 import { authInputClass } from "@/components/auth/authInputClass";
@@ -216,7 +216,8 @@ export default function SignupPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, password: e.target.value })
                   }
-                  placeholder="At least 8 characters"
+                  aria-describedby="signup-password-hint"
+                  aria-invalid={fieldErrors.password ? true : undefined}
                   className={authInputClass(!!fieldErrors.password)}
                   style={{ background: "var(--surface)", color: "var(--t1)" }}
                 />
@@ -230,14 +231,13 @@ export default function SignupPage() {
                   <Icon name={showPassword ? "eye-off" : "eye"} size={16} />
                 </button>
               </div>
-              {fieldErrors.password && (
-                <p
-                  className="mt-1 text-[11px]"
-                  style={{ color: "var(--rose)" }}
-                >
-                  {fieldErrors.password[0]}
-                </p>
-              )}
+              <p
+                id="signup-password-hint"
+                className="mt-1 text-[11px]"
+                style={{ color: fieldErrors.password ? "var(--rose)" : "var(--t3)" }}
+              >
+                {fieldErrors.password?.[0] ?? PASSWORD_HINT}
+              </p>
             </div>
 
             {/* Confirm password */}

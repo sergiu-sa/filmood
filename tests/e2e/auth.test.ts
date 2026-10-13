@@ -14,9 +14,7 @@ test.describe("Auth forms", () => {
       page.getByText(/name must be at least 3 characters/i),
     ).toBeVisible();
     await expect(page.getByText(/email is required/i)).toBeVisible();
-    await expect(
-      page.getByText(/password must be at least 8 characters/i),
-    ).toBeVisible();
+    await expect(page.getByText("Use at least 8 characters.")).toBeVisible();
   });
 
   test("signup form flags an invalid email format", async ({ page }) => {

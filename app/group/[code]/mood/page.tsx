@@ -56,6 +56,7 @@ export default function GroupMoodPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const { participantId } = useParticipantId();
   const redirectingRef = useRef(false);
+  const loadedRef = useRef(false);
   const buildingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Counts lock-in answers. A status read that started before one may have seen a submission
   // that a failed deck build then rolled back, so it mustn't move the page to waiting.
@@ -77,10 +78,17 @@ export default function GroupMoodPage() {
       const data = await res.json();
 
       if (!res.ok) {
+        // Gone after it loaded: the host deleted their account, which removes the session mid-game. Same as a disband.
+        if (res.status === 404 && loadedRef.current) {
+          redirectingRef.current = true;
+          router.replace("/group");
+          return;
+        }
         setError(data.error || "Failed to load session");
         return;
       }
 
+      loadedRef.current = true;
       setSessionInfo({ id: data.session.id, status: data.session.status });
 
       // Handle status transitions
@@ -155,6 +163,7 @@ export default function GroupMoodPage() {
     sessionId,
     channelPrefix: "mood",
     onUpdate: fetchState,
+    onDelete: () => router.replace("/group"),
     paused: loading || phase === "building",
   });
 
