@@ -102,6 +102,14 @@ export async function POST(request: NextRequest) {
       .select()
       .single();
 
+    // The same user's other join got past the seat lookup above at the same moment and inserted first;
+    // the unique (session_id, user_id) index (017) refused this one, so answer with that seat.
+    if (user && participantError?.code === "23505") {
+      const { participant: seat, error: seatErr } = await resolveParticipant(supabase, session.id, user, null);
+      if (seatErr) return seatErr;
+      return NextResponse.json({ sessionId: session.id, participantId: seat.id, code: upperCode });
+    }
+
     if (participantError || !participant) {
       return internalError(participantError, "Failed to join session");
     }

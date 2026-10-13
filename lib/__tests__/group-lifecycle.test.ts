@@ -207,6 +207,26 @@ describe("POST /api/group/join", () => {
     expect(inserts(supabase)).toBe(0);
   });
 
+  it("answers a join that loses the race to the same user's other join with the seat that one made", async () => {
+    mockGetAuthUser.mockResolvedValue(mockUser);
+    const supabase = createMockSupabase([
+      { data: { id: "s-1", status: "lobby", created_at: new Date().toISOString() }, error: null },
+      { data: null, error: null },
+      { data: null, error: null, count: 3 },
+      { data: null, error: { code: "23505", message: "duplicate key value violates unique constraint" } },
+      { data: { id: "part-1" }, error: null },
+    ]);
+    mockGetSupabaseAdmin.mockReturnValue(supabase);
+
+    const req = mockRequest("POST", "/api/group/join", { code: "ABC123" });
+    const { status, json } = await readResponse(await joinSession(req));
+    expect(status).toBe(200);
+    expect(json.participantId).toBe("part-1");
+    const readBack = supabase.from.mock.results[4].value;
+    expect(readBack.eq).toHaveBeenCalledWith("session_id", "s-1");
+    expect(readBack.eq).toHaveBeenCalledWith("user_id", mockUser.id);
+  });
+
   it("gives a guest who joins again with their stored id the same seat, under the name just typed", async () => {
     mockGetAuthUser.mockResolvedValue(null);
     const supabase = createMockSupabase([
