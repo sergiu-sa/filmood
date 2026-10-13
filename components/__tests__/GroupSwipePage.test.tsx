@@ -173,6 +173,34 @@ describe("Group swipe page", () => {
     expect(screen.queryByText(/didn't save/)).toBeNull();
   });
 
+  it("drops the note once a poll brings the vote back from the server", async () => {
+    // The last vote of the session: the server records it and finishes the session, but the answer is lost,
+    // and the retry is refused because the session is no longer swiping.
+    votedPositions = Array.from({ length: 14 }, (_, n) => n);
+    let calls = 0;
+    answerPost = async () => {
+      if (++calls === 1) throw new TypeError("Failed to fetch");
+      return Response.json({ error: "Session is not in swiping phase" }, { status: 400 });
+    };
+    render(<GroupSwipePage />);
+
+    await screen.findByText("Card 14");
+    press();
+    await screen.findByText("Your vote on Card 14 didn't save, so it's back in the deck.", {}, slow);
+
+    votedPositions = Array.from({ length: 15 }, (_, n) => n);
+    answerGet = async () => {
+      const state = await swipeState().json();
+      return Response.json({ ...state, sessionStatus: "done" });
+    };
+    await act(async () => {
+      await poll();
+    });
+
+    expect(await screen.findByRole("button", { name: /see group results/i })).toBeInTheDocument();
+    expect(screen.queryByText(/didn't save/)).toBeNull();
+  });
+
   it("numbers the card as the strip does after a gap", async () => {
     // 13 votes, none on 10 or 13: the strip counts votes, so this is film 14.
     votedPositions = [14, 12, 11, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0];

@@ -91,6 +91,25 @@ describe("SwipeDeck", () => {
     expect(screen.getByText("Title 1")).toBeInTheDocument();
   });
 
+  it("finds a vote taken back whose render lands after the last card's timer", () => {
+    const onVote = vi.fn();
+    const pair = deck.slice(0, 2);
+    const { rerender, container } = render(
+      <SwipeDeck deck={pair} votes={{ 1: "yes" }} onVote={onVote} disabled={false} />,
+    );
+
+    act(() => press());
+    // One act: the timer runs before React renders the rollback, so it still sees film 1's vote.
+    act(() => {
+      rerender(<SwipeDeck deck={pair} votes={{}} onVote={onVote} disabled={false} />);
+      vi.advanceTimersByTime(380);
+    });
+
+    expect(votedIds(onVote)).toEqual([2]);
+    expect(container).not.toBeEmptyDOMElement();
+    expect(screen.getByText("Title 1")).toBeInTheDocument();
+  });
+
   it("numbers the card by the votes cast, not its place in the deck", () => {
     render(<SwipeDeck deck={deck} votes={{ 1: "yes", 3: "no" }} onVote={vi.fn()} disabled={false} />);
 

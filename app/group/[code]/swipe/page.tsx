@@ -178,7 +178,6 @@ export default function GroupSwipePage() {
       // Optimistic: the card is already gone from SwipeDeck. A failed POST is
       // retried once; only if that fails too does the vote come out, which puts the card back.
       setMyVotes((prev) => ({ ...prev, [String(movieId)]: vote }));
-      setLostVoteId((lost) => (lost === movieId ? null : lost));
 
       const saved = async (res: Response) => {
         // 409: the server already has a vote on this film.
@@ -213,8 +212,11 @@ export default function GroupSwipePage() {
     { yes: 0, no: 0, maybe: 0 } as Record<SwipeVote, number>,
   );
 
+  // Only while the film has no vote: voting again, or a poll that finds the server had it after all, ends it.
   const lostTitle =
-    lostVoteId === null ? null : (deck.find((film) => film.id === lostVoteId)?.title ?? "this film");
+    lostVoteId === null || myVotes[String(lostVoteId)]
+      ? null
+      : (deck.find((film) => film.id === lostVoteId)?.title ?? "this film");
 
   const finishedCount = participants.filter((p) => p.has_swiped).length;
   const totalParticipants = participants.length;
@@ -396,7 +398,7 @@ export default function GroupSwipePage() {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          padding: "6px 20px 32px",
+          padding: "0 20px 32px",
           maxWidth: "820px",
           width: "100%",
           margin: "0 auto",
@@ -413,7 +415,7 @@ export default function GroupSwipePage() {
             gap: "8px",
             width: "100%",
             minHeight: "20px",
-            margin: "0 0 6px",
+            margin: "0 0 4px",
             fontSize: "13px",
             color: "var(--t2)",
           }}

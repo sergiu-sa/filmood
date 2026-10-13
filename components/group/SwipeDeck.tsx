@@ -84,8 +84,8 @@ export default function SwipeDeck({
   onVote,
   disabled,
 }: SwipeDeckProps) {
-  // Props only seed the index; after that it moves forward in the vote's timer,
-  // so a stale poll can never take the deck back to a card already swiped.
+  // Props only seed the index; after that it moves forward in the vote's timer (or, past
+  // the end, to a vote taken back), so a stale poll can never take the deck back to a card already swiped.
   const [currentIndex, setCurrentIndex] = useState(() => firstUnvoted(deck, votes, 0));
   const [exitDirection, setExitDirection] = useState<"left" | "right" | "up" | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
@@ -98,11 +98,19 @@ export default function SwipeDeck({
   // keydown listener can fire after a vote's timer, before React re-binds it.
   const indexRef = useRef(currentIndex);
   // The timer reads the newest votes: one taken back during the exit must still be offered.
-  // A layout effect, so no timer runs between a render and the ref catching up.
+  // A layout effect, so `indexRef` follows an index moved during render before any key reads it.
   const votesRef = useRef(votes);
   useLayoutEffect(() => {
     votesRef.current = votes;
-  }, [votes]);
+    indexRef.current = currentIndex;
+  }, [votes, currentIndex]);
+
+  // A rollback that renders after the last card's timer: that timer still saw the vote and ran off
+  // the end. Only from past the end, and polls only add votes, so a card on screen never changes.
+  if (currentIndex >= deck.length) {
+    const taken = firstUnvoted(deck, votes, 0);
+    if (taken < deck.length) setCurrentIndex(taken);
+  }
 
   const triggerVote = useCallback(
     (vote: SwipeVote) => {
