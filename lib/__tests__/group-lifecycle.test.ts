@@ -35,6 +35,9 @@ function routeParams(code: string) {
   return { params: Promise.resolve({ code }) };
 }
 
+// resolveParticipant refuses a guest id that isn't a uuid before it queries.
+const GUEST_ID = "0b9d3c4e-2f1a-4c8b-9e7d-6a5b4c3d2e1f";
+
 const inserts = (supabase: ReturnType<typeof createMockSupabase>) =>
   supabase.from.mock.results.filter((r) => (r.value.insert as ReturnType<typeof vi.fn>).mock.calls.length).length;
 
@@ -208,57 +211,59 @@ describe("POST /api/group/join", () => {
     mockGetAuthUser.mockResolvedValue(null);
     const supabase = createMockSupabase([
       { data: { id: "s-1", status: "lobby", created_at: new Date().toISOString() }, error: null },
-      { data: { id: "p-old" }, error: null },
+      { data: { id: GUEST_ID }, error: null },
       { data: null, error: null },
     ]);
     mockGetSupabaseAdmin.mockReturnValue(supabase);
 
-    const req = mockRequest("POST", "/api/group/join", { code: "ABC123", nickname: " Sergiu ", participantId: "p-old" });
+    const req = mockRequest("POST", "/api/group/join", { code: "ABC123", nickname: " Sergiu ", participantId: GUEST_ID });
     const { status, json } = await readResponse(await joinSession(req));
     expect(status).toBe(200);
-    expect(json.participantId).toBe("p-old");
+    expect(json.participantId).toBe(GUEST_ID);
     expect(inserts(supabase)).toBe(0);
 
     const seat = supabase.from.mock.results[1].value;
-    expect(seat.eq).toHaveBeenCalledWith("id", "p-old");
+    expect(seat.eq).toHaveBeenCalledWith("id", GUEST_ID);
     expect(seat.is).toHaveBeenCalledWith("user_id", null);
     const rename = supabase.from.mock.results[2].value;
     expect(rename.update).toHaveBeenCalledWith({ nickname: "Sergiu" });
-    expect(rename.eq).toHaveBeenCalledWith("id", "p-old");
+    expect(rename.eq).toHaveBeenCalledWith("id", GUEST_ID);
   });
 
   it("answers a failed rename with 500", async () => {
     mockGetAuthUser.mockResolvedValue(null);
     const supabase = createMockSupabase([
       { data: { id: "s-1", status: "lobby", created_at: new Date().toISOString() }, error: null },
-      { data: { id: "p-old" }, error: null },
+      { data: { id: GUEST_ID }, error: null },
       { data: null, error: { code: "57014", message: "timeout" } },
     ]);
     mockGetSupabaseAdmin.mockReturnValue(supabase);
 
-    const req = mockRequest("POST", "/api/group/join", { code: "ABC123", nickname: "Sergiu", participantId: "p-old" });
+    const req = mockRequest("POST", "/api/group/join", { code: "ABC123", nickname: "Sergiu", participantId: GUEST_ID });
     const { status } = await readResponse(await joinSession(req));
     expect(status).toBe(500);
   });
 
   it.each([
-    ["isn't a seat in this session", { data: null, error: null }],
-    ["isn't a uuid", { data: null, error: { code: "22P02", message: "invalid input syntax for type uuid" } }],
-  ])("seats a guest whose stored id %s", async (_, seatRead) => {
+    // A uuid is looked up; anything else is refused before the query.
+    ["isn't a seat in this session", GUEST_ID, [{ data: null, error: null }], 4],
+    ["isn't a uuid", "p-other-session", [], 3],
+  ])("seats a guest whose stored id %s", async (_, participantId, seatRead, queries) => {
     mockGetAuthUser.mockResolvedValue(null);
     const supabase = createMockSupabase([
       { data: { id: "s-1", status: "lobby", created_at: new Date().toISOString() }, error: null },
-      seatRead,
+      ...seatRead,
       { data: null, error: null, count: 3 },
       { data: { id: "part-new" }, error: null },
     ]);
     mockGetSupabaseAdmin.mockReturnValue(supabase);
 
-    const req = mockRequest("POST", "/api/group/join", { code: "ABC123", nickname: "Guest", participantId: "p-other-session" });
+    const req = mockRequest("POST", "/api/group/join", { code: "ABC123", nickname: "Guest", participantId });
     const { status, json } = await readResponse(await joinSession(req));
     expect(status).toBe(200);
     expect(json.participantId).toBe("part-new");
     expect(inserts(supabase)).toBe(1);
+    expect(supabase.from).toHaveBeenCalledTimes(queries);
   });
 
   it("answers a failed seat read with 500 instead of seating them again", async () => {
@@ -269,7 +274,7 @@ describe("POST /api/group/join", () => {
     ]);
     mockGetSupabaseAdmin.mockReturnValue(supabase);
 
-    const req = mockRequest("POST", "/api/group/join", { code: "ABC123", nickname: "Guest", participantId: "p-old" });
+    const req = mockRequest("POST", "/api/group/join", { code: "ABC123", nickname: "Guest", participantId: GUEST_ID });
     const { status } = await readResponse(await joinSession(req));
     expect(status).toBe(500);
     expect(inserts(supabase)).toBe(0);
@@ -398,6 +403,28 @@ describe("POST /api/group/[code]/ready", () => {
     const req = mockRequest("POST", "/api/group/ABC123/ready", {});
     const { status } = await readResponse(await toggleReady(req, routeParams("ABC123")));
     expect(status).toBe(500);
+  });
+
+  it.each([
+    ["a long string", "x".repeat(100_000)],
+    ["an array holding one", ["x".repeat(100_000)]],
+    // The filter would stringify it to the uuid and match that guest's seat.
+    ["an array holding a guest's uuid", [GUEST_ID]],
+    ["a uuid with more after it", `${GUEST_ID}x`],
+    ["a uuid with more before it", `x${GUEST_ID}`],
+  ])("refuses a guest id that is %s without asking the database", async (_, participantId) => {
+    mockGetAuthUser.mockResolvedValue(null);
+    // What a query would get: for the long ids, Supabase's gateway answers 414 with no error code.
+    const supabase = createMockSupabase([
+      { data: { id: "s-1", status: "lobby", created_at: new Date().toISOString() }, error: null },
+      { data: null, error: { message: "URI Too Long" } },
+    ]);
+    mockGetSupabaseAdmin.mockReturnValue(supabase);
+
+    const req = mockRequest("POST", "/api/group/ABC123/ready", { participantId });
+    const { status } = await readResponse(await toggleReady(req, routeParams("ABC123")));
+    expect(status).toBe(403);
+    expect(supabase.from).toHaveBeenCalledTimes(1);
   });
 
   it("returns 400 when session is not in lobby", async () => {
@@ -580,10 +607,11 @@ describe("DELETE /api/group/[code]/leave", () => {
     ]);
     mockGetSupabaseAdmin.mockReturnValue(supabase);
 
-    const req = mockRequest("DELETE", "/api/group/ABC123/leave", { participantId: "p-1" });
+    const hostRowId = "1e2d3c4b-5a69-4f87-8e9d-0a1b2c3d4e5f";
+    const req = mockRequest("DELETE", "/api/group/ABC123/leave", { participantId: hostRowId });
     const { status } = await readResponse(await leaveSession(req, routeParams("ABC123")));
     const participantQuery = supabase.from.mock.results[1].value;
-    expect(participantQuery.eq).toHaveBeenCalledWith("id", "p-1");
+    expect(participantQuery.eq).toHaveBeenCalledWith("id", hostRowId);
     expect(participantQuery.is).toHaveBeenCalledWith("user_id", null);
     expect(status).toBe(403);
     expect(supabase.from).toHaveBeenCalledTimes(2);

@@ -5,9 +5,14 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import GroupMoodPage from "@/app/group/[code]/mood/page";
 import { allMoods } from "@/lib/moodMap";
 
+// One router and one user for every render: a new one each time changes fetchState and refetches in a loop.
+const { router, host } = vi.hoisted(() => ({
+  router: { push: vi.fn(), replace: vi.fn(), back: vi.fn() },
+  host: { id: "u1" },
+}));
 vi.mock("next/navigation", () => ({
   useParams: () => ({ code: "K7F2AB" }),
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
+  useRouter: () => router,
 }));
 
 vi.mock("next/link", () => ({
@@ -21,7 +26,7 @@ vi.mock("next/link", () => ({
 // Signed in as the host (u1), or a guest holding p2's participant id.
 let signedIn = true;
 vi.mock("@/components/AuthProvider", () => ({
-  useAuth: () => ({ user: signedIn ? { id: "u1" } : null, loading: false }),
+  useAuth: () => ({ user: signedIn ? host : null, loading: false }),
 }));
 vi.mock("@/lib/useParticipantId", () => ({ useParticipantId: () => ({ participantId: signedIn ? null : "p2" }) }));
 vi.mock("@/lib/getAuthToken", () => ({
@@ -88,7 +93,7 @@ describe("Group mood page", () => {
     signedIn = true;
     answerPost = async () => Response.json({ allDone: false });
     answerGet = async () => session(selfSubmitted);
-    fetchMock.mockClear();
+    vi.clearAllMocks();
   });
 
   it("shows the session, its size and twelve unpressed toggle tiles", async () => {
@@ -248,6 +253,73 @@ describe("Group mood page", () => {
     await act(() => poll());
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("How do you feel?");
+  });
+
+  it("clears a failed first load's error once a poll gets through, and moves focus to the heading", async () => {
+    answerGet = async () => Response.json({ error: "Failed to load session" }, { status: 500 });
+    render(<GroupMoodPage />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Failed to load session");
+    screen.getByRole("button", { name: "Back to lobby" }).focus();
+
+    answerGet = async () => session(selfSubmitted);
+    await act(() => poll());
+    const heading = screen.getByRole("heading", { level: 1 });
+    expect(heading).toHaveTextContent("How do you feel?");
+    expect(heading).toHaveFocus();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("leaves focus where the person put it when a poll recovers from a failed first load", async () => {
+    answerGet = async () => Response.json({ error: "Failed to load session" }, { status: 500 });
+    render(<GroupMoodPage />);
+    await screen.findByRole("alert");
+    // Stands in for the layout's header, which stays mounted.
+    const nav = document.body.appendChild(document.createElement("button"));
+    try {
+      nav.focus();
+      answerGet = async () => session(selfSubmitted);
+      await act(() => poll());
+      expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("How do you feel?");
+      expect(nav).toHaveFocus();
+    } finally {
+      nav.remove();
+    }
+  });
+
+  it("keeps the error view when a poll after a failed first load answers 200 without a session", async () => {
+    answerGet = async () => Response.json({ error: "Failed to load session" }, { status: 500 });
+    render(<GroupMoodPage />);
+    await screen.findByRole("alert");
+
+    answerGet = async () => Response.json({});
+    await act(() => poll());
+    // The read throws before the page counts as loaded, so the catch still sets its message.
+    expect(screen.getByRole("alert")).toHaveTextContent("Something went wrong");
+    expect(screen.getByRole("button", { name: "Back to lobby" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+  });
+
+  it("ignores polls once Back to lobby is clicked, since the page is leaving", async () => {
+    answerGet = async () => Response.json({ error: "Failed to load session" }, { status: 500 });
+    render(<GroupMoodPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Back to lobby" }));
+    expect(router.push).toHaveBeenCalledWith("/group/K7F2AB");
+
+    answerGet = async () => session(selfSubmitted);
+    await act(() => poll());
+    expect(screen.getByRole("button", { name: "Back to lobby" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+  });
+
+  it("doesn't move focus to the heading when the recovering poll sends the page elsewhere", async () => {
+    answerGet = async () => Response.json({ error: "Failed to load session" }, { status: 500 });
+    render(<GroupMoodPage />);
+    await screen.findByRole("alert");
+
+    answerGet = async () => Response.json({ session: { id: "s1", status: "done" }, participants: [] });
+    await act(() => poll());
+    expect(router.replace).toHaveBeenCalledWith("/group/K7F2AB/results");
+    expect(screen.getByRole("heading", { level: 1 })).not.toHaveFocus();
   });
 
   it("says the session expired when a poll after loading answers 410", async () => {

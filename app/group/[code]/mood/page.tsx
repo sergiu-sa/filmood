@@ -84,13 +84,16 @@ export default function GroupMoodPage() {
           router.replace("/group");
           return;
         }
-        // Once loaded, error is the lock-in's alert: a 5xx is a blip the next poll catches up on, a 410 still shows.
+        // Once loaded, error is the lock-in's alert: a 5xx is a blip the next poll catches up on. A 410
+        // shows while picking; the waiting view has no alert.
         if (!loadedRef.current || res.status < 500) setError(data.error || "Failed to load session");
         return;
       }
 
-      loadedRef.current = true;
       setSessionInfo({ id: data.session.id, status: data.session.status });
+      // The first good load clears a failed one; after that, error belongs to the lock-in.
+      if (!loadedRef.current) setError(null);
+      loadedRef.current = true;
 
       // Handle status transitions
       if (data.session.status === "swiping") {
@@ -144,6 +147,18 @@ export default function GroupMoodPage() {
   useEffect(() => {
     if (phase === "waiting") headingRef.current?.focus();
   }, [phase]);
+
+  // A good poll after a failed first load unmounts the error view's "Back to lobby", so focus goes to the
+  // heading, unless the person has already moved it or the page is on its way elsewhere.
+  const errorViewRef = useRef(false);
+  const showsErrorView = !!error && !sessionInfo;
+  useEffect(() => {
+    if (showsErrorView) errorViewRef.current = true;
+    else if (errorViewRef.current) {
+      errorViewRef.current = false;
+      if (!redirectingRef.current && document.activeElement === document.body) headingRef.current?.focus();
+    }
+  }, [showsErrorView]);
 
   // Initial fetch
   useEffect(() => {
@@ -279,7 +294,7 @@ export default function GroupMoodPage() {
   }
 
   // Error state
-  if (error && !sessionInfo) {
+  if (showsErrorView) {
     return (
       <main
         className="lobby-grain min-h-screen font-sans"
@@ -290,9 +305,12 @@ export default function GroupMoodPage() {
           className="flex flex-col items-center justify-center gap-4"
           style={{ minHeight: "60vh", position: "relative", zIndex: 2 }}
         >
-          <p style={{ fontSize: "14px", color: "var(--rose)" }}>{error}</p>
+          <p role="alert" style={{ fontSize: "14px", color: "var(--rose)" }}>{error}</p>
           <button
-            onClick={() => router.push(`/group/${code}`)}
+            onClick={() => {
+              redirectingRef.current = true;
+              router.push(`/group/${code}`);
+            }}
             className="cursor-pointer font-sans"
             style={{
               padding: "10px 24px",

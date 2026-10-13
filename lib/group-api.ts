@@ -12,6 +12,8 @@ type ParticipantResult<T> =
   | { participant: T; error: null }
   | { participant: null; error: NextResponse };
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Validate the 6-char code, fetch the session, and check expiry.
  * Returns the session row or an error response ready to return.
@@ -93,6 +95,15 @@ export async function resolveParticipant<
     };
   }
 
+  const notInSession = () => ({
+    participant: null,
+    error: NextResponse.json({ error: "You are not in this session" }, { status: 403 }),
+  });
+
+  // Routes pass the body field or query param unchecked. Anything but a uuid string can't match a row,
+  // and a long one gets a 414 from Supabase's gateway with no error code, which would read as a failed read.
+  if (!user && (typeof participantId !== "string" || !UUID.test(participantId))) return notInSession();
+
   const baseQuery = supabase
     .from("session_participants")
     .select(selectFields)
@@ -104,24 +115,14 @@ export async function resolveParticipant<
     ? baseQuery.eq("user_id", user.id)
     : baseQuery.eq("id", participantId!).is("user_id", null);
 
-  const { data: participant, error: participantError } =
-    await filteredQuery.maybeSingle();
+  const { data: participant, error: participantError } = await filteredQuery.maybeSingle();
 
-  // A failed read isn't "not in this session": join would seat them a second time. 22P02 is a guest id
-  // that isn't a uuid, which can't match a row.
-  if (participantError && participantError.code !== "22P02") {
+  // A failed read isn't "not in this session": join would seat them a second time.
+  if (participantError) {
     return { participant: null, error: internalError(participantError, "Failed to load participant") };
   }
 
-  if (!participant) {
-    return {
-      participant: null,
-      error: NextResponse.json(
-        { error: "You are not in this session" },
-        { status: 403 },
-      ),
-    };
-  }
+  if (!participant) return notInSession();
 
   return { participant: participant as unknown as T, error: null };
 }

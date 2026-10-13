@@ -165,7 +165,7 @@ describe("POST /api/group/[code]/mood", () => {
 
   it("records nothing for a guest", async () => {
     mockGetAuthUser.mockResolvedValue(null);
-    const { status } = await lockIn({ moods: ["laugh"], participantId: "p-1" });
+    const { status } = await lockIn({ moods: ["laugh"], participantId: "0b9d3c4e-2f1a-4c8b-9e7d-6a5b4c3d2e1f" });
     expect(status).toBe(200);
     expect(afterCallbacks).toHaveLength(0);
   });
