@@ -85,9 +85,19 @@ function ResultsContent() {
       return;
     }
 
-    // Dropping src below re-runs this effect with the same query; don't fetch
-    // (and log the search) twice. Try again clears the guard.
-    if (!query || query === fetchedQuery.current?.query) return;
+    if (!query) return;
+
+    // src credits one search in search_events. Left in the URL, Back and reload
+    // would credit it again, so it goes even when the query is the one fetched.
+    if (src) {
+      const withoutSrc = new URLSearchParams(searchParams.toString());
+      withoutSrc.delete("src");
+      router.replace(`/results?${withoutSrc}`, { scroll: false });
+    }
+
+    // Dropping src re-runs this effect with the same query; don't fetch (and
+    // log the search) twice. Try again clears the guard.
+    if (query === fetchedQuery.current?.query) return;
     const ticket = { query };
     fetchedQuery.current = ticket;
     const params = new URLSearchParams(query);
@@ -127,14 +137,6 @@ function ResultsContent() {
     // A → B → back to A: A is still on screen, so don't fetch it again. The
     // guard now names A, so B's answer is dropped when it lands.
     if (!isShown(query)) fetchFilms();
-
-    // src credits this one search in search_events. Left in the URL, Back and
-    // reload would credit it again.
-    if (src) {
-      const withoutSrc = new URLSearchParams(searchParams.toString());
-      withoutSrc.delete("src");
-      router.replace(`/results?${withoutSrc}`, { scroll: false });
-    }
   }, [mood, text, seed, src, query, router, searchParams, attempt]);
 
   // Try again, and a saved-services edit that leaves the query as it is: the

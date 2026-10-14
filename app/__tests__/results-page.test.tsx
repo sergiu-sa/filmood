@@ -157,6 +157,18 @@ describe("results page", () => {
       expect(requests[1].src).toBe("direct");
     });
 
+    // "My services" confirmed unchanged: the same query with src=filter fetches nothing.
+    it("drops a src that leaves the query as it is, so a reload can't send it", async () => {
+      const go = open(A);
+      await vi.waitFor(() => expect(requests).toHaveLength(1));
+      await requests[0].answer("A film");
+      router.replace.mockClear();
+
+      go(`${A}&src=filter`);
+      expect(router.replace).toHaveBeenCalledWith(`/results?${A}`, { scroll: false });
+      expect(requests).toHaveLength(1);
+    });
+
     it("still searches when sessionStorage is blocked, as a new search", async () => {
       vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
         throw new Error("SecurityError");

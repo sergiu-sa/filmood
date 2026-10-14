@@ -61,7 +61,7 @@ export default function MoodHeader({ moods, interpreted, droppedMoods, filters, 
   const router = useRouter();
   const searchParams = useSearchParams();
   const isMobile = useMediaQuery("(max-width: 900px)");
-  // Open only on the URL it was opened on, so a picked tile, Back or Forward closes it. Not src: the page strips it once it has fetched.
+  // Open only on the URL it was opened on, so a picked tile, Back or Forward closes it. Not src: the page strips it.
   const here = new URLSearchParams(searchParams);
   here.delete("src");
   const urlKey = here.toString();
@@ -106,7 +106,7 @@ export default function MoodHeader({ moods, interpreted, droppedMoods, filters, 
   };
 
   const submitText = (value: string) => {
-    // The same query fetches nothing, and the page strips src only when it fetches, so src=text would stick.
+    // The same text is the same search: pushing it would only add a history entry.
     if (value === interpreted?.text) {
       closeEdit();
       return;

@@ -192,7 +192,7 @@ describe("settleTMDB", () => {
 
     expect(failure).toEqual({ reason: outage });
     expect(logged).toHaveBeenCalledTimes(1);
-    // Six callers share this line; the label says which one failed.
+    // Eight callers share this line; the label says which one failed.
     expect(logged).toHaveBeenCalledWith("Mood suggestions: 1 of 2 TMDB calls failed", [outage]);
   });
 });
