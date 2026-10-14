@@ -21,6 +21,29 @@ import { useDeviceServices } from "@/lib/useServices";
 
 const noSubscribe = () => () => {};
 
+const SEARCHED_KEY = "filmood:searched";
+
+// The queries this tab has had answered. sessionStorage: Back, Forward and
+// reload find them; a new tab (a shared link, a typed URL) starts empty.
+function searched(): unknown[] {
+  try {
+    const list: unknown = JSON.parse(sessionStorage.getItem(SEARCHED_KEY) ?? "[]");
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberSearch(query: string) {
+  try {
+    // The last 50 only: Back to an older one in the same tab logs it once more.
+    const list = [...searched().filter((q) => q !== query), query].slice(-50);
+    sessionStorage.setItem(SEARCHED_KEY, JSON.stringify(list));
+  } catch {
+    // Blocked storage: every visit reads as a new search, as before.
+  }
+}
+
 /* ── Results content ── */
 function ResultsContent() {
   const router = useRouter();
@@ -68,7 +91,10 @@ function ResultsContent() {
     const ticket = { query };
     fetchedQuery.current = ticket;
     const params = new URLSearchParams(query);
-    if (src) params.set("src", src);
+    // The route logs only a request with a src. No src in the URL and a query
+    // this tab has had answered: Back, Forward or a reload, not a new search.
+    const source = src ?? (searched().includes(query) ? null : "direct");
+    if (source) params.set("src", source);
 
     const fetchFilms = async () => {
       let failure = { message: "Failed to load films", retryable: true };
@@ -77,6 +103,8 @@ function ResultsContent() {
         const res = await fetch(`/api/movies/discover?${params}`, {
           headers: await getAuthHeaders(),
         });
+        // The route has logged it, even if the page has moved on since.
+        if (res.ok) rememberSearch(query);
         const data: DiscoverResponse & { error?: string } = await res.json();
         // Superseded (a related mood, then Back). The guard above skips re-runs,
         // so an effect cleanup flag could leave nothing fetching.

@@ -233,6 +233,7 @@ export async function getRegionalAvailability(
       ),
     ],
     (legs) => Object.keys(mergeRegions(legs)).length === 0,
+    "Where to watch",
   );
   const regions = mergeRegions(values);
 
@@ -377,6 +378,7 @@ export async function getRelatedFilms(
       tmdbJsonOptional<RawListResponse>(`/movie/${id}/similar`),
     ],
     (legs) => !legs.some((leg) => leg?.results?.some((f) => f.poster_path)),
+    "Related films",
   );
   const [rec, sim] = [0, 1].map((i) =>
     (values[i]?.results ?? []).filter((f) => f.poster_path),

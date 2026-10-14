@@ -7,7 +7,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export const SEARCH_SOURCES = ["direct", "tile", "text", "suggestion", "related", "shuffle", "filter"] as const;
 export type SearchSource = (typeof SEARCH_SOURCES)[number];
 
-export function parseSource(raw: string | null): SearchSource {
+/**
+ * null when there's no `src`: the results page sends none for a search it has
+ * already shown in this tab (Back, Forward, reload), and nothing is logged.
+ */
+export function parseSource(raw: string | null): SearchSource | null {
+  if (raw === null) return null;
   return SEARCH_SOURCES.find((s) => s === raw) ?? "direct";
 }
 

@@ -4,6 +4,7 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import ResultsNotice, { describeAsk } from "@/components/results/ResultsNotice";
 import { moodMap } from "@/lib/moodMap";
+import { ERA_OPTIONS, TIME_OPTIONS } from "@/lib/moodFilters";
 import type { AppliedFilters, DiscoverResponse } from "@/lib/types";
 
 vi.mock("next/link", () => ({
@@ -177,6 +178,23 @@ describe("describeAsk", () => {
     expect(ask({ time: "long" })).toBe("Nothing for Date night at 2 h 20 or longer right now.");
     expect(ask({ where: "mine" })).toBe("Nothing for Date night on your services right now.");
     expect(ask({ where: "norway" })).toBe("Nothing for Date night streaming in Norway right now.");
+  });
+
+  // The bounds live in lib/moodFilters.ts; moving one must move the sentence.
+  it("reads the bounds from the filter options", () => {
+    const [classic, modern] = ERA_OPTIONS;
+    const [short, , long] = TIME_OPTIONS;
+    const saved = [{ ...classic }, { ...modern }, { ...short }, { ...long }];
+    Object.assign(classic, { lte: "1979-12-31" });
+    Object.assign(modern, { gte: "1980-01-01", lte: "1999-12-31" });
+    Object.assign(short, { lte: 90 });
+    Object.assign(long, { gte: 150 });
+    try {
+      expect(ask({ era: "classic", time: "short" })).toBe("Nothing for Date night from before 1980, under 90 minutes right now.");
+      expect(ask({ era: "modern", time: "long" })).toBe("Nothing for Date night from 1980–1999, at 2 h 30 or longer right now.");
+    } finally {
+      [classic, modern, short, long].forEach((o, i) => Object.assign(o, saved[i]));
+    }
   });
 
   it("joins the clauses in the drawn order", () => {

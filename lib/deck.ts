@@ -149,6 +149,7 @@ export async function buildSharedDeck(
   const { values } = await settleTMDB(
     fetchResults,
     (pools) => assembleDeck(pools.filter((p) => p !== undefined)).length < MIN_DECK_SIZE,
+    "Group deck",
   );
   const deck = assembleDeck(values.filter((v) => v !== undefined));
 
