@@ -61,6 +61,19 @@ describe("GET /api/movies/search?type=all", () => {
     expect(body.films.map((f: { id: number }) => f.id)).toEqual([1, 2]);
     expect(logged).toHaveBeenCalledTimes(1);
   });
+
+  it("keeps the person's films when the title search fails, and logs the failure once", async () => {
+    mockTMDB({
+      "/search/movie": 503,
+      "/search/multi": { results: [person(7)] },
+      "/person/7/movie_credits": { cast: [film(10)] },
+    });
+
+    const { status, body } = await searchAll();
+    expect(status).toBe(200);
+    expect(ids(body)).toEqual([10]);
+    expect(logged).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("GET /api/movies/search?type=all, order", () => {
@@ -97,6 +110,18 @@ describe("GET /api/movies/search?type=all, order", () => {
     });
 
     expect(ids((await searchAll()).body)).toEqual([15, 12, 8, 5]);
+  });
+
+  // A film counted twice before the cut would hand its second place to a title.
+  it("counts a film acted in and directed once before the cut at 20", async () => {
+    const credits = Array.from({ length: 20 }, (_, i) => film(101 + i));
+    mockTMDB({
+      "/search/movie": { results: [film(1)] },
+      "/search/multi": { results: [person(7)] },
+      "/person/7/movie_credits": { cast: credits, crew: [directed(120)] },
+    });
+
+    expect(ids((await searchAll()).body)).toEqual(credits.map((f) => f.id).reverse());
   });
 
   it("fills the rest of the 20 with titles, without repeats", async () => {
