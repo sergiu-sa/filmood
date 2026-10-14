@@ -55,7 +55,7 @@ const HINT = "Two is the max — tap one of yours to swap it out.";
 
 const session = (selfSubmitted: boolean, extra: object[] = []) =>
   Response.json({
-    session: { id: "s1", status: "mood" },
+    session: { id: "s1", status: "mood", host_id: "u1" },
     participants: [
       { id: "p1", nickname: "Host", user_id: "u1", has_submitted: selfSubmitted },
       { id: "p2", nickname: "Guest", user_id: null, has_submitted: false },
@@ -72,8 +72,9 @@ function deferred() {
 let selfSubmitted = false;
 let answerPost: () => Promise<Response> = async () => Response.json({ allDone: false });
 let answerGet: () => Promise<Response> = async () => session(selfSubmitted);
+let answerPatch: () => Promise<Response> = async () => Response.json({ removed: 1 });
 const fetchMock = vi.fn(async (url: string, init?: RequestInit) =>
-  init?.method === "POST" ? answerPost() : answerGet(),
+  init?.method === "POST" ? answerPost() : init?.method === "PATCH" ? answerPatch() : answerGet(),
 );
 vi.stubGlobal("fetch", fetchMock);
 
@@ -93,6 +94,7 @@ describe("Group mood page", () => {
     signedIn = true;
     answerPost = async () => Response.json({ allDone: false });
     answerGet = async () => session(selfSubmitted);
+    answerPatch = async () => Response.json({ removed: 1 });
     vi.clearAllMocks();
   });
 
@@ -322,11 +324,232 @@ describe("Group mood page", () => {
     expect(screen.getByRole("heading", { level: 1 })).not.toHaveFocus();
   });
 
-  it("says the session expired when a poll after loading answers 410", async () => {
-    await renderPage();
-    answerGet = async () => Response.json({ error: "Session expired" }, { status: 410 });
+  const expired = async () => Response.json({ error: "Session expired" }, { status: 410 });
+  const endHeading = (name: string) => screen.findByRole("heading", { level: 1, name });
+
+  // The tiles, or the waiting list, would only lead to failures from here.
+  it.each([
+    ["while picking", false],
+    ["while waiting", true],
+  ])("ends on an expired session %s, with focus on why", async (_, submitted) => {
+    selfSubmitted = submitted;
+    render(<GroupMoodPage />);
+    await screen.findByRole("heading", { level: 1, name: submitted ? "Moods submitted" : "How do you feel?" });
+
+    answerGet = expired;
     await act(() => poll());
-    expect(screen.getByRole("alert")).toHaveTextContent("Session expired");
+    expect(await endHeading("This session has expired")).toHaveFocus();
+    expect(screen.getByText("Group sessions last 4 hours.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Lock in|^Pick a mood/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Back to group" }));
+    expect(router.push).toHaveBeenCalledWith("/group");
+  });
+
+  it("ends on an expired session at the first load", async () => {
+    answerGet = expired;
+    render(<GroupMoodPage />);
+    await endHeading("This session has expired");
+    expect(screen.queryByRole("button", { name: "Back to lobby" })).toBeNull();
+  });
+
+  it("ends when the lock-in finds the session expired", async () => {
+    await renderPage();
+    answerPost = expired;
+    fireEvent.click(tile("Need to laugh"));
+    fireEvent.click(lockIn());
+    await endHeading("This session has expired");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  // The host's PATCH removes the seat and moves the session on, so one poll usually sees both.
+  it("tells a player the host carried on without them, rather than follow the session to swiping", async () => {
+    await renderPage();
+    answerGet = async () =>
+      Response.json({
+        session: { id: "s1", status: "swiping", host_id: "u9" },
+        participants: [{ id: "p9", nickname: "Host", user_id: "u9", has_submitted: true }],
+      });
+    await act(() => poll());
+
+    expect(await endHeading("You're no longer in this session")).toHaveFocus();
+    expect(screen.getByText("The host carried on without you.")).toBeInTheDocument();
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("lets the host start without who's still choosing, after a confirm naming them", async () => {
+    selfSubmitted = true;
+    render(<GroupMoodPage />);
+    await screen.findByRole("heading", { level: 1, name: "Moods submitted" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Start without Guest" }));
+    const keep = screen.getByRole("button", { name: "Keep waiting" });
+    expect(keep).toHaveFocus();
+    expect(keep).toHaveAccessibleDescription("Guest hasn't locked in. Starting now removes them from the session.");
+    fireEvent.click(keep);
+    expect(screen.getByRole("button", { name: "Start without Guest" })).toHaveFocus();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "Start without Guest" }));
+    answerGet = async () =>
+      Response.json({
+        session: { id: "s1", status: "swiping", host_id: "u1" },
+        participants: [{ id: "p1", nickname: "Host", user_id: "u1", has_submitted: true }],
+      });
+    fireEvent.click(screen.getAllByRole("button", { name: "Start without Guest" }).at(-1)!);
+
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/group/K7F2AB/swipe"), { timeout: 3000 });
+    const patch = fetchMock.mock.calls.find(([, init]) => init?.method === "PATCH")!;
+    expect(patch[0]).toBe("/api/group/K7F2AB/mood");
+    expect(new Headers(patch[1]!.headers).get("Authorization")).toBe("Bearer t");
+    // Who the confirm named: the server refuses to remove anyone else.
+    expect(JSON.parse(String(patch[1]!.body))).toEqual({ participantIds: ["p2"] });
+  });
+
+  // The lock-in's answer shows the waiting view before any read has the host locked in.
+  it("waits for a read showing the host locked in before offering it", async () => {
+    await renderPage();
+    fireEvent.click(tile("Need to laugh"));
+    fireEvent.click(lockIn());
+    await screen.findByRole("heading", { level: 1, name: "Moods submitted" });
+    expect(screen.queryByRole("button", { name: /without/ })).toBeNull();
+
+    selfSubmitted = true;
+    await act(() => poll());
+    expect(screen.getByRole("button", { name: "Start without Guest" })).toBeInTheDocument();
+  });
+
+  it("names how many are left out when it's more than one, and shows a refusal with the list back", async () => {
+    selfSubmitted = true;
+    answerGet = async () => session(true, [{ id: "p3", nickname: "Third", user_id: null, has_submitted: false }]);
+    answerPatch = async () =>
+      Response.json({ error: "Someone else is still choosing. Check the list and try again." }, { status: 409 });
+    render(<GroupMoodPage />);
+    await screen.findByRole("heading", { level: 1, name: "Moods submitted" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Start without the 2 still choosing" }));
+    expect(screen.getByRole("button", { name: "Keep waiting" })).toHaveAccessibleDescription(
+      "Guest and Third haven't locked in. Starting now removes them from the session.",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Start without the 2 still choosing" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Someone else is still choosing.");
+    expect(screen.queryByRole("button", { name: "Keep waiting" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Start without the 2 still choosing" })).toHaveFocus();
+  });
+
+  // The others are all locked in, so only the host's picks can change; the route has cleared them.
+  it("gives the host the picker back when the deck would be too thin", async () => {
+    selfSubmitted = true;
+    answerPatch = async () => {
+      selfSubmitted = false;
+      return Response.json({ error: "Nothing fits everyone's picks together. Try a different mood." }, { status: 422 });
+    };
+    render(<GroupMoodPage />);
+    await screen.findByRole("heading", { level: 1, name: "Moods submitted" });
+
+    // The same h1 says "Moods submitted" until the picker renders; focus must land once it doesn't.
+    const readOnFocus: string[] = [];
+    screen.getByRole("heading", { level: 1 }).addEventListener("focus", (e) => {
+      readOnFocus.push((e.target as HTMLElement).textContent ?? "");
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Start without Guest" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start without Guest" }));
+
+    const heading = await screen.findByRole("heading", { level: 1, name: "How do you feel?" });
+    await waitFor(() => expect(heading).toHaveFocus());
+    expect(readOnFocus).toEqual(["How do you feel?"]);
+    expect(screen.getByRole("alert")).toHaveTextContent("Nothing fits everyone's picks together. Try a different mood.");
+    expect(lockIn()).toBeInTheDocument();
+  });
+
+  it("doesn't let a read from before the picks were handed back bring waiting back", async () => {
+    selfSubmitted = true;
+    render(<GroupMoodPage />);
+    await screen.findByRole("heading", { level: 1, name: "Moods submitted" });
+    fireEvent.click(screen.getByRole("button", { name: "Start without Guest" }));
+
+    const read = deferred();
+    answerGet = () => read.promise;
+    const polled = poll();
+    answerPatch = async () =>
+      Response.json({ error: "Nothing fits everyone's picks together. Try a different mood." }, { status: 422 });
+    fireEvent.click(screen.getByRole("button", { name: "Start without Guest" }));
+    await screen.findByRole("heading", { level: 1, name: "How do you feel?" });
+
+    read.resolve(session(true));
+    await act(() => polled);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("How do you feel?");
+  });
+
+  // A poll can change who's waiting while the confirm is open; it keeps the names it showed.
+  it("keeps the confirm's names when the list changes under it, and sends those", async () => {
+    selfSubmitted = true;
+    render(<GroupMoodPage />);
+    await screen.findByRole("heading", { level: 1, name: "Moods submitted" });
+    fireEvent.click(screen.getByRole("button", { name: "Start without Guest" }));
+
+    answerGet = async () =>
+      Response.json({
+        session: { id: "s1", status: "mood", host_id: "u1" },
+        participants: [
+          { id: "p1", nickname: "Host", user_id: "u1", has_submitted: true },
+          { id: "p2", nickname: "Guest", user_id: null, has_submitted: true },
+        ],
+      });
+    await act(() => poll());
+    expect(screen.getByRole("button", { name: "Keep waiting" })).toHaveAccessibleDescription(
+      "Guest hasn't locked in. Starting now removes them from the session.",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Start without Guest" }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true));
+    const patch = fetchMock.mock.calls.find(([, init]) => init?.method === "PATCH")!;
+    expect(JSON.parse(String(patch[1]!.body))).toEqual({ participantIds: ["p2"] });
+  });
+
+  it("sends one request when the confirm is pressed again while the first is pending", async () => {
+    selfSubmitted = true;
+    const pending = deferred();
+    answerPatch = () => pending.promise;
+    render(<GroupMoodPage />);
+    await screen.findByRole("heading", { level: 1, name: "Moods submitted" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Start without Guest" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start without Guest" }));
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(1));
+    fireEvent.click(screen.getByRole("button", { name: "Start without Guest" }));
+    await act(async () => {});
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(1);
+    pending.resolve(Response.json({ removed: 1 }));
+  });
+
+  // A seat deleted with its account leaves everyone else in, and no lock-in is coming to build the deck.
+  it("offers the host Start swiping, with no confirm, when nobody is left choosing", async () => {
+    selfSubmitted = true;
+    answerGet = async () =>
+      Response.json({
+        session: { id: "s1", status: "mood", host_id: "u1" },
+        participants: [{ id: "p1", nickname: "Host", user_id: "u1", has_submitted: true }],
+      });
+    render(<GroupMoodPage />);
+    await screen.findByText("Everyone is in");
+
+    fireEvent.click(screen.getByRole("button", { name: "Start swiping" }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true));
+    expect(screen.queryByRole("button", { name: "Keep waiting" })).toBeNull();
+  });
+
+  it("offers nobody else a way to start without the others", async () => {
+    signedIn = false;
+    answerGet = async () =>
+      Response.json({
+        session: { id: "s1", status: "mood", host_id: "u1" },
+        participants: [
+          { id: "p1", nickname: "Host", user_id: "u1", has_submitted: false },
+          { id: "p2", nickname: "Guest", user_id: null, has_submitted: true },
+        ],
+      });
+    render(<GroupMoodPage />);
+    await screen.findByRole("heading", { level: 1, name: "Moods submitted" });
+    expect(screen.queryByRole("button", { name: /without|Start swiping/ })).toBeNull();
   });
 
   it("hands the echo the picked tiles and the page's Era", async () => {

@@ -1,14 +1,64 @@
 import { after, NextRequest, NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
 import { MAX_MOODS, normalizeMoodKeys } from "@/lib/moodMap";
 import { MAX_TEXT_LENGTH, resolveMoodText } from "@/lib/moodResolver";
 import { isEraKey, isTimeKey } from "@/lib/moodFilters";
-import { resolveSession, resolveParticipant } from "@/lib/group-api";
+import { confirmedIds, resolveSession, resolveParticipant } from "@/lib/group-api";
 import { buildSharedDeck, DeckTooThinError } from "@/lib/deck";
 import { groupProviders } from "@/lib/watchProviders";
 import { badRequest, internalError } from "@/lib/api-errors";
 import { recordMoodPicks } from "@/lib/mood-history";
-import type { EraKey, TimeKey } from "@/lib/types";
+import type { EraKey, TempoKey, TimeKey } from "@/lib/types";
+
+interface PickRow {
+  mood_selections: string[] | null;
+  era: EraKey | null;
+  time: TimeKey | null;
+  tempo: TempoKey | null;
+  extra_keywords: number[] | null;
+  user_id: string | null;
+}
+
+const hasPicks = (p: { mood_selections: string[] | null }) => (p.mood_selections?.length ?? 0) > 0;
+
+// The deck of everyone who has locked in, on the services the signed-in ones among them saved.
+async function buildDeck(supabase: SupabaseClient, rows: PickRow[]) {
+  const locked = rows.filter(hasPicks);
+  return buildSharedDeck(locked, await groupProviders(supabase, locked.flatMap((p) => p.user_id ?? [])));
+}
+
+/**
+ * Hands a seat its picks back so its picker returns. Not once the session has moved on: a simultaneous lock-in
+ * may have built the deck, and the seat would then read as not locked in for a session already swiping. A failed
+ * re-read clears anyway: that mislabel is cosmetic, a skipped clear leaves the session wedged.
+ */
+async function reopenPicks(supabase: SupabaseClient, sessionId: string, seatId: string) {
+  const { data: current, error: readError } = await supabase
+    .from("sessions")
+    .select("status")
+    .eq("id", sessionId)
+    .single();
+  if (readError) console.error("Mood rollback re-read failed", readError);
+  if (!readError && current?.status !== "mood") return { movedOn: true, error: null };
+
+  const { error } = await supabase
+    .from("session_participants")
+    .update({ mood_selections: null })
+    .eq("id", seatId);
+  return { movedOn: false, error };
+}
+
+function deckFailed(error: unknown) {
+  // The picks have to change, so a retry as-is would build the same thin deck.
+  if (error instanceof DeckTooThinError) {
+    return NextResponse.json(
+      { error: "Nothing fits everyone's picks together. Try a different mood." },
+      { status: 422 },
+    );
+  }
+  return internalError(error, "Failed to build the movie deck");
+}
 
 // POST /api/group/[code]/mood
 // Save a participant's private mood selections (two at most) + optional
@@ -96,7 +146,7 @@ export async function POST(
       );
     }
 
-    const { error: updateError } = await supabase
+    const { data: savedRows, error: updateError } = await supabase
       .from("session_participants")
       .update({
         mood_selections: mergedMoods,
@@ -107,33 +157,23 @@ export async function POST(
         tempo: null,
         extra_keywords: extraKeywords,
       })
-      .eq("id", participant.id);
+      .eq("id", participant.id)
+      .select("id");
 
     if (updateError) {
       return internalError(updateError, "Failed to save moods");
     }
 
+    // The host started without this seat between its lookup and this update, which then changed no row.
+    if (!savedRows?.length) {
+      return NextResponse.json({ error: "You are not in this session" }, { status: 403 });
+    }
+
     // The moods above are now committed and the "already submitted" guard
     // would reject every retry, so any failure from here on would wedge the
     // session. Undo this participant's submission so the form comes back.
-    //
-    // Re-read the status first: a simultaneous submitter may have built the
-    // deck and moved the session on, in which case rolling back would show
-    // them as "hasn't submitted" for a session already swiping. A failed
-    // re-read rolls back anyway: that mislabel is cosmetic, a skipped rollback is the wedge.
     const rollBack = async () => {
-      const { data: current, error: readError } = await supabase
-        .from("sessions")
-        .select("status")
-        .eq("id", session.id)
-        .single();
-      if (readError) console.error("Mood rollback re-read failed", readError);
-      if (!readError && current?.status !== "mood") return;
-
-      const { error: rollbackError } = await supabase
-        .from("session_participants")
-        .update({ mood_selections: null })
-        .eq("id", participant.id);
+      const { error: rollbackError } = await reopenPicks(supabase, session.id, participant.id);
       // A failed rollback is the wedge this exists to prevent, so it must be
       // visible in the logs rather than swallowed.
       if (rollbackError) {
@@ -167,9 +207,7 @@ export async function POST(
     };
 
     const total = allParticipants.length;
-    const submitted = allParticipants.filter(
-      (p) => p.mood_selections && p.mood_selections.length > 0,
-    ).length;
+    const submitted = allParticipants.filter(hasPicks).length;
 
     if (submitted < total) {
       recordPicks();
@@ -183,17 +221,10 @@ export async function POST(
     // All done — build the shared deck using mood_selections plus refinements.
     let deck;
     try {
-      const userIds = allParticipants.flatMap((p) => p.user_id ?? []);
-      deck = await buildSharedDeck(allParticipants, await groupProviders(supabase, userIds));
+      deck = await buildDeck(supabase, allParticipants);
     } catch (deckError) {
       await rollBack();
-      if (deckError instanceof DeckTooThinError) {
-        return NextResponse.json(
-          { error: "Nothing fits everyone's picks together. Try a different mood." },
-          { status: 422 },
-        );
-      }
-      return internalError(deckError, "Failed to build the movie deck");
+      return deckFailed(deckError);
     }
 
     // Atomic compare-and-set on session.status so simultaneous last-submitters
@@ -221,5 +252,99 @@ export async function POST(
     });
   } catch (error) {
     return internalError(error, "Failed to submit moods");
+  }
+}
+
+// PATCH /api/group/[code]/mood
+// The host starts swiping without the players who haven't locked in: their seats go, and the deck is built
+// from everyone else's picks. With nobody left to remove (a seat deleted with its account), it builds the
+// deck that no last lock-in is coming to build.
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ code: string }> },
+) {
+  const user = await getAuthUser(request);
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { code } = await params;
+  const confirmed = confirmedIds(await request.json().catch(() => null));
+  if (!confirmed) return badRequest("participantIds must list who to leave out");
+
+  try {
+    const supabase = getSupabaseAdmin();
+
+    const { session, error: sessionErr } = await resolveSession<{
+      id: string; host_id: string; status: string; created_at: string;
+    }>(supabase, code, "id, host_id, status, created_at");
+    if (sessionErr) return sessionErr;
+
+    if (session.host_id !== user.id) {
+      return NextResponse.json({ error: "Only the host can start without the others" }, { status: 403 });
+    }
+
+    if (session.status !== "mood") {
+      return NextResponse.json({ error: "Session is not in mood selection phase" }, { status: 400 });
+    }
+
+    const { data: rows, error: loadErr } = await supabase
+      .from("session_participants")
+      .select("id, mood_selections, era, time, tempo, extra_keywords, user_id")
+      .eq("session_id", session.id);
+    if (loadErr || !rows) return internalError(loadErr, "Failed to load participants");
+
+    const hostSeat = rows.find((p) => p.user_id === user.id && hasPicks(p));
+    if (!hostSeat) {
+      return badRequest("Lock in your own picks first");
+    }
+
+    // The host confirmed names from a read up to 2 s old: anyone else without picks now (a lock-in that just
+    // rolled back) isn't removed unseen. Someone named who has locked in since just stays.
+    const leftOut = rows.filter((p) => !hasPicks(p)).map((p) => p.id);
+    if (leftOut.some((id) => !confirmed.has(id))) {
+      return NextResponse.json(
+        { error: "Someone else is still choosing. Check the list and try again." },
+        { status: 409 },
+      );
+    }
+
+    let deck;
+    try {
+      deck = await buildDeck(supabase, rows);
+    } catch (deckError) {
+      // Everyone staying has locked in, so only the host can still change the picks: theirs go, as a last
+      // lock-in's do, and the host's page shows the picker again.
+      if (deckError instanceof DeckTooThinError) {
+        const { movedOn, error: clearError } = await reopenPicks(supabase, session.id, hostSeat.id);
+        // Someone left out locked in during the build, and their lock-in started the session on its own deck.
+        if (movedOn) return NextResponse.json({ removed: 0 });
+        if (clearError) return internalError(clearError, "Failed to reopen your picks");
+      }
+      return deckFailed(deckError);
+    }
+
+    // Removed before the status moves, so a failed write can be retried. Only seats still without picks: one
+    // that locked in since the read keeps its seat, though its moods missed this deck.
+    if (leftOut.length > 0) {
+      const { error: removeErr } = await supabase
+        .from("session_participants")
+        .delete()
+        .in("id", leftOut)
+        .is("mood_selections", null);
+      if (removeErr) return internalError(removeErr, "Failed to remove players");
+    }
+
+    // The same compare-and-set as a last lock-in, which may be writing its own deck at this moment.
+    const { error: deckError } = await supabase
+      .from("sessions")
+      .update({ movie_deck: deck, status: "swiping" })
+      .eq("id", session.id)
+      .eq("status", "mood");
+    if (deckError) return internalError(deckError, "Failed to build deck");
+
+    return NextResponse.json({ removed: leftOut.length });
+  } catch (error) {
+    return internalError(error, "Failed to start without the others");
   }
 }

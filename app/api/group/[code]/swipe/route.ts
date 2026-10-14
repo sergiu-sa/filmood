@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
-import { resolveSession, resolveParticipant } from "@/lib/group-api";
-import { internalError } from "@/lib/api-errors";
+import { confirmedIds, resolveSession, resolveParticipant } from "@/lib/group-api";
+import { badRequest, internalError } from "@/lib/api-errors";
 import type { DeckFilm, SwipeVote } from "@/lib/types";
 
 const VALID_VOTES: SwipeVote[] = ["yes", "no", "maybe"];
@@ -22,8 +22,8 @@ export async function GET(
     const supabase = getSupabaseAdmin();
 
     const { session, error: sessionErr } = await resolveSession<{
-      id: string; status: string; movie_deck: DeckFilm[] | null; created_at: string;
-    }>(supabase, code, "id, status, movie_deck, created_at");
+      id: string; host_id: string; status: string; movie_deck: DeckFilm[] | null; created_at: string;
+    }>(supabase, code, "id, host_id, status, movie_deck, created_at");
     if (sessionErr) return sessionErr;
 
     if (session.status !== "swiping" && session.status !== "done") {
@@ -64,6 +64,7 @@ export async function GET(
 
     return NextResponse.json({
       sessionId: session.id,
+      hostId: session.host_id,
       deck,
       swipes: swipes ?? [],
       progress: {
@@ -229,5 +230,81 @@ export async function POST(
     });
   } catch (error) {
     return internalError(error, "Failed to record vote");
+  }
+}
+
+// PATCH /api/group/[code]/swipe
+// The host finishes the session without the players who haven't: their seats go, and the votes they cast
+// with them (001 cascades swipes), so the results count only who finished.
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ code: string }> },
+) {
+  const user = await getAuthUser(request);
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { code } = await params;
+  const confirmed = confirmedIds(await request.json().catch(() => null));
+  if (!confirmed) return badRequest("participantIds must list who to leave out");
+
+  try {
+    const supabase = getSupabaseAdmin();
+
+    const { session, error: sessionErr } = await resolveSession<{
+      id: string; host_id: string; status: string; created_at: string;
+    }>(supabase, code, "id, host_id, status, created_at");
+    if (sessionErr) return sessionErr;
+
+    if (session.host_id !== user.id) {
+      return NextResponse.json({ error: "Only the host can finish without the others" }, { status: 403 });
+    }
+
+    if (session.status !== "swiping") {
+      return NextResponse.json({ error: "Session is not in swiping phase" }, { status: 400 });
+    }
+
+    const { data: rows, error: loadErr } = await supabase
+      .from("session_participants")
+      .select("id, user_id, has_swiped")
+      .eq("session_id", session.id);
+    if (loadErr || !rows) return internalError(loadErr, "Failed to load participants");
+
+    if (!rows.some((p) => p.user_id === user.id && p.has_swiped)) {
+      return badRequest("Finish your own votes first");
+    }
+
+    // As on the mood page: nobody the host's confirm didn't name is removed.
+    const leftOut = rows.filter((p) => !p.has_swiped).map((p) => p.id);
+    if (leftOut.some((id) => !confirmed.has(id))) {
+      return NextResponse.json(
+        { error: "Someone else is still swiping. Check the list and try again." },
+        { status: 409 },
+      );
+    }
+
+    // Removed before the status moves, so a failed write can be retried. Only seats still unfinished: one that
+    // finished since the read keeps its seat and counts.
+    if (leftOut.length > 0) {
+      const { error: removeErr } = await supabase
+        .from("session_participants")
+        .delete()
+        .in("id", leftOut)
+        .eq("has_swiped", false);
+      if (removeErr) return internalError(removeErr, "Failed to remove players");
+    }
+
+    // Compare-and-set, as a last vote may be finishing the session at this moment.
+    const { error: doneError } = await supabase
+      .from("sessions")
+      .update({ status: "done" })
+      .eq("id", session.id)
+      .eq("status", "swiping");
+    if (doneError) return internalError(doneError, "Failed to finish session");
+
+    return NextResponse.json({ removed: leftOut.length });
+  } catch (error) {
+    return internalError(error, "Failed to finish without the others");
   }
 }

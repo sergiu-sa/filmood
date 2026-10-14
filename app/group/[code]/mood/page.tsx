@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState, useCallback, useRef } from "react";
+import { flushSync } from "react-dom";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { useParticipantId } from "@/lib/useParticipantId";
@@ -16,6 +17,8 @@ import FilterGroup from "@/components/mood/FilterGroup";
 import MoodEcho from "@/components/mood/MoodEcho";
 import MoodGrid from "@/components/mood/MoodGrid";
 import MoodTile from "@/components/mood/MoodTile";
+import CarryOn from "@/components/group/CarryOn";
+import SessionEnded, { type EndReason } from "@/components/group/SessionEnded";
 import Icon from "@/components/ui/Icon";
 
 type Phase = "selecting" | "submitting" | "waiting" | "building";
@@ -25,10 +28,12 @@ const MAX_HINT = "Two is the max — tap one of yours to swap it out.";
 interface SessionInfo {
   id: string;
   status: string;
+  hostId: string;
 }
 
 interface ParticipantProgress {
   id: string;
+  userId: string | null;
   nickname: string;
   hasSubmitted: boolean;
 }
@@ -47,6 +52,7 @@ export default function GroupMoodPage() {
   const [participants, setParticipants] = useState<ParticipantProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [ended, setEnded] = useState<EndReason | null>(null);
   const [era, setEra] = useState<EraKey | null>(null);
   const [time, setTime] = useState<TimeKey | null>(null);
   const [moodText, setMoodText] = useState("");
@@ -57,6 +63,8 @@ export default function GroupMoodPage() {
   const { participantId } = useParticipantId();
   const redirectingRef = useRef(false);
   const loadedRef = useRef(false);
+  /** This player's seat has been in a read, so a read without it means they were removed. */
+  const seatedRef = useRef(false);
   const buildingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Counts lock-in answers. A status read that started before one may have seen a submission
   // that a failed deck build then rolled back, so it mustn't move the page to waiting.
@@ -84,16 +92,36 @@ export default function GroupMoodPage() {
           router.replace("/group");
           return;
         }
-        // Once loaded, error is the lock-in's alert: a 5xx is a blip the next poll catches up on. A 410
-        // shows while picking; the waiting view has no alert.
+        // Past the 4 h limit every lock-in would fail too. redirectingRef stops the polls.
+        if (res.status === 410) {
+          redirectingRef.current = true;
+          setEnded("expired");
+          return;
+        }
+        // Once loaded, error is the lock-in's alert: a 5xx is a blip the next poll catches up on.
         if (!loadedRef.current || res.status < 500) setError(data.error || "Failed to load session");
         return;
       }
 
-      setSessionInfo({ id: data.session.id, status: data.session.status });
+      setSessionInfo({ id: data.session.id, status: data.session.status, hostId: data.session.host_id });
       // The first good load clears a failed one; after that, error belongs to the lock-in.
       if (!loadedRef.current) setError(null);
       loadedRef.current = true;
+
+      const self = data.participants.find(
+        (p: { user_id: string | null; id: string; has_submitted: boolean }) => {
+          if (user) return p.user_id === user.id;
+          return p.id === participantId;
+        },
+      );
+      // The host started without this player. Checked before the status, since the read that first
+      // lacks the seat has usually seen the session move to swiping too.
+      if (self) seatedRef.current = true;
+      else if (seatedRef.current) {
+        redirectingRef.current = true;
+        setEnded("removed");
+        return;
+      }
 
       // Handle status transitions
       if (data.session.status === "swiping") {
@@ -117,21 +145,14 @@ export default function GroupMoodPage() {
 
       // Map participants to progress
       const progress: ParticipantProgress[] = data.participants.map(
-        (p: { id: string; nickname: string; has_submitted: boolean }) => ({
+        (p: { id: string; user_id: string | null; nickname: string; has_submitted: boolean }) => ({
           id: p.id,
+          userId: p.user_id,
           nickname: p.nickname,
           hasSubmitted: p.has_submitted,
         }),
       );
       setParticipants(progress);
-
-      // Check if current user already submitted
-      const self = data.participants.find(
-        (p: { user_id: string | null; id: string; has_submitted: boolean }) => {
-          if (user) return p.user_id === user.id;
-          return p.id === participantId;
-        },
-      );
 
       if (self?.has_submitted && lockIns === lockInsRef.current) {
         setPhase((prev) => prev === "building" ? prev : "waiting");
@@ -180,7 +201,7 @@ export default function GroupMoodPage() {
     channelPrefix: "mood",
     onUpdate: fetchState,
     onDelete: () => router.replace("/group"),
-    paused: loading || phase === "building",
+    paused: loading || phase === "building" || ended !== null,
   });
 
   const toggleMood = (key: string) => {
@@ -238,6 +259,11 @@ export default function GroupMoodPage() {
       const data = await res.json();
 
       if (!res.ok) {
+        if (res.status === 410) {
+          redirectingRef.current = true;
+          setEnded("expired");
+          return;
+        }
         setError(data.error || "Failed to submit moods");
         setPhase("selecting");
         return;
@@ -260,6 +286,10 @@ export default function GroupMoodPage() {
 
   const submittedCount = participants.filter((p) => p.hasSubmitted).length;
   const totalCount = participants.length;
+  // Only once a read shows the host locked in: the route refuses before that, and the waiting view
+  // shows as soon as the lock-in answers.
+  const hostCanCarryOn =
+    !!user && sessionInfo?.hostId === user.id && participants.some((p) => p.userId === user.id && p.hasSubmitted);
 
   // Loading state
   if (loading || authLoading) {
@@ -292,6 +322,8 @@ export default function GroupMoodPage() {
       </main>
     );
   }
+
+  if (ended) return <SessionEnded reason={ended} />;
 
   // Error state
   if (showsErrorView) {
@@ -769,6 +801,25 @@ export default function GroupMoodPage() {
                     </div>
                   ))}
                 </div>
+
+                {hostCanCarryOn && (
+                  <CarryOn
+                    code={code}
+                    phase="mood"
+                    waitingOn={participants.filter((p) => !p.hasSubmitted)}
+                    onDone={fetchState}
+                    onPickAgain={(message) => {
+                      // As a failed lock-in: a read from before the route cleared the picks mustn't bring
+                      // waiting back. Rendered before the focus, so the heading is read out as the picker's.
+                      lockInsRef.current += 1;
+                      flushSync(() => {
+                        setError(message);
+                        setPhase("selecting");
+                      });
+                      headingRef.current?.focus();
+                    }}
+                  />
+                )}
               </div>
             )}
           </div>

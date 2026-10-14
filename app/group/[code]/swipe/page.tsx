@@ -8,9 +8,15 @@ import { useGroupRealtime } from "@/lib/useGroupRealtime";
 import { getAuthHeaders } from "@/lib/getAuthToken";
 import Breadcrumb from "@/components/Breadcrumb";
 import SwipeDeck from "@/components/group/SwipeDeck";
+import CarryOn from "@/components/group/CarryOn";
+import SessionEnded, { type EndReason } from "@/components/group/SessionEnded";
 import type { DeckFilm, SwipeVote } from "@/lib/types";
 import { AVATAR_COLORS } from "@/lib/constants";
 import Icon from "@/components/ui/Icon";
+
+// Answers after which every vote would fail: past the 4 h limit, or the host carried on without this player.
+const endReason = (status: number): EndReason | null =>
+  status === 410 ? "expired" : status === 403 ? "removed" : null;
 
 interface ParticipantStatus {
   id: string;
@@ -36,6 +42,8 @@ export default function GroupSwipePage() {
   const [allDone, setAllDone] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [ended, setEnded] = useState<EndReason | null>(null);
+  const [hostId, setHostId] = useState<string | null>(null);
 
   const [sessionId, setSessionId] = useState<string | null>(null);
   const { participantId, ready: participantIdReady } = useParticipantId();
@@ -48,7 +56,9 @@ export default function GroupSwipePage() {
 
     try {
       const headers = await getAuthHeaders();
-      const isGuest = !headers.Authorization;
+      // From the signed-in user, not the token: getSession() comes back empty when an expired token can't
+      // refresh, and the stored id is then this player's signed-in seat, which a guest id can't act for (403).
+      const isGuest = !user;
       const pidParam =
         isGuest && participantId
           ? `?participantId=${participantId}`
@@ -63,6 +73,14 @@ export default function GroupSwipePage() {
         if (res.status === 404 && loadedRef.current) {
           redirectingRef.current = true;
           router.replace("/group");
+          return;
+        }
+        // A 403 before the deck loads is a stranger or another session's guest id, not a removal: it keeps
+        // the error view. redirectingRef stops the polls.
+        const reason = endReason(res.status);
+        if (reason === "expired" || (reason && loadedRef.current)) {
+          redirectingRef.current = true;
+          setEnded(reason);
           return;
         }
         const data = await res.json();
@@ -97,6 +115,7 @@ export default function GroupSwipePage() {
       }
 
       setDeck(data.deck);
+      setHostId(data.hostId);
       setParticipants(data.participants);
       setSessionStatus(data.sessionStatus);
 
@@ -140,19 +159,29 @@ export default function GroupSwipePage() {
   // Not state: a vote taken back has to bring the deck back.
   const isDone = finished || (deck.length > 0 && Object.keys(myVotes).length >= deck.length);
 
+  // The waiting view goes when everyone is done, taking the host's focused "Finish without" with it. Only
+  // after it was on screen: a reload of a finished session leaves focus at the top.
+  const resultsRef = useRef<HTMLButtonElement>(null);
+  const waitedRef = useRef(false);
+  useEffect(() => {
+    if (!isDone) return;
+    if (!allDone) waitedRef.current = true;
+    else if (waitedRef.current && document.activeElement === document.body) resultsRef.current?.focus();
+  }, [allDone, isDone]);
+
   // Realtime + polling
   useGroupRealtime({
     sessionId,
     channelPrefix: "swipe",
     onUpdate: fetchSwipeState,
     onDelete: () => router.replace("/group"),
-    paused: loading,
+    paused: loading || ended !== null,
   });
 
   const sendVote = useCallback(
     async (movieId: number, vote: SwipeVote) => {
       const headers = await getAuthHeaders();
-      const isGuest = !headers.Authorization;
+      const isGuest = !user;
 
       const body: { movieId: number; vote: SwipeVote; participantId?: string } = {
         movieId,
@@ -170,7 +199,7 @@ export default function GroupSwipePage() {
 
       return res;
     },
-    [code, participantId],
+    [code, participantId, user],
   );
 
   const handleVote = useCallback(
@@ -182,6 +211,13 @@ export default function GroupSwipePage() {
       const saved = async (res: Response) => {
         // 409: the server already has a vote on this film.
         if (res.status === 409) return true;
+        // Not saved, but the end screen replaces the deck, so neither a retry nor the card coming back helps.
+        const reason = endReason(res.status);
+        if (reason) {
+          redirectingRef.current = true;
+          setEnded(reason);
+          return true;
+        }
         if (!res.ok) return false;
         const data = await res.json();
         if (data.participantDone) setFinished(true);
@@ -218,6 +254,9 @@ export default function GroupSwipePage() {
       ? null
       : (deck.find((film) => film.id === lostVoteId)?.title ?? "this film");
 
+  // Only once a read shows the host finished: the route refuses before that, and the waiting view
+  // shows as soon as the last card is voted.
+  const hostCanCarryOn = !!user && hostId === user.id && participants.some((p) => p.user_id === user.id && p.has_swiped);
   const finishedCount = participants.filter((p) => p.has_swiped).length;
   const totalParticipants = participants.length;
   const swiped = Object.keys(myVotes).length;
@@ -252,6 +291,8 @@ export default function GroupSwipePage() {
       </main>
     );
   }
+
+  if (ended) return <SessionEnded reason={ended} />;
 
   // Error
   if (error && deck.length === 0) {
@@ -601,9 +642,19 @@ export default function GroupSwipePage() {
                     </div>
                   ))}
                 </div>
+
+                {hostCanCarryOn && (
+                  <CarryOn
+                    code={code}
+                    phase="swipe"
+                    waitingOn={participants.filter((p) => !p.has_swiped)}
+                    onDone={fetchSwipeState}
+                  />
+                )}
               </div>
             ) : (
               <button
+                ref={resultsRef}
                 className="font-sans cursor-pointer"
                 onClick={() => router.replace(`/group/${code}/results`)}
                 style={{
