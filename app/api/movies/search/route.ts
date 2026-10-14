@@ -22,47 +22,50 @@ async function searchByTitle(query: string) {
   return (data.results ?? []).slice(0, 20).map(mapTMDBFilm);
 }
 
-function topByPopularity(credits: RawCredit[]) {
-  return [...credits]
-    .sort((a, b) => b.popularity - a.popularity)
-    .slice(0, 20)
-    .map(mapTMDBFilm);
+function uniqueById<T extends { id: number }>(items: T[]) {
+  const seen = new Set<number>();
+  return items.filter((item) => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
 }
 
 /**
- * Look the person up once and return both role slices. `type=all` needs acting
- * and directing credits from the same payload — asking per role would repeat
- * the person lookup and the credits fetch for an identical query, which the
- * uncached search path cannot absorb.
+ * The first person TMDB's all-types search finds, and their films: acting and
+ * directing together by popularity, so a director's films aren't cut for their
+ * acting roles. `leads` is true when TMDB ranks that person above every film:
+ * a person-only search always finds someone ("heat" finds a Percy Heat).
  */
-async function searchPersonCredits(query: string) {
-  const personData = await tmdbJson<{ results?: { id: number }[] }>(
-    "/search/person",
+async function searchPerson(query: string) {
+  const { results = [] } = await tmdbJson<{ results?: { id: number; media_type: string }[] }>(
+    "/search/multi",
     { language: "en-US", query, page: "1", include_adult: "false" },
     UNCACHED,
   );
-
-  const person = personData.results?.[0];
-  if (!person) return { actor: [], director: [] };
+  const person = results.find((r) => r.media_type === "person");
+  if (!person) return { leads: false, films: [] };
 
   const credits = await tmdbJson<{ cast?: RawCredit[]; crew?: RawCredit[] }>(
     `/person/${person.id}/movie_credits`,
     { language: "en-US" },
     UNCACHED,
   );
+  const directed = (credits.crew ?? []).filter((c) => c.job === "Director");
 
   return {
-    actor: topByPopularity(credits.cast ?? []),
-    director: topByPopularity(
-      (credits.crew ?? []).filter((c) => c.job === "Director"),
-    ),
+    // TV is skipped: this app lists films only.
+    leads: results.find((r) => r.media_type !== "tv") === person,
+    films: uniqueById([...(credits.cast ?? []), ...directed].sort((a, b) => b.popularity - a.popularity))
+      .slice(0, 20)
+      .map(mapTMDBFilm),
   };
 }
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("query");
-  const type = searchParams.get("type") ?? "title"; // "title" | "actor" | "director"
+  const type = searchParams.get("type") ?? "title"; // "title" | "all"
 
   if (!query || query.trim() === "") {
     return badRequest("Missing 'query' query parameter");
@@ -73,30 +76,16 @@ export async function GET(request: NextRequest) {
   try {
     let films;
 
-    if (type === "actor") {
-      films = (await searchPersonCredits(trimmed)).actor;
-    } else if (type === "director") {
-      films = (await searchPersonCredits(trimmed)).director;
-    } else if (type === "all") {
+    if (type === "all") {
       // One leg failing must not discard the other's completed lookups.
       // Nothing from either leg plus a real failure is an outage, not "no hits".
-      const { values } = await settleTMDB<Film[]>(
-        [
-          searchByTitle(trimmed),
-          searchPersonCredits(trimmed).then((p) => [...p.actor, ...p.director]),
-        ],
-        (legs) => legs.every((leg) => !leg?.length),
+      const { values } = await settleTMDB<{ films: Film[]; leads?: boolean }>(
+        [searchByTitle(trimmed).then((films) => ({ films })), searchPerson(trimmed)],
+        (legs) => legs.every((leg) => !leg?.films.length),
       );
-
-      const seen = new Set<number>();
-      films = values
-        .flatMap((leg) => leg ?? [])
-        .filter((f: { id: number }) => {
-          if (seen.has(f.id)) return false;
-          seen.add(f.id);
-          return true;
-        })
-        .slice(0, 20);
+      const [titles, person] = values;
+      const legs = person?.leads ? [person, titles] : [titles, person];
+      films = uniqueById(legs.flatMap((leg) => leg?.films ?? [])).slice(0, 20);
     } else {
       films = await searchByTitle(trimmed);
     }
