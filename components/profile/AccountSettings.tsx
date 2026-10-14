@@ -44,10 +44,12 @@ export default function AccountSettings({ user }: Props) {
 
   async function saveProfile() {
     setSaving(true);
-    const { error } = await supabase.auth.updateUser({
+    const { data, error } = await supabase.auth.updateUser({
       ...(name !== savedName(user) ? { data: { full_name: name } } : {}),
       ...(email !== user.email ? { email } : {}),
     });
+    // A cleared name falls back to the signup one in the hero, so the field shows it too.
+    if (data.user) setName(savedName(data.user));
     setSaving(false);
     setEditingName(false);
     setEditingEmail(false);
