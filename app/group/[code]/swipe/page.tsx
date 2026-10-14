@@ -56,7 +56,9 @@ export default function GroupSwipePage() {
 
     try {
       const headers = await getAuthHeaders();
-      const isGuest = !headers.Authorization;
+      // From the signed-in user, not the token: getSession() comes back empty when an expired token can't
+      // refresh, and the stored id is then this player's signed-in seat, which a guest id can't act for (403).
+      const isGuest = !user;
       const pidParam =
         isGuest && participantId
           ? `?participantId=${participantId}`
@@ -157,6 +159,12 @@ export default function GroupSwipePage() {
   // Not state: a vote taken back has to bring the deck back.
   const isDone = finished || (deck.length > 0 && Object.keys(myVotes).length >= deck.length);
 
+  // The waiting view goes when everyone is done, taking the host's focused "Finish without" with it.
+  const resultsRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (allDone && isDone && document.activeElement === document.body) resultsRef.current?.focus();
+  }, [allDone, isDone]);
+
   // Realtime + polling
   useGroupRealtime({
     sessionId,
@@ -169,7 +177,7 @@ export default function GroupSwipePage() {
   const sendVote = useCallback(
     async (movieId: number, vote: SwipeVote) => {
       const headers = await getAuthHeaders();
-      const isGuest = !headers.Authorization;
+      const isGuest = !user;
 
       const body: { movieId: number; vote: SwipeVote; participantId?: string } = {
         movieId,
@@ -187,7 +195,7 @@ export default function GroupSwipePage() {
 
       return res;
     },
-    [code, participantId],
+    [code, participantId, user],
   );
 
   const handleVote = useCallback(
@@ -635,13 +643,14 @@ export default function GroupSwipePage() {
                   <CarryOn
                     code={code}
                     phase="swipe"
-                    waitingOn={participants.filter((p) => !p.has_swiped).map((p) => p.nickname)}
+                    waitingOn={participants.filter((p) => !p.has_swiped)}
                     onDone={fetchSwipeState}
                   />
                 )}
               </div>
             ) : (
               <button
+                ref={resultsRef}
                 className="font-sans cursor-pointer"
                 onClick={() => router.replace(`/group/${code}/results`)}
                 style={{

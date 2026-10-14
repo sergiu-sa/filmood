@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { User } from "@supabase/supabase-js";
 import { isSessionExpired } from "@/lib/group";
 import { internalError } from "@/lib/api-errors";
+import { MAX_PARTICIPANTS } from "@/lib/constants";
 
 type ResolveResult<T> =
   | { session: T; error: null }
@@ -125,4 +126,16 @@ export async function resolveParticipant<
   if (!participant) return notInSession();
 
   return { participant: participant as unknown as T, error: null };
+}
+
+/**
+ * The seat ids the host's confirm named, from a host's carry-on body. Null for anything but a list of
+ * strings no longer than a session can seat.
+ */
+export function confirmedIds(body: unknown): Set<string> | null {
+  const ids = (body as { participantIds?: unknown } | null)?.participantIds;
+  if (!Array.isArray(ids) || ids.length > MAX_PARTICIPANTS || !ids.every((id) => typeof id === "string")) {
+    return null;
+  }
+  return new Set(ids);
 }

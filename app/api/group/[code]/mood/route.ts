@@ -4,7 +4,7 @@ import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
 import { MAX_MOODS, normalizeMoodKeys } from "@/lib/moodMap";
 import { MAX_TEXT_LENGTH, resolveMoodText } from "@/lib/moodResolver";
 import { isEraKey, isTimeKey } from "@/lib/moodFilters";
-import { resolveSession, resolveParticipant } from "@/lib/group-api";
+import { confirmedIds, resolveSession, resolveParticipant } from "@/lib/group-api";
 import { buildSharedDeck, DeckTooThinError } from "@/lib/deck";
 import { groupProviders } from "@/lib/watchProviders";
 import { badRequest, internalError } from "@/lib/api-errors";
@@ -125,7 +125,7 @@ export async function POST(
       );
     }
 
-    const { error: updateError } = await supabase
+    const { data: savedRows, error: updateError } = await supabase
       .from("session_participants")
       .update({
         mood_selections: mergedMoods,
@@ -136,10 +136,16 @@ export async function POST(
         tempo: null,
         extra_keywords: extraKeywords,
       })
-      .eq("id", participant.id);
+      .eq("id", participant.id)
+      .select("id");
 
     if (updateError) {
       return internalError(updateError, "Failed to save moods");
+    }
+
+    // The host started without this seat between its lookup and this update, which then changed no row.
+    if (!savedRows?.length) {
+      return NextResponse.json({ error: "You are not in this session" }, { status: 403 });
     }
 
     // The moods above are now committed and the "already submitted" guard
@@ -258,6 +264,8 @@ export async function PATCH(
   }
 
   const { code } = await params;
+  const confirmed = confirmedIds(await request.json().catch(() => null));
+  if (!confirmed) return badRequest("participantIds must list who to leave out");
 
   try {
     const supabase = getSupabaseAdmin();
@@ -281,20 +289,39 @@ export async function PATCH(
       .eq("session_id", session.id);
     if (loadErr || !rows) return internalError(loadErr, "Failed to load participants");
 
-    if (!rows.some((p) => p.user_id === user.id && hasPicks(p))) {
+    const hostSeat = rows.find((p) => p.user_id === user.id && hasPicks(p));
+    if (!hostSeat) {
       return badRequest("Lock in your own picks first");
+    }
+
+    // The host confirmed names from a read up to 2 s old: anyone else without picks now (a lock-in that just
+    // rolled back) isn't removed unseen. Someone named who has locked in since just stays.
+    const leftOut = rows.filter((p) => !hasPicks(p)).map((p) => p.id);
+    if (leftOut.some((id) => !confirmed.has(id))) {
+      return NextResponse.json(
+        { error: "Someone else is still choosing. Check the list and try again." },
+        { status: 409 },
+      );
     }
 
     let deck;
     try {
       deck = await buildDeck(supabase, rows);
     } catch (deckError) {
+      // Everyone left has locked in, so nobody else can change the picks: the host's go, as a last lock-in's
+      // do, and the host's page shows the picker again.
+      if (deckError instanceof DeckTooThinError) {
+        const { error: clearError } = await supabase
+          .from("session_participants")
+          .update({ mood_selections: null })
+          .eq("id", hostSeat.id);
+        if (clearError) return internalError(clearError, "Failed to reopen your picks");
+      }
       return deckFailed(deckError);
     }
 
     // Removed before the status moves, so a failed write can be retried. Only seats still without picks: one
     // that locked in since the read keeps its seat, though its moods missed this deck.
-    const leftOut = rows.filter((p) => !hasPicks(p)).map((p) => p.id);
     if (leftOut.length > 0) {
       const { error: removeErr } = await supabase
         .from("session_participants")

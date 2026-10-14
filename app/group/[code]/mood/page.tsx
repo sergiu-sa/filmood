@@ -805,8 +805,16 @@ export default function GroupMoodPage() {
                   <CarryOn
                     code={code}
                     phase="mood"
-                    waitingOn={participants.filter((p) => !p.hasSubmitted).map((p) => p.nickname)}
+                    waitingOn={participants.filter((p) => !p.hasSubmitted)}
                     onDone={fetchState}
+                    onPickAgain={(message) => {
+                      // As a failed lock-in: a read from before the route cleared the picks mustn't bring
+                      // waiting back. The heading stays mounted, so focus can move before the button goes.
+                      lockInsRef.current += 1;
+                      setError(message);
+                      setPhase("selecting");
+                      headingRef.current?.focus();
+                    }}
                   />
                 )}
               </div>

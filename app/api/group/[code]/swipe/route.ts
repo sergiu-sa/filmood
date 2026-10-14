@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin, getAuthUser } from "@/lib/supabase-server";
-import { resolveSession, resolveParticipant } from "@/lib/group-api";
+import { confirmedIds, resolveSession, resolveParticipant } from "@/lib/group-api";
 import { badRequest, internalError } from "@/lib/api-errors";
 import type { DeckFilm, SwipeVote } from "@/lib/types";
 
@@ -246,6 +246,8 @@ export async function PATCH(
   }
 
   const { code } = await params;
+  const confirmed = confirmedIds(await request.json().catch(() => null));
+  if (!confirmed) return badRequest("participantIds must list who to leave out");
 
   try {
     const supabase = getSupabaseAdmin();
@@ -273,9 +275,17 @@ export async function PATCH(
       return badRequest("Finish your own votes first");
     }
 
+    // As on the mood page: nobody the host's confirm didn't name is removed.
+    const leftOut = rows.filter((p) => !p.has_swiped).map((p) => p.id);
+    if (leftOut.some((id) => !confirmed.has(id))) {
+      return NextResponse.json(
+        { error: "Someone else is still swiping. Check the list and try again." },
+        { status: 409 },
+      );
+    }
+
     // Removed before the status moves, so a failed write can be retried. Only seats still unfinished: one that
     // finished since the read keeps its seat and counts.
-    const leftOut = rows.filter((p) => !p.has_swiped).map((p) => p.id);
     if (leftOut.length > 0) {
       const { error: removeErr } = await supabase
         .from("session_participants")

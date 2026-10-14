@@ -25,9 +25,14 @@ vi.mock("next/link", () => ({
 }));
 
 vi.mock("@/components/AuthProvider", () => ({ useAuth: () => auth }));
-vi.mock("@/lib/useParticipantId", () => ({ useParticipantId: () => ({ participantId: null, ready: true }) }));
+// The id SessionJoin stored in localStorage, which it does for signed-in players too.
+let storedId: string | null = null;
+vi.mock("@/lib/useParticipantId", () => ({ useParticipantId: () => ({ participantId: storedId, ready: true }) }));
+// Off: getSession() came back empty, as when an expired token can't refresh.
+let withToken = true;
 vi.mock("@/lib/getAuthToken", () => ({
-  getAuthHeaders: async () => ({ "Content-Type": "application/json", Authorization: "Bearer t" }),
+  getAuthHeaders: async () =>
+    withToken ? { "Content-Type": "application/json", Authorization: "Bearer t" } : { "Content-Type": "application/json" },
 }));
 // The page's refetch, as Realtime or the 2s poll would call it.
 let poll: () => Promise<void> = async () => {};
@@ -101,6 +106,8 @@ describe("Group swipe page", () => {
     answerPost = recorded;
     fetchMock.mockClear();
     router.push.mockClear();
+    storedId = null;
+    withToken = true;
   });
 
   it("resumes at the first card without a vote and steps over the ones already voted", async () => {
@@ -255,6 +262,42 @@ describe("Group swipe page", () => {
     expect(screen.queryByText(/didn't save/)).toBeNull();
   });
 
+  it("ends at the first vote that finds the player removed, without a retry", async () => {
+    answerPost = async () => Response.json({ error: "You are not in this session" }, { status: 403 });
+    render(<GroupSwipePage />);
+    await screen.findByText("Card 0");
+    press();
+
+    await endHeading("You're no longer in this session");
+    await new Promise((r) => setTimeout(r, 900));
+    expect(postedIds()).toEqual([deck[0].id]);
+  });
+
+  // A stranger, or another session's guest id: nothing says this player was ever in.
+  it("keeps the error view for a 403 at the first load", async () => {
+    answerGet = async () => Response.json({ error: "You are not in this session" }, { status: 403 });
+    render(<GroupSwipePage />);
+    expect(await screen.findByText("You are not in this session")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back to lobby" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "You're no longer in this session" })).toBeNull();
+  });
+
+  // Without a token the stored id is this player's own signed-in seat, which a guest id can't act for: a 403
+  // that would end the page for good. No id gets a 401, and the next poll with a token catches up.
+  it("never sends a stored id for a signed-in player whose token didn't come back", async () => {
+    storedId = "0b9d3c4e-2f1a-4c8b-9e7d-6a5b4c3d2e1f";
+    withToken = false;
+    render(<GroupSwipePage />);
+    await screen.findByText("Card 0");
+    press();
+    await waitFor(() => expect(postedIds()).toHaveLength(1));
+
+    const [getUrl] = fetchMock.mock.calls[0];
+    expect(getUrl).toBe("/api/group/K7F2AB/swipe");
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === "POST")!;
+    expect(JSON.parse(String(post[1]!.body))).not.toHaveProperty("participantId");
+  });
+
   it("ends on an expired session at the first load", async () => {
     answerGet = expired;
     render(<GroupSwipePage />);
@@ -286,9 +329,12 @@ describe("Group swipe page", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Finish without Guest" }));
 
-    expect(await screen.findByRole("button", { name: /see group results/i }, slow)).toBeInTheDocument();
+    // The focused confirm is gone with the waiting view.
+    const results = await screen.findByRole("button", { name: /see group results/i }, slow);
+    await waitFor(() => expect(results).toHaveFocus());
     const patch = fetchMock.mock.calls.find(([, init]) => init?.method === "PATCH")!;
     expect(patch[0]).toBe("/api/group/K7F2AB/swipe");
+    expect(JSON.parse(String(patch[1]!.body))).toEqual({ participantIds: ["p2"] });
   });
 
   // The last vote shows the waiting view before any read has the host finished.

@@ -76,6 +76,7 @@ describe("POST /api/group/[code]/mood", () => {
   const inMood = { data: { id: "s-1", status: "mood", created_at: new Date().toISOString() }, error: null };
   const notSubmitted = { data: { id: "p-1", mood_selections: null }, error: null };
   const ok = { data: null, error: null };
+  const saved = { data: [{ id: "p-1" }], error: null };
 
   // Session, participant, the update, everyone's picks; then `rest`: by default what a failed deck reads,
   // the status re-read and the rollback. A built deck's only further call is the compare-and-set write.
@@ -85,7 +86,7 @@ describe("POST /api/group/[code]/mood", () => {
     everyone: unknown[] = [{ mood_selections: ["laugh"] }, { mood_selections: null }],
     rest: unknown[] = rollbackCalls,
   ) {
-    const supabase = createMockSupabase([inMood, notSubmitted, ok, { data: everyone, error: null }, ...(rest as { data: unknown; error: null }[])]);
+    const supabase = createMockSupabase([inMood, notSubmitted, saved, { data: everyone, error: null }, ...(rest as { data: unknown; error: null }[])]);
     mockGetSupabaseAdmin.mockReturnValue(supabase);
     const req = mockRequest("POST", "/api/group/ABC123/mood", body);
     const res = await readResponse(await submitMood(req, routeParams("ABC123")));
@@ -240,12 +241,28 @@ describe("POST /api/group/[code]/mood", () => {
     expect(status).toBe(409);
   });
 
+  // The host can remove a seat between its lookup and its update, which then changes no row.
+  it("refuses a lock-in whose seat went in the meantime, and builds and records nothing", async () => {
+    mockGetAuthUser.mockResolvedValue(mockUser);
+    const supabase = createMockSupabase([inMood, notSubmitted, { data: [], error: null }]);
+    mockGetSupabaseAdmin.mockReturnValue(supabase);
+
+    const req = mockRequest("POST", "/api/group/ABC123/mood", { moods: ["laugh"] });
+    const { status, json } = await readResponse(await submitMood(req, routeParams("ABC123")));
+    expect(status).toBe(403);
+    expect(json.error).toBe("You are not in this session");
+    expect(supabase.from).toHaveBeenCalledTimes(3);
+    expect(supabase.from.mock.results[2].value.select).toHaveBeenCalledWith("id");
+    expect(mockBuildSharedDeck).not.toHaveBeenCalled();
+    expect(afterCallbacks).toHaveLength(0);
+  });
+
   it("saves moods and returns allDone:false when not all submitted", async () => {
     mockGetAuthUser.mockResolvedValue(mockUser);
     const supabase = createMockSupabase([
       { data: { id: "s-1", status: "mood", created_at: new Date().toISOString() }, error: null },
       { data: { id: "p-1", mood_selections: null }, error: null },
-      { data: null, error: null },
+      { data: [{ id: "p-1" }], error: null },
       { data: [{ mood_selections: ["laugh"] }, { mood_selections: null }], error: null },
     ]);
     mockGetSupabaseAdmin.mockReturnValue(supabase);
@@ -262,7 +279,7 @@ describe("POST /api/group/[code]/mood", () => {
     const supabase = createMockSupabase([
       { data: { id: "s-1", status: "mood", created_at: new Date().toISOString() }, error: null },
       { data: { id: "p-1", mood_selections: null }, error: null },
-      { data: null, error: null },
+      { data: [{ id: "p-1" }], error: null },
       { data: [{ mood_selections: ["laugh"] }, { mood_selections: ["cry"] }], error: null },
       { data: null, error: null },
     ]);
@@ -284,7 +301,7 @@ describe("POST /api/group/[code]/mood", () => {
     const supabase = createMockSupabase([
       { data: { id: "s-1", status: "mood", created_at: new Date().toISOString() }, error: null },
       { data: { id: "p-1", mood_selections: null }, error: null },
-      { data: null, error: null },
+      { data: [{ id: "p-1" }], error: null },
       { data: [{ mood_selections: ["laugh"] }, { mood_selections: ["cry"] }], error: null },
       // The rollback re-reads the session first, so it only fires while the
       // session is still in "mood" and a concurrent submitter hasn't moved on.
@@ -337,7 +354,7 @@ describe("POST /api/group/[code]/mood", () => {
   // The submission is saved before either call, so a failure in one would otherwise 409 every retry.
   it("rolls back when everyone's picks can't be loaded", async () => {
     mockGetAuthUser.mockResolvedValue(mockUser);
-    const supabase = createMockSupabase([inMood, notSubmitted, ok, { data: null, error: { message: "timeout" } }, ...rollbackCalls]);
+    const supabase = createMockSupabase([inMood, notSubmitted, saved, { data: null, error: { message: "timeout" } }, ...rollbackCalls]);
     mockGetSupabaseAdmin.mockReturnValue(supabase);
     const req = mockRequest("POST", "/api/group/ABC123/mood", { moods: ["laugh"] });
     expect((await readResponse(await submitMood(req, routeParams("ABC123")))).status).toBe(500);
@@ -379,18 +396,29 @@ describe("PATCH /api/group/[code]/mood", () => {
   const stalledUser = { id: "p-3", user_id: "user-3", mood_selections: null };
   const stalledGuest = { id: "p-4", user_id: null, mood_selections: null };
 
-  async function carryOn(responses: unknown[], user: unknown = mockUser) {
+  // `participantIds`: who the host's confirm named.
+  async function carryOn(responses: unknown[], participantIds: unknown = [], user: unknown = mockUser) {
     mockGetAuthUser.mockResolvedValue(user);
     const supabase = createMockSupabase(responses as { data: unknown; error: unknown }[]);
     mockGetSupabaseAdmin.mockReturnValue(supabase);
-    const req = mockRequest("PATCH", "/api/group/ABC123/mood");
+    const req = mockRequest("PATCH", "/api/group/ABC123/mood", { participantIds });
     return { ...(await readResponse(await startWithout(req, routeParams("ABC123")))), supabase };
   }
   const call = (supabase: ReturnType<typeof createMockSupabase>, n: number) => supabase.from.mock.results[n].value;
 
   it("returns 401 when not signed in", async () => {
-    const { status, supabase } = await carryOn([], null);
+    const { status, supabase } = await carryOn([], [], null);
     expect(status).toBe(401);
+    expect(supabase.from).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a null list", null],
+    ["a list of numbers", [3, 4]],
+    ["more ids than a session has seats", Array.from({ length: 11 }, (_, n) => `p-${n}`)],
+  ])("refuses %s of who to leave out, before touching the database", async (_, participantIds) => {
+    const { status, supabase } = await carryOn([], participantIds);
+    expect(status).toBe(400);
     expect(supabase.from).not.toHaveBeenCalled();
   });
 
@@ -413,12 +441,10 @@ describe("PATCH /api/group/[code]/mood", () => {
   });
 
   it("builds the deck from who locked in, removes the rest, then moves the session to swiping", async () => {
-    const { status, json, supabase } = await carryOn([
-      inMood,
-      { data: [host, lockedGuest, stalledUser, stalledGuest], error: null },
-      ok,
-      ok,
-    ]);
+    const { status, json, supabase } = await carryOn(
+      [inMood, { data: [host, lockedGuest, stalledUser, stalledGuest], error: null }, ok, ok],
+      ["p-3", "p-4"],
+    );
     expect(status).toBe(200);
     expect(json.removed).toBe(2);
 
@@ -448,31 +474,66 @@ describe("PATCH /api/group/[code]/mood", () => {
     expect(call(supabase, 2).update).toHaveBeenCalledWith({ movie_deck: defaultDeck, status: "swiping" });
   });
 
-  it("answers a thin deck with 422 and removes nobody", async () => {
+  // The confirm named who it showed, from a read up to 2 s old.
+  it("refuses with 409 when someone the host didn't see is still choosing, before building", async () => {
+    const { status, json, supabase } = await carryOn([inMood, { data: [host, stalledUser, stalledGuest], error: null }], ["p-3"]);
+    expect(status).toBe(409);
+    expect(json.error).toBe("Someone else is still choosing. Check the list and try again.");
+    expect(mockBuildSharedDeck).not.toHaveBeenCalled();
+    expect(supabase.from).toHaveBeenCalledTimes(2);
+  });
+
+  it("goes ahead when someone the host named has locked in since, and removes nobody", async () => {
+    const { status, json, supabase } = await carryOn([inMood, { data: [host, lockedGuest], error: null }, ok], ["p-2"]);
+    expect(status).toBe(200);
+    expect(json.removed).toBe(0);
+    expect(mockBuildSharedDeck.mock.calls[0][0]).toEqual([host, lockedGuest]);
+    expect(supabase.from).toHaveBeenNthCalledWith(3, "sessions");
+  });
+
+  // Everyone left is locked in, so nobody else can change the picks: the host's go, as a last lock-in's do.
+  it("answers a thin deck with 422, removes nobody and hands the host their picks back", async () => {
     mockBuildSharedDeck.mockRejectedValue(new DeckTooThinError(2));
-    const { status, json, supabase } = await carryOn([inMood, { data: [host, stalledGuest], error: null }]);
+    const { status, json, supabase } = await carryOn([inMood, { data: [host, stalledGuest], error: null }, ok], ["p-4"]);
     expect(status).toBe(422);
     expect(json.error).toBe("Nothing fits everyone's picks together. Try a different mood.");
+    expect(supabase.from).toHaveBeenCalledTimes(3);
+    const clear = call(supabase, 2);
+    expect(supabase.from).toHaveBeenNthCalledWith(3, "session_participants");
+    expect(clear.update).toHaveBeenCalledWith({ mood_selections: null });
+    expect(clear.eq).toHaveBeenCalledWith("id", "p-1");
+  });
+
+  it("answers 500 when the host's picks can't be handed back after a thin deck", async () => {
+    mockBuildSharedDeck.mockRejectedValue(new DeckTooThinError(2));
+    const { status } = await carryOn(
+      [inMood, { data: [host, stalledGuest], error: null }, { data: null, error: { code: "57014", message: "timeout" } }],
+      ["p-4"],
+    );
+    expect(status).toBe(500);
+  });
+
+  it("keeps the host's picks when the deck fails for another reason", async () => {
+    mockBuildSharedDeck.mockRejectedValue(new Error("TMDB responded 429"));
+    const { status, supabase } = await carryOn([inMood, { data: [host, stalledGuest], error: null }], ["p-4"]);
+    expect(status).toBe(500);
     expect(supabase.from).toHaveBeenCalledTimes(2);
   });
 
   it("answers a failed removal with 500 and leaves the session in mood", async () => {
-    const { status, supabase } = await carryOn([
-      inMood,
-      { data: [host, stalledGuest], error: null },
-      { data: null, error: { code: "57014", message: "timeout" } },
-    ]);
+    const { status, supabase } = await carryOn(
+      [inMood, { data: [host, stalledGuest], error: null }, { data: null, error: { code: "57014", message: "timeout" } }],
+      ["p-4"],
+    );
     expect(status).toBe(500);
     expect(supabase.from).toHaveBeenCalledTimes(3);
   });
 
   it("answers a failed deck write with 500", async () => {
-    const { status } = await carryOn([
-      inMood,
-      { data: [host, stalledGuest], error: null },
-      ok,
-      { data: null, error: { code: "57014", message: "timeout" } },
-    ]);
+    const { status } = await carryOn(
+      [inMood, { data: [host, stalledGuest], error: null }, ok, { data: null, error: { code: "57014", message: "timeout" } }],
+      ["p-4"],
+    );
     expect(status).toBe(500);
   });
 });
@@ -638,17 +699,31 @@ describe("PATCH /api/group/[code]/swipe", () => {
   const finishedGuest = { id: "p-2", user_id: null, has_swiped: true };
   const stalled = { id: "p-3", user_id: null, has_swiped: false };
 
-  async function finish(responses: unknown[], user: unknown = mockUser) {
+  // `participantIds`: who the host's confirm named.
+  async function finish(responses: unknown[], participantIds: unknown = [], user: unknown = mockUser) {
     mockGetAuthUser.mockResolvedValue(user);
     const supabase = createMockSupabase(responses as { data: unknown; error: unknown }[]);
     mockGetSupabaseAdmin.mockReturnValue(supabase);
-    const req = mockRequest("PATCH", "/api/group/ABC123/swipe");
+    const req = mockRequest("PATCH", "/api/group/ABC123/swipe", { participantIds });
     return { ...(await readResponse(await finishWithout(req, routeParams("ABC123")))), supabase };
   }
 
   it("returns 401 when not signed in", async () => {
-    const { status } = await finish([], null);
+    const { status } = await finish([], [], null);
     expect(status).toBe(401);
+  });
+
+  it("refuses a null list of who to leave out, before touching the database", async () => {
+    const { status, supabase } = await finish([], null);
+    expect(status).toBe(400);
+    expect(supabase.from).not.toHaveBeenCalled();
+  });
+
+  it("refuses with 409 when someone the host didn't see hasn't finished", async () => {
+    const { status, json, supabase } = await finish([swiping, { data: [host, stalled], error: null }], []);
+    expect(status).toBe(409);
+    expect(json.error).toBe("Someone else is still swiping. Check the list and try again.");
+    expect(supabase.from).toHaveBeenCalledTimes(2);
   });
 
   it("refuses anyone but the host", async () => {
@@ -669,7 +744,7 @@ describe("PATCH /api/group/[code]/swipe", () => {
   });
 
   it("removes who hasn't finished, votes and all, then finishes the session", async () => {
-    const { status, json, supabase } = await finish([swiping, { data: [host, finishedGuest, stalled], error: null }, ok, ok]);
+    const { status, json, supabase } = await finish([swiping, { data: [host, finishedGuest, stalled], error: null }, ok, ok], ["p-3"]);
     expect(status).toBe(200);
     expect(json.removed).toBe(1);
 
@@ -687,13 +762,20 @@ describe("PATCH /api/group/[code]/swipe", () => {
   });
 
   it("answers a failed removal with 500 and leaves the session swiping", async () => {
-    const { status, supabase } = await finish([
-      swiping,
-      { data: [host, stalled], error: null },
-      { data: null, error: { code: "57014", message: "timeout" } },
-    ]);
+    const { status, supabase } = await finish(
+      [swiping, { data: [host, stalled], error: null }, { data: null, error: { code: "57014", message: "timeout" } }],
+      ["p-3"],
+    );
     expect(status).toBe(500);
     expect(supabase.from).toHaveBeenCalledTimes(3);
+  });
+
+  it("answers a failed finish with 500", async () => {
+    const { status } = await finish(
+      [swiping, { data: [host, stalled], error: null }, ok, { data: null, error: { code: "57014", message: "timeout" } }],
+      ["p-3"],
+    );
+    expect(status).toBe(500);
   });
 });
 
