@@ -46,6 +46,7 @@ test.describe("Reduced motion", () => {
   // A drift's keyframes set transform, which replaced the glow's own centring, so the
   // glows drifted 160-300px off their spot while reduced motion showed them on it.
   test("the drifting glows drift around where reduced motion leaves them", async ({ page }) => {
+    await mockTmdb(page);
     await page.route("**/api/group/GLOW01/results**", (route) =>
       route.fulfill({ json: { code: "GLOW01", participantCount: 2, topPick: null, perfect: [], strong: [], miss: [] } }),
     );
