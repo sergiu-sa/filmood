@@ -1,10 +1,11 @@
 /**
  * @vitest-environment jsdom
  */
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { User } from "@supabase/supabase-js";
 import AccountSettings from "@/components/profile/AccountSettings";
+import { supabase } from "@/lib/supabase";
 import { PASSWORD_HINT } from "@/lib/validations";
 
 vi.mock("@/lib/supabase", () => ({ supabase: { auth: { updateUser: vi.fn() } } }));
@@ -44,6 +45,22 @@ describe("AccountSettings", () => {
     await u.click(screen.getByRole("button", { name: "Update password" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Add a number.");
+
+    // The same text set again changes nothing a screen reader would announce.
+    fireEvent.click(screen.getByRole("button", { name: "Update password" }));
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Add a number.");
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // The toast mounts with its text, which screen readers don't reliably announce.
+  it("announces a save in a region that's already there", async () => {
+    vi.mocked(supabase.auth.updateUser).mockResolvedValue({ data: { user }, error: null });
+    render(<AccountSettings user={user} />);
+    const status = screen.getByRole("status");
+    expect(status).toBeEmptyDOMElement();
+
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(status).toHaveTextContent("Changes saved"));
   });
 });

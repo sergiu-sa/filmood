@@ -8,7 +8,7 @@ interface BottomSheetProps {
   children: React.ReactNode;
   accentColor?: string;
   /** The dialog's accessible name. */
-  label?: string;
+  label: string;
 }
 
 export default function BottomSheet({
@@ -16,7 +16,7 @@ export default function BottomSheet({
   onClose,
   children,
   accentColor,
-  label = "Panel",
+  label,
 }: BottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const dragStartY = useRef(0);

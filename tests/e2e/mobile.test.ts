@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Locator } from "@playwright/test";
 import { mockTmdb } from "./fixtures/tmdb";
 
 // Mobile-only (chromium-mobile project, Pixel 5). Below 900px, DashboardShell
@@ -46,7 +46,7 @@ test.describe("Mobile — BottomSheet dashboard panel", () => {
     await page.goto("/");
     const pageBox = page.getByRole("textbox", { name: /^Search films — / });
     await pageBox.tap();
-    const sheet = page.getByRole("dialog", { name: "Panel" });
+    const sheet = page.getByRole("dialog", { name: "Browse & Search" });
     await expect(sheet).toBeFocused();
 
     const box = sheet.getByRole("textbox", { name: "Search films", exact: true });
@@ -61,6 +61,36 @@ test.describe("Mobile — BottomSheet dashboard panel", () => {
     await page.waitForTimeout(300);
     await expect(sheet).toHaveAttribute("inert", "");
     await expect(page.locator("body")).not.toHaveCSS("overflow", "hidden");
+  });
+
+  test("every control in the search and group-session sheets is at least 44px", async ({ page }) => {
+    const short = async (sheet: Locator) => {
+      const found: string[] = [];
+      for (const target of await sheet.locator("a[href], button, select, input").all()) {
+        const { height } = (await target.boundingBox())!;
+        if (height < 44) found.push(`${(await target.textContent())?.trim()} ${height}`);
+      }
+      return found;
+    };
+
+    // The genre chips' entry animation scales them; measure them at rest.
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/");
+    await page.getByRole("textbox", { name: /^Search films — / }).tap();
+    const search = page.getByRole("dialog", { name: "Browse & Search" });
+    await search.getByRole("button", { name: "By Genre" }).tap();
+    await expect(search.getByRole("button", { name: "Action" })).toBeVisible();
+    expect(await short(search)).toEqual([]);
+    await search.getByRole("button", { name: "Close" }).tap();
+    await expect(page.locator("body")).not.toHaveCSS("overflow", "hidden");
+
+    await page.getByRole("button", { name: "Start or join a session" }).tap();
+    const explore = page.getByRole("dialog", { name: "Group session" });
+    await expect(explore).toBeVisible();
+    expect(await short(explore)).toEqual([]);
+    await explore.getByRole("button", { name: "Join with code" }).tap();
+    await expect(explore.getByLabel("Session code")).toBeVisible();
+    expect(await short(explore)).toEqual([]);
   });
 
   // WCAG 2.4.11: a tile scrolled into view by focus must not sit under the pinned describe field.

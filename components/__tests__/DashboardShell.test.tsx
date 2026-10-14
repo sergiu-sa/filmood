@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import type SearchToolbar from "@/components/dashboard/SearchToolbar";
@@ -72,13 +72,13 @@ describe("DashboardShell, desktop", () => {
     const user = userEvent.setup();
     render(<DashboardShell />);
 
-    const explore = screen.getByRole("button", { name: /^Discover together/ });
+    const explore = screen.getByRole("button", { name: "Start or join a session" });
     await user.click(explore);
     await user.click(await closeBeside("Sessions expire after 4 hours"));
     expect(explore).toHaveAttribute("aria-expanded", "false");
     expect(explore).toHaveFocus();
 
-    const trending = screen.getByRole("button", { name: "Trending today" });
+    const trending = screen.getByRole("button", { name: "Browse & search" });
     await user.click(trending);
     await user.click(await closeBeside("No results"));
     expect(trending).toHaveAttribute("aria-expanded", "false");
@@ -116,7 +116,7 @@ describe("DashboardShell, desktop", () => {
 
     act(() => toolbar.props.onQueryChange(""));
     expect(card("The Godfather")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Trending today" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "Browse & search" })).toHaveAttribute("aria-expanded", "true");
     expect(calls("/api/movies/browse?category=top-rated")).toBe(1);
   });
 
@@ -175,7 +175,7 @@ describe("DashboardShell, desktop", () => {
 
     await userEvent.click(await closeBeside("Loading..."));
     await act(async () => search.settle({ films: [film(1, "Dune")] }));
-    expect(screen.getByRole("button", { name: "Trending today" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("button", { name: "Browse & search" })).toHaveAttribute("aria-expanded", "false");
   });
 
   it("never lets a late category answer replace a newer search", async () => {
@@ -214,6 +214,15 @@ describe("DashboardShell, phone", () => {
   it("tells the toolbar not to open the sheet on focus", () => {
     render(<DashboardShell />);
     expect(toolbar.props.expandOnFocus).toBe(false);
+  });
+
+  // BottomSheet's fallback name was "Panel", for search and explore alike.
+  it("names each sheet after its panel", () => {
+    render(<DashboardShell />);
+    openPanel();
+    expect(screen.getByRole("dialog")).toHaveAccessibleName("Browse & Search");
+    fireEvent.click(screen.getByRole("button", { name: "Start or join a session" }));
+    expect(screen.getByRole("dialog")).toHaveAccessibleName("Group session");
   });
 
   it("the sheet's box edits the toolbar's search", async () => {
