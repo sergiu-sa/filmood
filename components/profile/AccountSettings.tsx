@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { getAuthHeaders } from "@/lib/getAuthToken";
+import { savedName } from "@/lib/displayName";
 import Icon from "@/components/ui/Icon";
 import { passwordProblem, PASSWORD_HINT } from "@/lib/validations";
 
@@ -14,7 +15,7 @@ interface Props {
 type Toast = { tone: "saved" | "error"; message: string } | null;
 
 export default function AccountSettings({ user }: Props) {
-  const [name, setName] = useState(user.user_metadata?.full_name ?? "");
+  const [name, setName] = useState(savedName(user));
   const [email, setEmail] = useState(user.email ?? "");
 
   const [editingName, setEditingName] = useState(false);
@@ -43,12 +44,12 @@ export default function AccountSettings({ user }: Props) {
 
   async function saveProfile() {
     setSaving(true);
-    const { error } = await supabase.auth.updateUser({
-      ...(name !== user.user_metadata?.full_name
-        ? { data: { full_name: name } }
-        : {}),
+    const { data, error } = await supabase.auth.updateUser({
+      ...(name !== savedName(user) ? { data: { full_name: name } } : {}),
       ...(email !== user.email ? { email } : {}),
     });
+    // A cleared name falls back to the signup one in the hero, so the field shows it too.
+    if (data.user) setName(savedName(data.user));
     setSaving(false);
     setEditingName(false);
     setEditingEmail(false);

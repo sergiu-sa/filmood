@@ -53,6 +53,49 @@ describe("AccountSettings", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  // Signup saves the name as `name`, Account as `full_name`; the hero shows whichever is there.
+  it("starts Full name as the name typed at signup, and saves only what changed", async () => {
+    vi.mocked(supabase.auth.updateUser).mockResolvedValue({ data: { user }, error: null });
+    const signedUp = { id: "u2", email: "e2e@example.com", user_metadata: { name: "Filmood E2E" } } as unknown as User;
+    render(<AccountSettings user={signedUp} />);
+    expect(screen.getByLabelText("Full name")).toHaveValue("Filmood E2E");
+
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(supabase.auth.updateUser).toHaveBeenCalledWith({}));
+  });
+
+  it("sends a cleared Full name, then shows the signup name the hero falls back to", async () => {
+    const signedUp = { id: "u2", email: "e2e@example.com", user_metadata: { name: "Filmood E2E" } } as unknown as User;
+    const cleared = { ...signedUp, user_metadata: { name: "Filmood E2E", full_name: "" } } as unknown as User;
+    vi.mocked(supabase.auth.updateUser).mockResolvedValue({ data: { user: cleared }, error: null });
+    const u = userEvent.setup();
+    const { rerender } = render(<AccountSettings user={signedUp} />);
+
+    await u.click(screen.getByRole("button", { name: "Edit Full name" }));
+    await u.clear(screen.getByLabelText("Full name"));
+    await u.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(supabase.auth.updateUser).toHaveBeenLastCalledWith({ data: { full_name: "" } });
+    await waitFor(() => expect(screen.getByLabelText("Full name")).toHaveValue("Filmood E2E"));
+
+    // AuthProvider hands the updated user down; a second save has nothing new to send.
+    rerender(<AccountSettings user={cleared} />);
+    await u.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(supabase.auth.updateUser).toHaveBeenLastCalledWith({});
+  });
+
+  it("sends an email-only change without the name", async () => {
+    vi.mocked(supabase.auth.updateUser).mockResolvedValue({ data: { user }, error: null });
+    const signedUp = { id: "u2", email: "e2e@example.com", user_metadata: { name: "Filmood E2E" } } as unknown as User;
+    const u = userEvent.setup();
+    render(<AccountSettings user={signedUp} />);
+
+    await u.click(screen.getByRole("button", { name: "Edit Email address" }));
+    await u.clear(screen.getByLabelText("Email address"));
+    await u.type(screen.getByLabelText("Email address"), "new@example.com");
+    await u.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(supabase.auth.updateUser).toHaveBeenLastCalledWith({ email: "new@example.com" });
+  });
+
   // The toast mounts with its text, which screen readers don't reliably announce.
   it("announces a save in a region that's already there", async () => {
     vi.mocked(supabase.auth.updateUser).mockResolvedValue({ data: { user }, error: null });

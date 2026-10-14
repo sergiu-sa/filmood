@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useSyncExternalStore } from "react";
 import { useAuth } from "./AuthProvider";
+import { avatarInitial, displayName } from "@/lib/displayName";
 import FilmoodLogo from "./dashboard/FilmoodLogo";
 
 function getThemeSnapshot(): "dark" | "light" {
@@ -158,7 +159,7 @@ export default function Navbar() {
                   color: "var(--gold-on)",
                 }}
               >
-                {user.email?.[0]?.toUpperCase() || "U"}
+                {avatarInitial(displayName(user))}
               </div>
             </Link>
           </div>

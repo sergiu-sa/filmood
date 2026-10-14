@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { getAuthHeaders } from "@/lib/getAuthToken";
-import { moodLabel, moodMap } from "@/lib/moodMap";
+import { avatarInitial, displayName } from "@/lib/displayName";
+import { moodAccent, moodLabel } from "@/lib/moodMap";
 import { ACCENT_VARS } from "@/lib/constants";
-import type { AccentColor } from "@/lib/types";
 import Icon from "@/components/ui/Icon";
 
 interface Props {
@@ -17,11 +17,6 @@ interface Stats {
   moodPicks: number;
   topMood: string | null;
   sessionsJoined: number;
-}
-
-function moodAccent(moodKey: string | null): AccentColor {
-  if (!moodKey) return "gold";
-  return (moodMap[moodKey]?.accentColor ?? "gold") as AccentColor;
 }
 
 export default function ProfileHero({ user }: Props) {
@@ -52,9 +47,7 @@ export default function ProfileHero({ user }: Props) {
     };
   }, []);
 
-  const initial = user.email?.[0]?.toUpperCase() ?? "U";
-  const displayName =
-    user.user_metadata?.full_name ?? user.email?.split("@")[0] ?? "User";
+  const name = displayName(user);
   const joinedDate = new Date(user.created_at).toLocaleDateString("en-GB", {
     month: "long",
     year: "numeric",
@@ -97,7 +90,7 @@ export default function ProfileHero({ user }: Props) {
                 "0 0 0 1px var(--border), 0 8px 28px rgba(var(--gold-rgb), 0.30)",
             }}
           >
-            {initial}
+            {avatarInitial(name)}
           </div>
           <button
             type="button"
@@ -128,7 +121,7 @@ export default function ProfileHero({ user }: Props) {
               margin: "0 0 4px",
             }}
           >
-            {displayName}
+            {name}
           </p>
           <p
             style={{

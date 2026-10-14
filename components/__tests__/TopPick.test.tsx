@@ -74,6 +74,21 @@ describe("TopPick", () => {
     expect(screen.getByText("2010")).toBeInTheDocument();
   });
 
+  // The card's own accent is teal here, so an ember chip can only come from its mood.
+  it("names its mood chip as the pickers do, in that mood's colour", () => {
+    render(
+      <TopPick
+        film={film}
+        moods={["dark"]}
+        accent="teal"
+        providers={[]}
+        providersLoading={false}
+        why={{ keywords: [], genres: [] }}
+      />,
+    );
+    expect(screen.getByText("Go dark")).toHaveStyle({ color: "var(--ember)" });
+  });
+
   it("keeps the title and link the e2e specs find", () => {
     renderPick({ keywords: [], genres: ["Comedy"] });
     expect(screen.getByRole("heading", { level: 2, name: "Barbie" })).toBeInTheDocument();

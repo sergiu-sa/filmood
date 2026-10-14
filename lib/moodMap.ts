@@ -5,7 +5,7 @@
 // Keyword IDs live in lib/tmdbKeywords.ts, by name.
 
 import { TMDB_KEYWORDS } from "@/lib/tmdbKeywords";
-import type { MoodConfig } from "@/lib/types";
+import type { AccentColor, MoodConfig } from "@/lib/types";
 export const moodMap: Record<string, MoodConfig> = {
   laugh: {
     key: "laugh",
@@ -218,6 +218,12 @@ export function normalizeMoodKey(raw: string): string | null {
 export function moodLabel(raw: string): string {
   const key = normalizeMoodKey(raw);
   return key ? moodMap[key].tagLabel : raw;
+}
+
+/** A mood's accent, retired keys included; gold for an unknown key or none. */
+export function moodAccent(raw: string | null): AccentColor {
+  const key = raw && normalizeMoodKey(raw);
+  return key ? moodMap[key].accentColor : "gold";
 }
 
 /** Normalise, drop unknowns, dedupe — order preserved. */

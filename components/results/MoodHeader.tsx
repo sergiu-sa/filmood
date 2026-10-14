@@ -7,7 +7,7 @@ import MoodTile from "@/components/mood/MoodTile";
 import Icon from "@/components/ui/Icon";
 import { ACCENT_VARS } from "@/lib/constants";
 import { ERA_OPTIONS, TIME_OPTIONS } from "@/lib/moodFilters";
-import { MAX_MOODS, moodMap, normalizeMoodKeys } from "@/lib/moodMap";
+import { MAX_MOODS, moodLabel, moodMap, normalizeMoodKeys } from "@/lib/moodMap";
 import { MAX_TEXT_LENGTH } from "@/lib/moodResolver";
 import { useDismiss } from "@/lib/useDismiss";
 import { useMediaQuery } from "@/lib/useMediaQuery";
@@ -29,7 +29,6 @@ interface MoodHeaderProps {
 const ADD_TITLE = "Add a mood";
 
 const moodList = new Intl.ListFormat("en-GB", { type: "conjunction" });
-const tagLabel = (key: string) => (Object.hasOwn(moodMap, key) ? moodMap[key].tagLabel : key);
 
 /** The results URL with these tile moods (none: `mood` removed), everything else kept, and `src` set. */
 export function withMoods(sp: URLSearchParams, keys: string[], src: SearchSource): URLSearchParams {
@@ -298,7 +297,7 @@ export default function MoodHeader({ moods, interpreted, droppedMoods, filters, 
           </ul>
           {droppedMoods.length > 0 && (
             <p className="font-sans" style={{ margin: 0, fontSize: "13px", color: "var(--t2)" }}>
-              {`Two moods at a time — left out ${moodList.format(droppedMoods.map(tagLabel))}.`}
+              {`Two moods at a time — left out ${moodList.format(droppedMoods.map(moodLabel))}.`}
             </p>
           )}
         </div>

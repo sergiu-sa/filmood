@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import type { AccentColor, DiscoverFilm, DiscoverResponse, Film, Keyword, Provider } from "@/lib/types";
-import { moodMap } from "@/lib/moodMap";
+import { moodAccent, moodLabel } from "@/lib/moodMap";
 import { ACCENT_VARS } from "@/lib/constants";
 import { tmdbImageUrl } from "@/lib/tmdb";
 import { matchedKeywords, reasonGenres } from "@/lib/whyLine";
@@ -228,9 +228,7 @@ export default function TopPick({
           {moods.length > 0 && (
             <div style={{ display: "flex", gap: "5px", flexWrap: "wrap" }}>
               {moods.map((m) => {
-                const moodKey = m.trim().toLowerCase();
-                const moodAccentKey = moodMap[moodKey]?.accentColor ?? "gold";
-                const moodAccent = ACCENT_VARS[moodAccentKey];
+                const chip = ACCENT_VARS[moodAccent(m)];
                 return (
                   <span
                     key={m}
@@ -240,12 +238,12 @@ export default function TopPick({
                       borderRadius: "100px",
                       fontSize: "10px",
                       fontWeight: 600,
-                      color: moodAccent.text,
-                      background: moodAccent.soft,
-                      border: `1px solid ${moodAccent.soft}`,
+                      color: chip.text,
+                      background: chip.soft,
+                      border: `1px solid ${chip.soft}`,
                     }}
                   >
-                    {moodMap[moodKey]?.tagLabel ?? m}
+                    {moodLabel(m)}
                   </span>
                 );
               })}
