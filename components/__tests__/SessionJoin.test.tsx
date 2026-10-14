@@ -102,6 +102,18 @@ describe("SessionJoin", () => {
     });
   });
 
+  // The same text set again changes nothing a screen reader would announce.
+  it("announces the same nickname error again on a second try", async () => {
+    renderWithCode();
+    const alert = screen.getByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: /join session/i }));
+    await waitFor(() => expect(alert).toHaveTextContent(/nickname must be at least 2 characters/i));
+
+    fireEvent.click(screen.getByRole("button", { name: /join session/i }));
+    expect(alert).toBeEmptyDOMElement();
+    await waitFor(() => expect(alert).toHaveTextContent(/nickname must be at least 2 characters/i));
+  });
+
   it("does NOT show nickname error when nickname is >= 2 chars", async () => {
     renderWithCode();
     await typeNickname("Al");

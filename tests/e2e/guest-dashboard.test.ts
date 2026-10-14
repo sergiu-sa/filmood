@@ -19,16 +19,10 @@ test.describe("Guest dashboard", () => {
     const heading = page.getByRole("heading", { level: 1 });
     await expect(heading).toContainText(/play your/i);
 
-    // MoodBox's one control is its button; the other two boxes are role="button" sections.
-    await expect(
-      page.getByRole("button", { name: "Open the mood board" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: /discover together/i }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: /trending today/i }),
-    ).toBeVisible();
+    // Each box opens its panel from a real button inside it; the boxes themselves aren't buttons.
+    for (const name of ["Open the mood board", "Start or join a session", "Browse & search"]) {
+      await expect(page.getByRole("button", { name })).toBeVisible();
+    }
 
     expect(pageErrors).toEqual([]);
   });

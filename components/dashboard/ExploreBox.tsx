@@ -7,8 +7,8 @@ interface ExploreBoxProps {
   onExpand: () => void;
   isExpanded: boolean;
   isCollapsed?: boolean;
-  /** The box, which takes focus back when its panel's Close collapses the panel. */
-  ref?: Ref<HTMLElement>;
+  /** The box's button, which takes focus back when its panel's Close collapses the panel. */
+  ref?: Ref<HTMLButtonElement>;
 }
 
 const exploreItems = [
@@ -56,14 +56,9 @@ export default function ExploreBox({
   }
 
   return (
+    // A click anywhere on the box opens the panel too, for pointers; keyboards use its buttons.
     <section
-      ref={ref}
-      role="button"
-      tabIndex={0}
       onClick={onExpand}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onExpand(); } }}
-      aria-expanded={isExpanded}
-      aria-label="Discover together — group sessions and curated picks"
       className="relative overflow-hidden cursor-pointer"
       style={{
         background: "var(--surface)",
@@ -188,6 +183,9 @@ export default function ExploreBox({
 
       {/* See more button */}
       <button
+        ref={ref}
+        type="button"
+        aria-expanded={isExpanded}
         onClick={(e) => {
           e.stopPropagation();
           onExpand();
@@ -206,6 +204,7 @@ export default function ExploreBox({
       >
         <span>Start or join a session</span>
         <span
+          aria-hidden="true"
           style={{
             fontSize: "11px",
             transition: "transform var(--t-slow)",

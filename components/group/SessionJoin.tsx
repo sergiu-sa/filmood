@@ -87,14 +87,16 @@ export default function SessionJoin({ initialCode = "" }: SessionJoinProps) {
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    // The same text set again changes nothing a screen reader would announce, so it goes for a frame first.
+    const refuse = (message: string) => requestAnimationFrame(() => setError(message));
 
     if (!isFilled) {
-      setError("Enter the full 6-character code");
+      refuse("Enter the full 6-character code");
       return;
     }
 
     if (!user && nickname.trim().length < 2) {
-      setError("Nickname must be at least 2 characters");
+      refuse("Nickname must be at least 2 characters");
       return;
     }
 

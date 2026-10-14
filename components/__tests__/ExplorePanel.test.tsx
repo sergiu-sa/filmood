@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ExplorePanel from "@/components/dashboard/ExplorePanel";
 
@@ -48,12 +48,34 @@ describe("ExplorePanel", () => {
       expect(await screen.findByRole("alert")).toHaveTextContent("Failed to create session");
     });
 
-    it("announces a join code that isn't six characters", async () => {
+    // The same text set again changes nothing a screen reader would announce.
+    it("announces a join code that isn't six characters, again on a second try", async () => {
       render(<ExplorePanel isOpen onClose={vi.fn()} />);
       await userEvent.click(screen.getByRole("button", { name: "Join with code" }));
       await userEvent.type(screen.getByLabelText("Session code"), "AB1");
       await userEvent.click(screen.getByRole("button", { name: "Join" }));
-      expect(screen.getByRole("alert")).toHaveTextContent("Enter a 6-character code");
+      expect(await screen.findByRole("alert")).toHaveTextContent("Enter a 6-character code");
+
+      fireEvent.click(screen.getByRole("button", { name: "Join" }));
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(await screen.findByRole("alert")).toHaveTextContent("Enter a 6-character code");
     });
+  });
+
+  // The guest's and the signed-in Create tab differ; mobile.test.ts measures the guest's.
+  it.each([null, { id: "u1" }])("makes every button and link a 44px target in the phone sheet only (user %o)", async (who) => {
+    user = who;
+    for (const embedded of [true, false]) {
+      const { container, unmount } = render(<ExplorePanel isOpen embedded={embedded} onClose={vi.fn()} />);
+      const off = () =>
+        [...container.querySelectorAll<HTMLElement>("a[href], button")]
+          .filter((el) => el.style.minHeight !== (embedded ? "44px" : ""))
+          .map((el) => el.textContent);
+      expect(off()).toEqual([]);
+      await userEvent.click(screen.getByRole("button", { name: "Join with code" }));
+      expect(off()).toEqual([]);
+      unmount();
+    }
+    user = null;
   });
 });

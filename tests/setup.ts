@@ -25,3 +25,9 @@ if (typeof window !== "undefined" && !window.matchMedia) {
       dispatchEvent: () => false,
     }) as unknown as MediaQueryList;
 }
+
+// jsdom doesn't implement scrollIntoView either. DashboardShell calls it from a
+// timer, so the throw lands as an unhandled error after its test has passed.
+if (typeof window !== "undefined" && !Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}

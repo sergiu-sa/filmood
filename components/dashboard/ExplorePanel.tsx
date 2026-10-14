@@ -45,6 +45,8 @@ export default function ExplorePanel({ isOpen, onClose, embedded }: ExplorePanel
   const [joinLoading, setJoinLoading] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  // In the phone sheet every control is a 44px target; the desktop panel keeps its sizes.
+  const minHeight = embedded ? "44px" : undefined;
 
   const handleCreate = async () => {
     if (!user) {
@@ -80,7 +82,9 @@ export default function ExplorePanel({ isOpen, onClose, embedded }: ExplorePanel
   const handleJoin = async () => {
     const trimmed = joinCode.trim().toUpperCase();
     if (trimmed.length !== 6) {
-      setJoinError("Enter a 6-character code");
+      // The same text set again changes nothing a screen reader would announce, so it goes for a frame first.
+      setJoinError(null);
+      requestAnimationFrame(() => setJoinError("Enter a 6-character code"));
       return;
     }
 
@@ -215,6 +219,7 @@ export default function ExplorePanel({ isOpen, onClose, embedded }: ExplorePanel
               className="cursor-pointer font-sans"
               style={{
                 flex: 1,
+                minHeight,
                 padding: "10px",
                 borderRadius: "10px",
                 border: "none",
@@ -287,6 +292,7 @@ export default function ExplorePanel({ isOpen, onClose, embedded }: ExplorePanel
                   className="cursor-pointer font-sans"
                   style={{
                     width: "100%",
+                    minHeight,
                     padding: "12px 24px",
                     borderRadius: "10px",
                     background: createLoading ? "var(--surface3)" : "var(--teal)",
@@ -317,6 +323,9 @@ export default function ExplorePanel({ isOpen, onClose, embedded }: ExplorePanel
                     href="/signup"
                     className="font-sans"
                     style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      minHeight,
                       padding: "10px 20px",
                       borderRadius: "10px",
                       background: "var(--teal)",
@@ -332,6 +341,9 @@ export default function ExplorePanel({ isOpen, onClose, embedded }: ExplorePanel
                     href="/login"
                     className="font-sans"
                     style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      minHeight,
                       padding: "9px 18px",
                       borderRadius: "10px",
                       background: "none",
@@ -408,6 +420,7 @@ export default function ExplorePanel({ isOpen, onClose, embedded }: ExplorePanel
                 disabled={joinLoading}
                 className="cursor-pointer font-sans"
                 style={{
+                  minHeight,
                   padding: "11px 20px",
                   borderRadius: "10px",
                   background: joinLoading ? "var(--surface3)" : "var(--gold)",
@@ -457,6 +470,7 @@ export default function ExplorePanel({ isOpen, onClose, embedded }: ExplorePanel
           style={{
             display: "inline-flex",
             alignItems: "center",
+            minHeight,
             padding: "9px 18px",
             borderRadius: "10px",
             background: "none",
@@ -478,6 +492,7 @@ export default function ExplorePanel({ isOpen, onClose, embedded }: ExplorePanel
             display: "inline-flex",
             alignItems: "center",
             gap: "4px",
+            minHeight,
             padding: "9px 16px",
             borderRadius: "10px",
             background: "var(--teal-soft)",

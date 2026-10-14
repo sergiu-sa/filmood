@@ -52,6 +52,17 @@ const defaultProps = {
 describe("SearchPanel", () => {
   afterEach(() => vi.clearAllMocks());
 
+  // The phone sheet's controls are 44px targets; the desktop panel keeps its compact sizes.
+  it.each([true, false])("sizes its controls for the phone sheet only (embedded: %s)", (embedded) => {
+    const { container } = render(
+      <SearchPanel {...defaultProps} embedded={embedded} activeCategory="by-genre" onSearchTextChange={embedded ? vi.fn() : undefined} />,
+    );
+    const off = [...container.querySelectorAll<HTMLElement>("button, select, a[href]:not([href^='/film/'])")]
+      .filter((el) => el.style.minHeight !== (embedded ? "44px" : ""))
+      .map((el) => el.textContent);
+    expect(off).toEqual([]);
+  });
+
   // ── Static structure ─────────────────────────────────────────────────────
   it('renders the "Browse" section label', () => {
     render(<SearchPanel {...defaultProps} />);

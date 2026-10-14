@@ -16,8 +16,8 @@ interface TrendingBoxProps {
   onExpand: () => void;
   isExpanded?: boolean;
   isCollapsed?: boolean;
-  /** The box, which takes focus back when the search panel's Close collapses it. */
-  ref?: Ref<HTMLElement>;
+  /** The box's button, which takes focus back when the search panel's Close collapses it. */
+  ref?: Ref<HTMLButtonElement>;
 }
 
 export default function TrendingBox({ onExpand, isExpanded, isCollapsed, ref }: TrendingBoxProps) {
@@ -45,14 +45,9 @@ export default function TrendingBox({ onExpand, isExpanded, isCollapsed, ref }: 
   }
 
   return (
+    // A click anywhere on the box opens search too, for pointers; the button is the one control.
     <section
-      ref={ref}
-      role="button"
-      tabIndex={0}
       onClick={onExpand}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onExpand(); } }}
-      aria-expanded={isExpanded}
-      aria-label="Trending today"
       className="relative overflow-hidden cursor-pointer"
       style={{
         background: "var(--surface)",
@@ -60,6 +55,7 @@ export default function TrendingBox({ onExpand, isExpanded, isCollapsed, ref }: 
         borderRadius: 16, padding: 22,
         transition: "border-color 0.3s, box-shadow 0.3s",
         boxShadow: isExpanded ? "0 0 0 1px var(--blue), 0 0 16px var(--blue-glow)" : "none",
+        display: "flex", flexDirection: "column",
       }}
     >
       <div style={{
@@ -80,7 +76,7 @@ export default function TrendingBox({ onExpand, isExpanded, isCollapsed, ref }: 
         Top 5 films right now.
       </p>
 
-      <ol onClick={(e) => e.stopPropagation()} style={{ listStyle: "none", margin: 0, padding: 0 }}>
+      <ol onClick={(e) => e.stopPropagation()} style={{ listStyle: "none", margin: "0 0 14px", padding: 0 }}>
         {items.map((f, i) => (
           <li key={f.id} style={{ marginBottom: 2 }}>
             <Link
@@ -107,6 +103,42 @@ export default function TrendingBox({ onExpand, isExpanded, isCollapsed, ref }: 
           </li>
         ))}
       </ol>
+
+      <button
+        ref={ref}
+        type="button"
+        aria-expanded={isExpanded}
+        onClick={(e) => {
+          e.stopPropagation();
+          onExpand();
+        }}
+        className="flex w-full items-center justify-center gap-1.5 cursor-pointer"
+        style={{
+          marginTop: "auto",
+          padding: "11px",
+          borderRadius: "10px",
+          background: "var(--blue-soft)",
+          border: "1px solid rgba(var(--blue-rgb), 0.22)",
+          color: "var(--blue)",
+          fontSize: "12.5px",
+          fontWeight: 600,
+          letterSpacing: "0.2px",
+          transition: "all 0.25s",
+        }}
+      >
+        <span>Browse &amp; search</span>
+        <span
+          aria-hidden="true"
+          style={{
+            fontSize: "11px",
+            transition: "transform 0.3s",
+            transform: isExpanded ? "rotate(180deg)" : "none",
+            display: "inline-block",
+          }}
+        >
+          ↓
+        </span>
+      </button>
     </section>
   );
 }

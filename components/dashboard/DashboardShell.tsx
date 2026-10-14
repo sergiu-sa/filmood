@@ -81,8 +81,8 @@ export default function DashboardShell() {
   const closePanel = () => setOpenPanel(null);
 
   // A closed desktop panel is inert, so focus on its Close would fall to <body>.
-  const exploreBoxRef = useRef<HTMLElement>(null);
-  const trendingBoxRef = useRef<HTMLElement>(null);
+  const exploreBoxRef = useRef<HTMLButtonElement>(null);
+  const trendingBoxRef = useRef<HTMLButtonElement>(null);
   const closeSearch = () => {
     closePanel();
     trendingBoxRef.current?.focus();
@@ -180,7 +180,7 @@ export default function DashboardShell() {
         />
         <TrendingBox
           ref={trendingBoxRef}
-          onExpand={() => setOpenPanel("search")}
+          onExpand={() => togglePanel("search")}
           isExpanded={openPanel === "search"}
           isCollapsed={isBoxCollapsed("search")}
         />
@@ -211,7 +211,11 @@ export default function DashboardShell() {
         <BottomSheet
           isOpen={openPanel !== null}
           onClose={closePanel}
-          label={openPanel === "mood" ? "How do you want to feel?" : "Panel"}
+          label={
+            openPanel === "mood" ? "How do you want to feel?"
+            : openPanel === "explore" ? "Group session"
+            : "Browse & Search"
+          }
           accentColor={
             openPanel === "mood" ? "var(--gold)"
             : openPanel === "explore" ? "var(--teal)"

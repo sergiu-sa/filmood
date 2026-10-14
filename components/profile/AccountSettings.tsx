@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { getAuthHeaders } from "@/lib/getAuthToken";
@@ -31,9 +31,14 @@ export default function AccountSettings({ user }: Props) {
   const [pwSaving, setPwSaving] = useState(false);
   const [pwError, setPwError] = useState<string | null>(null);
 
+  const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   function flashToast(t: Toast) {
-    setToast(t);
-    setTimeout(() => setToast(null), 2400);
+    // An earlier toast's timer would hide this one early, and the same text left in
+    // place changes nothing a screen reader would announce, so it goes for a frame first.
+    clearTimeout(toastTimer.current);
+    setToast(null);
+    requestAnimationFrame(() => setToast(t));
+    toastTimer.current = setTimeout(() => setToast(null), 2400);
   }
 
   async function saveProfile() {
@@ -56,17 +61,19 @@ export default function AccountSettings({ user }: Props) {
 
   async function submitPasswordChange() {
     setPwError(null);
+    // The same text set again changes nothing a screen reader would announce, so it goes for a frame first.
+    const refuse = (problem: string) => requestAnimationFrame(() => setPwError(problem));
     if (currentPassword.length === 0) {
-      setPwError("Enter your current password.");
+      refuse("Enter your current password.");
       return;
     }
     const problem = passwordProblem(newPassword);
     if (problem) {
-      setPwError(problem);
+      refuse(problem);
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPwError("Passwords don't match.");
+      refuse("Passwords don't match.");
       return;
     }
     setPwSaving(true);
@@ -263,30 +270,33 @@ export default function AccountSettings({ user }: Props) {
         </button>
       </div>
 
-      {toast && (
-        <div
-          className="fixed bottom-7 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2.5 rounded-xl border px-5 py-3 text-[13px] font-medium"
-          style={{
-            background: "var(--surface)",
-            borderColor:
-              toast.tone === "saved" ? "var(--teal)" : "var(--rose)",
-            color: "var(--t1)",
-            boxShadow: "0 8px 32px var(--overlay-heavy)",
-          }}
-        >
-          <span
+      {/* Mounted before the toast, which a screen reader doesn't reliably hear when it arrives with its text. */}
+      <div role="status">
+        {toast && (
+          <div
+            className="fixed bottom-7 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2.5 rounded-xl border px-5 py-3 text-[13px] font-medium"
             style={{
-              color: toast.tone === "saved" ? "var(--teal)" : "var(--rose)",
+              background: "var(--surface)",
+              borderColor:
+                toast.tone === "saved" ? "var(--teal)" : "var(--rose)",
+              color: "var(--t1)",
+              boxShadow: "0 8px 32px var(--overlay-heavy)",
             }}
           >
-            <Icon
-              name={toast.tone === "saved" ? "check" : "close"}
-              size={14}
-            />
-          </span>
-          {toast.message}
-        </div>
-      )}
+            <span
+              style={{
+                color: toast.tone === "saved" ? "var(--teal)" : "var(--rose)",
+              }}
+            >
+              <Icon
+                name={toast.tone === "saved" ? "check" : "close"}
+                size={14}
+              />
+            </span>
+            {toast.message}
+          </div>
+        )}
+      </div>
     </>
   );
 }

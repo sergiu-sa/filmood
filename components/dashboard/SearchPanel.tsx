@@ -134,6 +134,8 @@ export default function SearchPanel({
 
   const displayFilms = useMemo(() => sortFilms(films, sortOrder), [films, sortOrder]);
   const failed = error !== null;
+  // In the phone sheet every control is a 44px target; desktop keeps its compact pills.
+  const minHeight = embedded ? "44px" : undefined;
 
   const handleCategoryClick = (catId: BrowseCategory) => {
     if (catId === "by-genre") {
@@ -268,6 +270,7 @@ export default function SearchPanel({
               display: "inline-flex",
               alignItems: "center",
               gap: "6px",
+              minHeight,
               padding: "9px 18px",
               borderRadius: "10px",
               background: "var(--blue)",
@@ -405,8 +408,7 @@ export default function SearchPanel({
           value={sortOrder}
           onChange={(e) => setSortOrder(e.target.value as SortOrder)}
           style={{
-            // In the phone sheet it sits beside the search box, a 44px target.
-            minHeight: onSearchTextChange ? "44px" : undefined,
+            minHeight,
             padding: "10px 12px",
             borderRadius: "10px",
             background: "var(--surface2)",
@@ -447,6 +449,7 @@ export default function SearchPanel({
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "5px",
+                minHeight,
                 padding: "7px 13px",
                 borderRadius: "999px",
                 fontSize: "12px",
@@ -506,6 +509,7 @@ export default function SearchPanel({
                 className="search-genre-chip"
                 onClick={() => handleGenreClick(g.id)}
                 style={{
+                  minHeight,
                   padding: "6px 13px",
                   borderRadius: "100px",
                   fontSize: "11px",
@@ -638,6 +642,7 @@ export default function SearchPanel({
           style={{
             display: "inline-flex",
             alignItems: "center",
+            minHeight,
             padding: "9px 18px",
             borderRadius: "10px",
             background: "none",
