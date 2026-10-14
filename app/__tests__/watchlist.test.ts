@@ -64,7 +64,7 @@ describe("GET /api/watchlist ?details", () => {
     expect(watchlist[1]).toEqual({ ...rows[1], release_date: null, vote_average: null });
     expect(watchlist[0]).toMatchObject({ release_date: "2020-01-01", vote_average: 7 });
     expect(watchlist[2]).toMatchObject({ release_date: "2020-01-01", vote_average: 7 });
-    expect(error).toHaveBeenCalledWith("1 of 3 TMDB calls failed", [expect.any(TMDBError)]);
+    expect(error).toHaveBeenCalledWith("Watchlist details: 1 of 3 TMDB calls failed", [expect.any(TMDBError)]);
     error.mockRestore();
   });
 });

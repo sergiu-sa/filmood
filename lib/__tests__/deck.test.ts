@@ -125,9 +125,9 @@ describe("buildSharedDeck", () => {
     expect(film1Entries.length).toBe(1);
   });
 
-  // An empty deck is unusable: the caller writes it to the session and flips
-  // to swiping, where no vote can ever complete it. Refuse rather than wedge.
-  it("refuses to return an empty deck when the only mood has no films", async () => {
+  // A discover 404 is TMDB moving the endpoint: a 500 worth retrying, not
+  // "Nothing fits everyone's picks", which asks the group to change moods.
+  it("rethrows a discover 404 instead of calling the deck thin", async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 404,
@@ -136,7 +136,7 @@ describe("buildSharedDeck", () => {
 
     await expect(
       buildSharedDeck([{ mood_selections: ["laugh"] }]),
-    ).rejects.toBeInstanceOf(DeckTooThinError);
+    ).rejects.toMatchObject({ name: "TMDBError", status: 404 });
   });
 
   // The 200-with-no-results case: nothing rejects, so a rejection-counting

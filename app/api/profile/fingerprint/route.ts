@@ -66,6 +66,7 @@ export async function GET(request: NextRequest) {
           return data.genres ?? [];
         }),
         () => false,
+        "Profile fingerprint",
       );
 
       const results = values.map((g) => g ?? []);

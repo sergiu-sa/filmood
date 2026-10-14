@@ -45,18 +45,10 @@ export async function GET(request: NextRequest) {
   // D4: no Where means the user's services when there are some; resolveWhere settles on Norway otherwise and says so.
   const requested = isWhereKey(searchParams.get("where")) ? filters : { ...filters, where: "mine" as const };
   const seed = parseSeed(searchParams.get("seed")) ?? newSeed();
+  const source = parseSource(searchParams.get("src"));
 
   try {
     const user = await getAuthUser(request);
-    // after(), not an unawaited promise: Next keeps the function alive until it
-    // finishes, which an unawaited promise isn't guaranteed.
-    if (user) {
-      after(() =>
-        recordMoodPicks(getSupabaseAdmin(), user.id, moodKeys).catch((err) =>
-          console.error("mood_history insert failed", err),
-        ),
-      );
-    }
 
     // A failed saved-services read is a 500 like any other failure, never a quiet Norway.
     const settled = await resolveWhere(
@@ -97,6 +89,20 @@ export async function GET(request: NextRequest) {
       relatedMoods: result.relatedMoods,
     };
 
+    // No src: Back, Forward or a reload of a search this tab has already shown.
+    if (!source) return NextResponse.json(body);
+
+    // Here, not before the search: after() runs when the handler fails too. A filter,
+    // Shuffle or suggestion searches the moods already picked, so it records none.
+    if (user && !["filter", "shuffle", "suggestion"].includes(source)) {
+      // after(), not an unawaited promise: Next keeps the function alive until it finishes.
+      after(() =>
+        recordMoodPicks(getSupabaseAdmin(), user.id, moodKeys).catch((err) =>
+          console.error("mood_history insert failed", err),
+        ),
+      );
+    }
+
     const logged = Object.fromEntries(
       Object.entries(body.filters).filter(([, v]) => v !== null),
     ) as Record<string, string>;
@@ -107,7 +113,7 @@ export async function GET(request: NextRequest) {
           moods: moodKeys,
           filters: logged,
           hasText: text.length > 0,
-          source: parseSource(searchParams.get("src")),
+          source,
           resultCount: body.films.length,
           relaxed: body.relaxed,
           partial: body.partial,

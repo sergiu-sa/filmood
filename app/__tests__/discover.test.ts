@@ -158,7 +158,7 @@ describe("GET /api/movies/discover", () => {
   it("resolves the retired key beautiful to cry", async () => {
     const admin = withSaved(null);
     const { get, tmdbJson, recordMoodPicks } = await setup({ user: { id: "user-1" }, getSupabaseAdmin: admin });
-    const { status, body } = await get("mood=beautiful");
+    const { status, body } = await get("mood=beautiful&src=tile");
 
     expect(status).toBe(200);
     expect(body.moods).toEqual([{ key: "cry", label: "Need to let it out", accent: "blue" }]);
@@ -169,7 +169,7 @@ describe("GET /api/movies/discover", () => {
   it("keeps two moods, tiles first, and reports the text moods it dropped", async () => {
     const admin = withSaved(null);
     const { get, tmdbJson, recordMoodPicks } = await setup({ user: { id: "user-1" }, getSupabaseAdmin: admin });
-    const { body } = await get("mood=laugh,cry&text=scary");
+    const { body } = await get("mood=laugh,cry&text=scary&src=text");
 
     expect(body.moods.map((m: { key: string }) => m.key)).toEqual(["laugh", "cry"]);
     expect(body.droppedMoods).toEqual(["unsettled"]);
@@ -258,9 +258,10 @@ describe("GET /api/movies/discover", () => {
     expect(body.seed).toBeLessThanOrEqual(2147483646);
   });
 
-  it("turns a TMDB 401 into a 500 with a safe message", async () => {
+  // The discover path is fixed, so a 404 is TMDB moving the endpoint, not "no films".
+  it.each([401, 404])("turns a TMDB %i into a 500 with a safe message", async (status) => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    const { get } = await setup({ tmdb: () => 401 });
+    const { get } = await setup({ tmdb: () => status });
     expect(await get("mood=laugh")).toEqual({ status: 500, body: { error: "Failed to fetch films" } });
   });
 
@@ -433,13 +434,13 @@ describe("GET /api/movies/discover", () => {
 
     it("logs a default that settled on My services as mine", async () => {
       const { get, recordSearchEvent } = await setup();
-      await get("mood=laugh&services=netflix");
+      await get("mood=laugh&services=netflix&src=tile");
       expect(recordSearchEvent.mock.calls[0][1].filters).toEqual({ where: "mine" });
     });
 
     it("logs where=mine without the services", async () => {
       const { get, recordSearchEvent } = await setup();
-      await get("mood=laugh&where=mine&services=netflix,viaplay");
+      await get("mood=laugh&where=mine&services=netflix,viaplay&src=tile");
 
       const [, event] = recordSearchEvent.mock.calls[0];
       expect(event.filters).toEqual({ where: "mine" });
@@ -500,7 +501,7 @@ describe("GET /api/movies/discover", () => {
     const { request, flushAfter, recordMoodPicks, recordSearchEvent } = await setup({
       user: { id: "user-1" },
     });
-    const res = await request("mood=laugh");
+    const res = await request("mood=laugh&src=tile");
 
     expect(res.status).toBe(200);
     expect(recordMoodPicks).not.toHaveBeenCalled();
@@ -575,6 +576,39 @@ describe("GET /api/movies/discover", () => {
     });
   });
 
+  // Back, Forward and reload send no src: the page has shown that search in this tab already.
+  it("logs nothing for a request without src", async () => {
+    const { get, recordMoodPicks, recordSearchEvent } = await setup({ user: { id: "user-1" } });
+    expect((await get("mood=laugh&seed=9")).status).toBe(200);
+    expect(recordSearchEvent).not.toHaveBeenCalled();
+    expect(recordMoodPicks).not.toHaveBeenCalled();
+  });
+
+  // after() runs when the handler fails too, so Try again used to record the pick twice.
+  it("records no mood pick when the search fails", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { get, recordMoodPicks, recordSearchEvent } = await setup({ user: { id: "user-1" }, tmdb: () => 503 });
+    expect((await get("mood=laugh&src=tile")).status).toBe(500);
+    expect(recordMoodPicks).not.toHaveBeenCalled();
+    expect(recordSearchEvent).not.toHaveBeenCalled();
+  });
+
+  // The profile says "Picked the mood": a filter, Shuffle or suggestion searches the moods already picked.
+  it.each([
+    ["tile", 1],
+    ["text", 1],
+    ["related", 1],
+    ["direct", 1],
+    ["filter", 0],
+    ["shuffle", 0],
+    ["suggestion", 0],
+  ])("logs a src=%s search and records %i mood pick", async (src, picks) => {
+    const { get, recordMoodPicks, recordSearchEvent } = await setup({ user: { id: "user-1" } });
+    await get(`mood=laugh&src=${src}`);
+    expect(recordSearchEvent).toHaveBeenCalledTimes(1);
+    expect(recordMoodPicks).toHaveBeenCalledTimes(picks);
+  });
+
   it("logs an unknown src as direct", async () => {
     const { get, recordSearchEvent } = await setup();
     await get("mood=laugh&src=newsletter");
@@ -583,21 +617,21 @@ describe("GET /api/movies/discover", () => {
 
   it("answers the same when the log insert fails", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    const ok = await (await setup()).get("mood=laugh&seed=9");
+    const ok = await (await setup()).get("mood=laugh&seed=9&src=tile");
     vi.resetModules();
     const failing = await setup({ recordSearchEvent: vi.fn().mockRejectedValue(new Error("no table")) });
-    expect(await failing.get("mood=laugh&seed=9")).toEqual(ok);
+    expect(await failing.get("mood=laugh&seed=9&src=tile")).toEqual(ok);
   });
 
   it("answers the same when the admin client can't be created", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    const ok = await (await setup()).get("mood=laugh&seed=9");
+    const ok = await (await setup()).get("mood=laugh&seed=9&src=tile");
     vi.resetModules();
     const broken = await setup({
       getSupabaseAdmin: () => {
         throw new Error("Missing Supabase env vars");
       },
     });
-    expect(await broken.get("mood=laugh&seed=9")).toEqual(ok);
+    expect(await broken.get("mood=laugh&seed=9&src=tile")).toEqual(ok);
   });
 });

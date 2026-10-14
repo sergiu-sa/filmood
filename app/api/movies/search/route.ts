@@ -82,6 +82,7 @@ export async function GET(request: NextRequest) {
       const { values } = await settleTMDB<{ films: Film[]; leads?: boolean }>(
         [searchByTitle(trimmed).then((films) => ({ films })), searchPerson(trimmed)],
         (legs) => legs.every((leg) => !leg?.films.length),
+        "Search",
       );
       const [titles, person] = values;
       const legs = person?.leads ? [person, titles] : [titles, person];

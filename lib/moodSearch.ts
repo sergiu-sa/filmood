@@ -9,7 +9,7 @@ import { moodMap } from "@/lib/moodMap";
 import { buildMoodParams, certificationParams, type Tier } from "@/lib/moodQuery";
 import { applyFilters, withoutFilter, type FilterKey, type Filters } from "@/lib/moodFilters";
 import { mulberry32, SEED_MAX } from "@/lib/seededRandom";
-import { settleTMDB, tmdbJson, TMDBError } from "@/lib/tmdb-fetch";
+import { settleTMDB, tmdbJson } from "@/lib/tmdb-fetch";
 import type { MoodConfig } from "@/lib/types";
 
 export const MIN_RESULTS = 12;
@@ -73,27 +73,20 @@ export function buildSearchParams(
   return params;
 }
 
+// Every failure throws, a 404 included: TMDB answers a page past the end with
+// 200 and no films, so a 404 is the endpoint gone, not an empty mood.
 async function fetchPage(params: Record<string, string>, page: number): Promise<DiscoverPage> {
-  try {
-    const data = await tmdbJson<{
-      results?: TMDBDiscoverRaw[];
-      total_results?: number;
-      total_pages?: number;
-    }>("/discover/movie", { ...params, page: String(page) }, MOOD_DISCOVER_REVALIDATE);
-    const results = data.results ?? [];
-    return {
-      results,
-      total: data.total_results ?? results.length,
-      totalPages: data.total_pages ?? 1,
-    };
-  } catch (error) {
-    // A missing page is "no films". A bad key, a rate limit or an outage must
-    // reach the route's catch, or a broken deploy renders as an empty mood.
-    if (error instanceof TMDBError && error.status === 404) {
-      return { results: [], total: 0, totalPages: 0 };
-    }
-    throw error;
-  }
+  const data = await tmdbJson<{
+    results?: TMDBDiscoverRaw[];
+    total_results?: number;
+    total_pages?: number;
+  }>("/discover/movie", { ...params, page: String(page) }, MOOD_DISCOVER_REVALIDATE);
+  const results = data.results ?? [];
+  return {
+    results,
+    total: data.total_results ?? results.length,
+    totalPages: data.total_pages ?? 1,
+  };
 }
 
 function dedupeById<T extends { id: number }>(films: T[]): T[] {
@@ -178,6 +171,7 @@ async function suggestRemovals(
           fetchPage(buildSearchParams(p.moodKey, withoutFilter(f, remove), p.tier, cap), 1),
         ),
         () => false,
+        "Mood suggestions",
       );
       return { remove, total: values.reduce((sum, v) => sum + (v?.total ?? 0), 0) };
     }),
@@ -212,6 +206,7 @@ export async function runMoodSearch(
   const { values, failure } = await settleTMDB(
     moodKeys.map((key, i) => searchMood(key, f, poolRngs[i], cap)),
     (settled) => settled.every((p) => !p?.films.length),
+    "Mood search",
   );
   const pools = values.filter((p): p is MoodPool => p !== undefined);
   const films = blend(pools, rng);

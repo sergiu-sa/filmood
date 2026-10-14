@@ -93,15 +93,9 @@ describe("searchMood — page fetch", () => {
     expect(pool.films).toHaveLength(20);
   });
 
-  it("treats a 404 as an empty page", async () => {
-    respond(() => new TMDBError(404, "/discover/movie"));
-    const pool = await searchMood("laugh", EMPTY_FILTERS, rng());
-    expect(pool.films).toEqual([]);
-    expect(pool.total).toBe(0);
-  });
-
-  // A throttled deploy must not render as "no films match your mood".
-  it.each([401, 429, 503])("propagates a page-1 %i", async (status) => {
+  // A throttled deploy must not render as "no films match your mood". TMDB answers
+  // a page past the end with 200 and no films, so a 404 means the endpoint moved.
+  it.each([401, 404, 429, 503])("propagates a page-1 %i", async (status) => {
     respond(() => new TMDBError(status, "/discover/movie"));
     await expect(searchMood("laugh", EMPTY_FILTERS, rng())).rejects.toMatchObject({ status });
   });

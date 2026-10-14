@@ -100,7 +100,7 @@ export async function tmdbJsonOptional<T = Record<string, unknown>>(
 /**
  * Run several TMDB calls, keep what succeeded, and throw only a total failure:
  * when `isEmpty(values)` and anything rejected. A caller that must never throw
- * passes `() => false`.
+ * passes `() => false`. `label` names the caller in the log line.
  *
  * "Total" is the caller's rule, not "every promise rejected": a 404 resolves to
  * `{}` through `tmdbJsonOptional`, so one leg 404ing while the other times out
@@ -114,6 +114,7 @@ export async function tmdbJsonOptional<T = Record<string, unknown>>(
 export async function settleTMDB<T>(
   calls: Promise<T>[],
   isEmpty: (values: (T | undefined)[]) => boolean,
+  label: string,
 ): Promise<{ values: (T | undefined)[]; failure: { reason: unknown } | null }> {
   const settled = await Promise.allSettled(calls);
   // Positional, with `undefined` for a rejected call. Compacting the array
@@ -131,7 +132,7 @@ export async function settleTMDB<T>(
   const thrown = isEmpty(values);
   const logged = thrown ? reasons.filter((_, i) => i !== at) : reasons;
   if (logged.length > 0) {
-    console.error(`${reasons.length} of ${settled.length} TMDB calls failed`, logged);
+    console.error(`${label}: ${reasons.length} of ${settled.length} TMDB calls failed`, logged);
   }
   if (thrown) throw failure.reason;
   return { values, failure };

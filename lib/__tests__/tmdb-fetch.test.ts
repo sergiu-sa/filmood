@@ -129,7 +129,7 @@ describe("settleTMDB", () => {
   it("keeps results at their original index when an earlier call fails", async () => {
     const { values } = await settleTMDB<{ tag: string }>(
       [Promise.reject(new Error("first fails")), Promise.resolve({ tag: "second" })],
-      () => false,
+      () => false, "test",
     );
 
     expect(values).toHaveLength(2);
@@ -140,7 +140,7 @@ describe("settleTMDB", () => {
   it("reports the first rejection and keeps every success", async () => {
     const { values, failure } = await settleTMDB<number>(
       [Promise.resolve(1), Promise.reject(new Error("boom")), Promise.resolve(3)],
-      () => false,
+      () => false, "test",
     );
 
     expect(values).toEqual([1, undefined, 3]);
@@ -150,7 +150,7 @@ describe("settleTMDB", () => {
   it("reports no rejection when everything succeeds, and logs nothing", async () => {
     const { values, failure } = await settleTMDB(
       [Promise.resolve("a"), Promise.resolve("b")],
-      () => true,
+      () => true, "test",
     );
 
     expect(values).toEqual(["a", "b"]);
@@ -162,7 +162,7 @@ describe("settleTMDB", () => {
   it("throws the first rejection that isn't a 404, logging only the one it doesn't throw", async () => {
     const result = settleTMDB(
       [Promise.reject(new TMDBError(404, "/a")), Promise.reject(new TMDBError(503, "/b"))],
-      () => true,
+      () => true, "test",
     );
 
     await expect(result).rejects.toMatchObject({ status: 503 });
@@ -173,7 +173,7 @@ describe("settleTMDB", () => {
   it("throws a falsy reason too, ahead of a 404", async () => {
     const result = settleTMDB(
       [Promise.reject(new TMDBError(404, "/a")), Promise.reject(undefined)],
-      () => true,
+      () => true, "test",
     );
 
     await expect(result).rejects.toBeUndefined();
@@ -181,17 +181,18 @@ describe("settleTMDB", () => {
 
   // Callers read `failure !== null` as "partial", so an unboxed falsy reason would hide one.
   it("reports a falsy reason it doesn't throw", async () => {
-    const { failure } = await settleTMDB([Promise.resolve(1), Promise.reject(undefined)], () => false);
+    const { failure } = await settleTMDB([Promise.resolve(1), Promise.reject(undefined)], () => false, "test");
 
     expect(failure).toEqual({ reason: undefined });
   });
 
   it("resolves when the caller has something to show, logging the failure once", async () => {
     const outage = new TMDBError(503, "/b");
-    const { failure } = await settleTMDB([Promise.resolve(1), Promise.reject(outage)], () => false);
+    const { failure } = await settleTMDB([Promise.resolve(1), Promise.reject(outage)], () => false, "Mood suggestions");
 
     expect(failure).toEqual({ reason: outage });
     expect(logged).toHaveBeenCalledTimes(1);
-    expect(logged.mock.calls[0][1]).toEqual([outage]);
+    // Eight callers share this line; the label says which one failed.
+    expect(logged).toHaveBeenCalledWith("Mood suggestions: 1 of 2 TMDB calls failed", [outage]);
   });
 });

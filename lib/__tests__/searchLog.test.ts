@@ -18,8 +18,13 @@ describe("parseSource", () => {
     expect(parseSource(source)).toBe(source);
   });
 
-  it.each([null, "", "TILE", "newsletter", "tile "])("turns %j into direct", (raw) => {
+  it.each(["", "TILE", "newsletter", "tile "])("turns %j into direct", (raw) => {
     expect(parseSource(raw)).toBe("direct");
+  });
+
+  // No src: a search the page has already shown in this tab (Back, Forward, reload).
+  it("reads a missing src as no source", () => {
+    expect(parseSource(null)).toBeNull();
   });
 });
 

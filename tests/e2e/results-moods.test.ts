@@ -81,6 +81,37 @@ test.describe("Results mood header", () => {
     expect(urlParams(page).get("seed")).toBe("4242");
   });
 
+  // The route logs only a request with a src: a new tab is a new search, history isn't.
+  test("a shared link sends direct; Back, Forward and reload send no src", async ({ page }) => {
+    const requests = discoverParams(page);
+    await page.goto("/results?mood=laugh&seed=4242");
+    await expect(page.getByRole("heading", { level: 1, name: "Need to laugh" })).toBeVisible();
+    await settle(page);
+    expect(requests.map((p) => p.get("src"))).toEqual(["direct"]);
+
+    const added = answered(page, "tile");
+    await page.getByRole("button", { name: "Add a mood" }).click();
+    await page.getByRole("dialog", { name: "Add a mood" }).getByRole("link", { name: /^Go dark —/ }).click();
+    await added;
+    await page.waitForURL((url) => url.searchParams.get("mood") === "laugh,dark" && !url.searchParams.has("src"));
+
+    // laugh,dark is on screen, so Back refetches laugh, and Forward laugh,dark.
+    await page.goBack();
+    await expect.poll(() => requests.length).toBe(3);
+    await page.goForward();
+    await expect.poll(() => requests.length).toBe(4);
+    await page.reload();
+    await expect.poll(() => requests.length).toBe(5);
+    await settle(page);
+    expect(requests.map((p) => [p.get("mood"), p.get("src")])).toEqual([
+      ["laugh", "direct"],
+      ["laugh,dark", "tile"],
+      ["laugh", null],
+      ["laugh,dark", null],
+      ["laugh,dark", null],
+    ]);
+  });
+
   test("removing the last mood goes home", async ({ page }) => {
     await page.goto("/results?mood=laugh&seed=4242");
     await page.getByRole("button", { name: "Remove Need to laugh" }).click();

@@ -2,7 +2,7 @@ import { useId } from "react";
 import MoodTile from "@/components/mood/MoodTile";
 import Icon from "@/components/ui/Icon";
 import { filmCount } from "@/lib/filmCount";
-import type { FilterKey } from "@/lib/moodFilters";
+import { ERA_OPTIONS, TIME_OPTIONS, type FilterKey } from "@/lib/moodFilters";
 import type { AppliedFilters, DiscoverResponse, EraKey, TimeKey, WhereKey } from "@/lib/types";
 
 interface ResultsNoticeProps {
@@ -17,16 +17,25 @@ interface ResultsNoticeProps {
   onRemove: (key: FilterKey) => void;
 }
 
-const ERA_CLAUSE: Record<EraKey, string> = {
-  classic: "from before 1990",
-  modern: "from 1990–2009",
-  fresh: "from 2010 on",
-};
-const TIME_CLAUSE: Record<TimeKey, string> = {
-  short: "under 100 minutes",
-  medium: "under 2 hours",
-  long: "at 2 h 20 or longer",
-};
+function eraClause(key: EraKey | null): string | null {
+  const era = ERA_OPTIONS.find((o) => o.value === key);
+  const from = era?.gte?.slice(0, 4);
+  const to = era?.lte?.slice(0, 4);
+  if (from && to) return `from ${from}–${to}`;
+  if (from) return `from ${from} on`;
+  // An era ends on Dec 31, so "before" names the year after.
+  return to ? `from before ${Number(to) + 1}` : null;
+}
+
+// 100 → "100 minutes", 120 → "2 hours", 140 → "2 h 20": the way the options' labels and hints say them.
+const duration = (m: number) =>
+  m % 60 === 0 ? `${m / 60} hours` : m < 120 ? `${m} minutes` : `${Math.floor(m / 60)} h ${m % 60}`;
+
+function timeClause(key: TimeKey | null): string | null {
+  const time = TIME_OPTIONS.find((o) => o.value === key);
+  if (time?.lte) return `under ${duration(time.lte)}`;
+  return time?.gte ? `at ${duration(time.gte)} or longer` : null;
+}
 const WHERE_CLAUSE: Record<WhereKey, string | null> = {
   mine: "on your services",
   norway: "streaming in Norway",
@@ -36,8 +45,8 @@ const WHERE_CLAUSE: Record<WhereKey, string | null> = {
 /** "Nothing for Date night from before 1990, under 100 minutes, on your services right now." */
 export function describeAsk(moods: DiscoverResponse["moods"], filters: AppliedFilters): string {
   const clauses = [
-    filters.era && ERA_CLAUSE[filters.era],
-    filters.time && TIME_CLAUSE[filters.time],
+    eraClause(filters.era),
+    timeClause(filters.time),
     WHERE_CLAUSE[filters.where],
   ].filter(Boolean);
   const names = moods.map((m) => m.label).join(" + ");
