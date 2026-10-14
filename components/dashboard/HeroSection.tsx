@@ -141,7 +141,7 @@ export default function HeroSection() {
         <div
           className="hero-orb"
           style={{
-            position: "absolute", top: "-12%", left: "15%",
+            position: "absolute", top: "-12%", left: "15%", translate: "-50% 0",
             width: 380, height: 240, borderRadius: "50%",
             background: `radial-gradient(ellipse, rgba(var(${accentVar}-rgb), 0.5), transparent 70%)`,
             filter: "blur(50px)", opacity: 0.7,

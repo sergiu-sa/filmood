@@ -42,6 +42,14 @@ describe("ResultsError", () => {
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
+  // A `font` shorthand after the weight reset it to the inherited 400 / 16px.
+  it("Try again keeps its own weight and size", () => {
+    render(<ResultsError message="x" retryable onRetry={vi.fn()} />);
+    const button = screen.getByRole("button", { name: "Try again" });
+    expect(button.style.fontWeight).toBe("700");
+    expect(button.style.fontSize).toBe("14px");
+  });
+
   it("not retryable: the route's message and a way home, no retry", () => {
     render(<ResultsError message={MESSAGE} retryable={false} onRetry={vi.fn()} />);
     expect(screen.getByRole("heading", { level: 1, name: MESSAGE })).toBeInTheDocument();

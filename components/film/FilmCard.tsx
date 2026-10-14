@@ -30,7 +30,7 @@ export default function FilmCard({
   reason,
   moodDots,
 }: FilmCardProps) {
-  const year = releaseDate ? new Date(releaseDate).getFullYear() : "N/A";
+  const year = releaseDate ? releaseDate.slice(0, 4) : "N/A";
   const rating = voteAverage?.toFixed(1) ?? "N/A";
   const accent = accentBase ?? "var(--gold)";
 
@@ -97,8 +97,6 @@ export default function FilmCard({
                 lineHeight: 1,
                 color: "rgb(var(--gold-rgb))",
                 background: "var(--overlay-heavy)",
-                border: "1px solid rgba(255,255,255,0.06)",
-                boxShadow: "0 6px 18px rgba(0,0,0,0.24)",
                 zIndex: 2,
               }}
             >

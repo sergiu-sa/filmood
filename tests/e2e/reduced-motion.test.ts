@@ -42,4 +42,35 @@ test.describe("Reduced motion", () => {
     expect(poster.property).toBe("transform");
     expect(poster.duration).toBeLessThan(0.001);
   });
+
+  // A drift's keyframes set transform, which replaced the glow's own centring, so the
+  // glows drifted 160-300px off their spot while reduced motion showed them on it.
+  test("the drifting glows drift around where reduced motion leaves them", async ({ page }) => {
+    await page.route("**/api/group/GLOW01/results**", (route) =>
+      route.fulfill({ json: { code: "GLOW01", participantCount: 2, topPick: null, perfect: [], strong: [], miss: [] } }),
+    );
+    const glows = [
+      { url: "/group", selector: ".lobby-ambient", animation: "ambientDrift" },
+      { url: "/group/GLOW01/results", selector: '[style*="ambientDrift"]', animation: "ambientDrift" },
+      { url: "/", selector: ".hero-orb", animation: "heroOrbDrift1" },
+    ];
+    for (const glow of glows) {
+      // The drift's first keyframe, where every cycle starts and ends.
+      const left = () =>
+        page.locator(glow.selector).first().evaluate((el, name) => {
+          const drift = el.getAnimations().find((a) => (a as CSSAnimation).animationName === name);
+          if (drift) {
+            drift.pause();
+            drift.currentTime = 0;
+          }
+          return el.getBoundingClientRect().left - el.parentElement!.getBoundingClientRect().left;
+        }, glow.animation);
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.goto(glow.url);
+      const resting = await left();
+      await page.emulateMedia({ reducedMotion: "no-preference" });
+      await page.goto(glow.url);
+      expect.soft(await left(), glow.url).toBeCloseTo(resting, 0);
+    }
+  });
 });

@@ -212,7 +212,8 @@ export default function GroupResultsPage() {
           position: "fixed",
           top: "-120px",
           left: "50%",
-          transform: "translateX(-50%)",
+          // translate, not transform: ambientDrift's transform would replace it.
+          translate: "-50% 0",
           width: "600px",
           height: "400px",
           borderRadius: "50%",

@@ -59,6 +59,21 @@ describe("TopPick", () => {
     expect(screen.queryByText("Why")).toBeNull();
   });
 
+  // Vitest runs in New York, where 2010-01-01 parsed as a Date is still 2009.
+  it("shows a 1 January release under its own year west of UTC", () => {
+    render(
+      <TopPick
+        film={{ ...film, release_date: "2010-01-01" }}
+        moods={["easy"]}
+        accent="teal"
+        providers={[]}
+        providersLoading={false}
+        why={{ keywords: [], genres: [] }}
+      />,
+    );
+    expect(screen.getByText("2010")).toBeInTheDocument();
+  });
+
   it("keeps the title and link the e2e specs find", () => {
     renderPick({ keywords: [], genres: ["Comedy"] });
     expect(screen.getByRole("heading", { level: 2, name: "Barbie" })).toBeInTheDocument();

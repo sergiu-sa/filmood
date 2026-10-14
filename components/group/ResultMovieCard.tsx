@@ -74,7 +74,7 @@ export default function ResultMovieCard({
             gap: "4px",
             padding: "4px 8px",
             borderRadius: "8px",
-            background: "rgba(0,0,0,0.65)",
+            background: "var(--overlay-heavy)",
             backdropFilter: "blur(8px)",
             fontSize: "10px",
             fontWeight: 700,

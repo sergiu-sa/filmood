@@ -167,7 +167,7 @@ export default function RecentGroupSessions() {
                       width: "42px",
                       height: "60px",
                       background: "var(--surface3)",
-                      color: "var(--t3)",
+                      color: "var(--t2)",
                       fontSize: "10px",
                       fontWeight: 700,
                       letterSpacing: "1.2px",

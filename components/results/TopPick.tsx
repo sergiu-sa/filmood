@@ -37,9 +37,7 @@ export default function TopPick({
 }: TopPickProps) {
   const accent = ACCENT_VARS[accentKey];
   const isMobile = useMediaQuery("(max-width: 820px)");
-  const year = film.release_date
-    ? new Date(film.release_date).getFullYear()
-    : "";
+  const year = film.release_date?.slice(0, 4) ?? "";
   const rating = film.vote_average?.toFixed(1) ?? "---";
   const posterUrl = film.poster_path
     ? tmdbImageUrl(film.poster_path, "w500")
