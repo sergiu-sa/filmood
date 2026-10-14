@@ -180,7 +180,7 @@ export default function DashboardShell() {
         />
         <TrendingBox
           ref={trendingBoxRef}
-          onExpand={() => setOpenPanel("search")}
+          onExpand={() => togglePanel("search")}
           isExpanded={openPanel === "search"}
           isCollapsed={isBoxCollapsed("search")}
         />

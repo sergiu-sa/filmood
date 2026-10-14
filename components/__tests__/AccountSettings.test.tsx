@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { User } from "@supabase/supabase-js";
 import AccountSettings from "@/components/profile/AccountSettings";
@@ -62,5 +62,35 @@ describe("AccountSettings", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(status).toHaveTextContent("Changes saved"));
+  });
+
+  it("announces a second save inside the toast's 2.4 s, and keeps it up for its own 2.4 s", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "requestAnimationFrame"] });
+    try {
+      vi.mocked(supabase.auth.updateUser).mockResolvedValue({ data: { user }, error: null });
+      render(<AccountSettings user={user} />);
+      const status = screen.getByRole("status");
+      const save = async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+        await act(async () => {});
+        act(() => vi.advanceTimersByTime(16));
+      };
+
+      await save();
+      const first = status.firstElementChild;
+      expect(status).toHaveTextContent("Changes saved");
+      act(() => vi.advanceTimersByTime(1000));
+      await save();
+      // The same text left in place changes nothing a screen reader would announce.
+      expect(status.firstElementChild).not.toBe(first);
+      expect(status).toHaveTextContent("Changes saved");
+
+      act(() => vi.advanceTimersByTime(1500));
+      expect(status).toHaveTextContent("Changes saved");
+      act(() => vi.advanceTimersByTime(1000));
+      expect(status).toBeEmptyDOMElement();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

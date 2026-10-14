@@ -85,6 +85,16 @@ describe("DashboardShell, desktop", () => {
     expect(trending).toHaveFocus();
   });
 
+  // Its arrow and aria-expanded say it closes search, as the other two boxes' buttons do.
+  it("Browse & search closes search as well as opening it", async () => {
+    render(<DashboardShell />);
+    const trending = screen.getByRole("button", { name: "Browse & search" });
+    await userEvent.click(trending);
+    expect(trending).toHaveAttribute("aria-expanded", "true");
+    await userEvent.click(trending);
+    expect(trending).toHaveAttribute("aria-expanded", "false");
+  });
+
   it("Full search carries the search; picking a category replaces it", async () => {
     render(<DashboardShell />);
     openPanel();

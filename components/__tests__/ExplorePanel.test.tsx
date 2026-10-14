@@ -63,14 +63,19 @@ describe("ExplorePanel", () => {
   });
 
   // The guest's and the signed-in Create tab differ; mobile.test.ts measures the guest's.
-  it.each([null, { id: "u1" }])("makes every button and link in the phone sheet a 44px target (user %o)", async (who) => {
+  it.each([null, { id: "u1" }])("makes every button and link a 44px target in the phone sheet only (user %o)", async (who) => {
     user = who;
-    const { container } = render(<ExplorePanel isOpen embedded onClose={vi.fn()} />);
-    const short = () =>
-      [...container.querySelectorAll<HTMLElement>("a[href], button")].filter((el) => el.style.minHeight !== "44px").map((el) => el.textContent);
-    expect(short()).toEqual([]);
-    await userEvent.click(screen.getByRole("button", { name: "Join with code" }));
-    expect(short()).toEqual([]);
+    for (const embedded of [true, false]) {
+      const { container, unmount } = render(<ExplorePanel isOpen embedded={embedded} onClose={vi.fn()} />);
+      const off = () =>
+        [...container.querySelectorAll<HTMLElement>("a[href], button")]
+          .filter((el) => el.style.minHeight !== (embedded ? "44px" : ""))
+          .map((el) => el.textContent);
+      expect(off()).toEqual([]);
+      await userEvent.click(screen.getByRole("button", { name: "Join with code" }));
+      expect(off()).toEqual([]);
+      unmount();
+    }
     user = null;
   });
 });
