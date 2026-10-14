@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import { getAuthHeaders } from "@/lib/getAuthToken";
-import { moodLabel, moodMap } from "@/lib/moodMap";
+import { moodAccent, moodLabel } from "@/lib/moodMap";
 import { ACCENT_VARS } from "@/lib/constants";
 import type { AccentColor } from "@/lib/types";
 
@@ -42,10 +42,6 @@ function relativeTime(iso: string): string {
     month: "short",
     year: "numeric",
   });
-}
-
-function moodAccent(key: string): AccentColor {
-  return (moodMap[key]?.accentColor ?? "gold") as AccentColor;
 }
 
 interface RowProps {

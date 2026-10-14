@@ -87,10 +87,23 @@ describe("Navbar — logged in user", () => {
     });
   });
 
-  it("renders the user avatar with the first letter of their email", () => {
+  it("renders the user avatar with the first letter of their email when no name is saved", () => {
     render(<Navbar />);
     // first letter of "alice@example.com" is "A"
     expect(screen.getByText("A")).toBeInTheDocument();
+  });
+
+  // The profile hero shows this name beside its own avatar; the two letters must agree.
+  it("takes the avatar letter from the saved name, not the email", () => {
+    mockUseAuth.mockReturnValue({
+      user: { ...fakeUser, user_metadata: { full_name: "Zoe" } },
+      session: null,
+      loading: false,
+      signOut: mockSignOut,
+    });
+    render(<Navbar />);
+    expect(screen.getByText("Z")).toBeInTheDocument();
+    expect(screen.queryByText("A")).toBeNull();
   });
 
   it("links the avatar to /profile", () => {

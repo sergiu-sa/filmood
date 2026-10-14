@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { getAuthHeaders } from "@/lib/getAuthToken";
-import { moodLabel, moodMap } from "@/lib/moodMap";
+import { moodAccent, moodLabel, moodMap } from "@/lib/moodMap";
 import { ACCENT_VARS } from "@/lib/constants";
 import type { AccentColor } from "@/lib/types";
 import Icon from "@/components/ui/Icon";
@@ -33,10 +33,6 @@ const CHIP_ROTATION: AccentColor[] = [
   "teal",
   "ember",
 ];
-
-function moodAccent(key: string): AccentColor {
-  return (moodMap[key]?.accentColor ?? "gold") as AccentColor;
-}
 
 export default function TasteFingerprint() {
   const { user } = useAuth();

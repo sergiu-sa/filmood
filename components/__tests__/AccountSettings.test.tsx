@@ -53,6 +53,17 @@ describe("AccountSettings", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  // Signup saves the name as `name`, Account as `full_name`; the hero shows whichever is there.
+  it("starts Full name as the name typed at signup, and saves only what changed", async () => {
+    vi.mocked(supabase.auth.updateUser).mockResolvedValue({ data: { user }, error: null });
+    const signedUp = { id: "u2", email: "e2e@example.com", user_metadata: { name: "Filmood E2E" } } as unknown as User;
+    render(<AccountSettings user={signedUp} />);
+    expect(screen.getByLabelText("Full name")).toHaveValue("Filmood E2E");
+
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(supabase.auth.updateUser).toHaveBeenCalledWith({}));
+  });
+
   // The toast mounts with its text, which screen readers don't reliably announce.
   it("announces a save in a region that's already there", async () => {
     vi.mocked(supabase.auth.updateUser).mockResolvedValue({ data: { user }, error: null });

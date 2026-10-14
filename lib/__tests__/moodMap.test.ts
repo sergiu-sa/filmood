@@ -1,6 +1,7 @@
 import {
   allMoods,
   LEGACY_MOOD_ALIASES,
+  moodAccent,
   moodLabel,
   moodMap,
   normalizeMoodKey,
@@ -114,5 +115,19 @@ describe("moodLabel", () => {
 
   it("shows an unknown key as stored", () => {
     expect(moodLabel("constructor")).toBe("constructor");
+  });
+});
+
+describe("moodAccent", () => {
+  it("gives a key its mood's accent, retired keys the mood that absorbed them", () => {
+    expect(moodAccent("easy")).toBe("teal");
+    expect(moodAccent(" Dark ")).toBe("ember");
+    expect(moodAccent("beautiful")).toBe("blue");
+    expect(moodAccent("weird")).toBe("violet");
+  });
+
+  it("falls back to gold for an unknown key or none", () => {
+    expect(moodAccent("constructor")).toBe("gold");
+    expect(moodAccent(null)).toBe("gold");
   });
 });
