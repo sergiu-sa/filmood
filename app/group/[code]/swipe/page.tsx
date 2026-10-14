@@ -159,10 +159,14 @@ export default function GroupSwipePage() {
   // Not state: a vote taken back has to bring the deck back.
   const isDone = finished || (deck.length > 0 && Object.keys(myVotes).length >= deck.length);
 
-  // The waiting view goes when everyone is done, taking the host's focused "Finish without" with it.
+  // The waiting view goes when everyone is done, taking the host's focused "Finish without" with it. Only
+  // after it was on screen: a reload of a finished session leaves focus at the top.
   const resultsRef = useRef<HTMLButtonElement>(null);
+  const waitedRef = useRef(false);
   useEffect(() => {
-    if (allDone && isDone && document.activeElement === document.body) resultsRef.current?.focus();
+    if (!isDone) return;
+    if (!allDone) waitedRef.current = true;
+    else if (waitedRef.current && document.activeElement === document.body) resultsRef.current?.focus();
   }, [allDone, isDone]);
 
   // Realtime + polling

@@ -28,6 +28,27 @@ async function buildDeck(supabase: SupabaseClient, rows: PickRow[]) {
   return buildSharedDeck(locked, await groupProviders(supabase, locked.flatMap((p) => p.user_id ?? [])));
 }
 
+/**
+ * Hands a seat its picks back so its picker returns. Not once the session has moved on: a simultaneous lock-in
+ * may have built the deck, and the seat would then read as not locked in for a session already swiping. A failed
+ * re-read clears anyway: that mislabel is cosmetic, a skipped clear leaves the session wedged.
+ */
+async function reopenPicks(supabase: SupabaseClient, sessionId: string, seatId: string) {
+  const { data: current, error: readError } = await supabase
+    .from("sessions")
+    .select("status")
+    .eq("id", sessionId)
+    .single();
+  if (readError) console.error("Mood rollback re-read failed", readError);
+  if (!readError && current?.status !== "mood") return { movedOn: true, error: null };
+
+  const { error } = await supabase
+    .from("session_participants")
+    .update({ mood_selections: null })
+    .eq("id", seatId);
+  return { movedOn: false, error };
+}
+
 function deckFailed(error: unknown) {
   // The picks have to change, so a retry as-is would build the same thin deck.
   if (error instanceof DeckTooThinError) {
@@ -151,24 +172,8 @@ export async function POST(
     // The moods above are now committed and the "already submitted" guard
     // would reject every retry, so any failure from here on would wedge the
     // session. Undo this participant's submission so the form comes back.
-    //
-    // Re-read the status first: a simultaneous submitter may have built the
-    // deck and moved the session on, in which case rolling back would show
-    // them as "hasn't submitted" for a session already swiping. A failed
-    // re-read rolls back anyway: that mislabel is cosmetic, a skipped rollback is the wedge.
     const rollBack = async () => {
-      const { data: current, error: readError } = await supabase
-        .from("sessions")
-        .select("status")
-        .eq("id", session.id)
-        .single();
-      if (readError) console.error("Mood rollback re-read failed", readError);
-      if (!readError && current?.status !== "mood") return;
-
-      const { error: rollbackError } = await supabase
-        .from("session_participants")
-        .update({ mood_selections: null })
-        .eq("id", participant.id);
+      const { error: rollbackError } = await reopenPicks(supabase, session.id, participant.id);
       // A failed rollback is the wedge this exists to prevent, so it must be
       // visible in the logs rather than swallowed.
       if (rollbackError) {
@@ -308,13 +313,12 @@ export async function PATCH(
     try {
       deck = await buildDeck(supabase, rows);
     } catch (deckError) {
-      // Everyone left has locked in, so nobody else can change the picks: the host's go, as a last lock-in's
-      // do, and the host's page shows the picker again.
+      // Everyone staying has locked in, so only the host can still change the picks: theirs go, as a last
+      // lock-in's do, and the host's page shows the picker again.
       if (deckError instanceof DeckTooThinError) {
-        const { error: clearError } = await supabase
-          .from("session_participants")
-          .update({ mood_selections: null })
-          .eq("id", hostSeat.id);
+        const { movedOn, error: clearError } = await reopenPicks(supabase, session.id, hostSeat.id);
+        // Someone left out locked in during the build, and their lock-in started the session on its own deck.
+        if (movedOn) return NextResponse.json({ removed: 0 });
         if (clearError) return internalError(clearError, "Failed to reopen your picks");
       }
       return deckFailed(deckError);

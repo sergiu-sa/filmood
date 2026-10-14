@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState, useCallback, useRef } from "react";
+import { flushSync } from "react-dom";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { useParticipantId } from "@/lib/useParticipantId";
@@ -809,10 +810,12 @@ export default function GroupMoodPage() {
                     onDone={fetchState}
                     onPickAgain={(message) => {
                       // As a failed lock-in: a read from before the route cleared the picks mustn't bring
-                      // waiting back. The heading stays mounted, so focus can move before the button goes.
+                      // waiting back. Rendered before the focus, so the heading is read out as the picker's.
                       lockInsRef.current += 1;
-                      setError(message);
-                      setPhase("selecting");
+                      flushSync(() => {
+                        setError(message);
+                        setPhase("selecting");
+                      });
                       headingRef.current?.focus();
                     }}
                   />

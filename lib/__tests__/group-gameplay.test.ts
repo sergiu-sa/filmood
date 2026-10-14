@@ -492,22 +492,37 @@ describe("PATCH /api/group/[code]/mood", () => {
   });
 
   // Everyone left is locked in, so nobody else can change the picks: the host's go, as a last lock-in's do.
+  const stillMood = { data: { status: "mood" }, error: null };
+
   it("answers a thin deck with 422, removes nobody and hands the host their picks back", async () => {
     mockBuildSharedDeck.mockRejectedValue(new DeckTooThinError(2));
-    const { status, json, supabase } = await carryOn([inMood, { data: [host, stalledGuest], error: null }, ok], ["p-4"]);
+    const { status, json, supabase } = await carryOn([inMood, { data: [host, stalledGuest], error: null }, stillMood, ok], ["p-4"]);
     expect(status).toBe(422);
     expect(json.error).toBe("Nothing fits everyone's picks together. Try a different mood.");
-    expect(supabase.from).toHaveBeenCalledTimes(3);
-    const clear = call(supabase, 2);
-    expect(supabase.from).toHaveBeenNthCalledWith(3, "session_participants");
+    expect(supabase.from).toHaveBeenCalledTimes(4);
+    expect(supabase.from).toHaveBeenNthCalledWith(3, "sessions");
+    const clear = call(supabase, 3);
+    expect(supabase.from).toHaveBeenNthCalledWith(4, "session_participants");
     expect(clear.update).toHaveBeenCalledWith({ mood_selections: null });
     expect(clear.eq).toHaveBeenCalledWith("id", "p-1");
+  });
+
+  // Someone left out locked in during the build, and their own lock-in started the session on its deck.
+  it("leaves the host's picks alone after a thin deck when the session has moved on", async () => {
+    mockBuildSharedDeck.mockRejectedValue(new DeckTooThinError(2));
+    const { status, json, supabase } = await carryOn(
+      [inMood, { data: [host, stalledGuest], error: null }, { data: { status: "swiping" }, error: null }],
+      ["p-4"],
+    );
+    expect(status).toBe(200);
+    expect(json.removed).toBe(0);
+    expect(supabase.from).toHaveBeenCalledTimes(3);
   });
 
   it("answers 500 when the host's picks can't be handed back after a thin deck", async () => {
     mockBuildSharedDeck.mockRejectedValue(new DeckTooThinError(2));
     const { status } = await carryOn(
-      [inMood, { data: [host, stalledGuest], error: null }, { data: null, error: { code: "57014", message: "timeout" } }],
+      [inMood, { data: [host, stalledGuest], error: null }, stillMood, { data: null, error: { code: "57014", message: "timeout" } }],
       ["p-4"],
     );
     expect(status).toBe(500);

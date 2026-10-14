@@ -446,11 +446,17 @@ describe("Group mood page", () => {
     render(<GroupMoodPage />);
     await screen.findByRole("heading", { level: 1, name: "Moods submitted" });
 
+    // The same h1 says "Moods submitted" until the picker renders; focus must land once it doesn't.
+    const readOnFocus: string[] = [];
+    screen.getByRole("heading", { level: 1 }).addEventListener("focus", (e) => {
+      readOnFocus.push((e.target as HTMLElement).textContent ?? "");
+    });
     fireEvent.click(screen.getByRole("button", { name: "Start without Guest" }));
     fireEvent.click(screen.getByRole("button", { name: "Start without Guest" }));
 
     const heading = await screen.findByRole("heading", { level: 1, name: "How do you feel?" });
     await waitFor(() => expect(heading).toHaveFocus());
+    expect(readOnFocus).toEqual(["How do you feel?"]);
     expect(screen.getByRole("alert")).toHaveTextContent("Nothing fits everyone's picks together. Try a different mood.");
     expect(lockIn()).toBeInTheDocument();
   });

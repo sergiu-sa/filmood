@@ -355,6 +355,17 @@ describe("Group swipe page", () => {
     expect(screen.getByRole("button", { name: "Finish without Guest" })).toBeInTheDocument();
   });
 
+  // A reload of a finished session: nobody pressed anything, so focus stays at the top of the page.
+  it("leaves focus alone when the page loads a session that's already done", async () => {
+    votedPositions = Array.from({ length: 15 }, (_, n) => n);
+    participants = players(true, true);
+    sessionStatus = "done";
+    render(<GroupSwipePage />);
+    await screen.findByRole("button", { name: /see group results/i });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.getByRole("button", { name: /see group results/i })).not.toHaveFocus();
+  });
+
   it("offers nobody but the host a way to finish without the others", async () => {
     votedPositions = Array.from({ length: 15 }, (_, n) => n);
     participants = [
