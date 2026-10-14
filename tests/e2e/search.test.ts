@@ -45,4 +45,31 @@ test.describe("One search on home and browse", () => {
     await expect(page.getByRole("alert").filter({ hasText: "Couldn't reach the film database." })).toBeVisible();
     await expect(page.getByText("No films found")).toHaveCount(0);
   });
+
+  // spin's keyframes blended the spinner's own translateY(-50%) into a full turn,
+  // which slid it down and back without turning it.
+  test("home's search spinner turns in place while a search is in flight", async ({ page }) => {
+    await mockTmdb(page);
+    await page.route(/\/api\/movies\/search(\?.*)?$/, () => {});
+
+    await page.goto("/");
+    const box = page.getByRole("textbox", { name: /^Search films/ });
+    await box.fill("dune");
+    await box.press("Enter");
+    const quarter = await page.waitForFunction(() => {
+      const spin = document.getAnimations().find((a) => (a as CSSAnimation).animationName === "spin");
+      if (!spin) return null;
+      spin.pause();
+      spin.currentTime = 200;
+      const el = (spin.effect as KeyframeEffect).target as HTMLElement;
+      const turn = new DOMMatrix(getComputedStyle(el).transform);
+      const own = el.getBoundingClientRect();
+      const field = el.parentElement!.getBoundingClientRect();
+      return { cos: turn.a, sin: turn.b, offCentre: own.top + own.height / 2 - (field.top + field.height / 2) };
+    });
+    const { cos, sin, offCentre } = (await quarter.jsonValue())!;
+    expect(cos).toBeCloseTo(0, 2);
+    expect(sin).toBeCloseTo(1, 2);
+    expect(Math.abs(offCentre)).toBeLessThan(1);
+  });
 });

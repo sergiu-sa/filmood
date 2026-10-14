@@ -47,8 +47,10 @@ function ratio(a: RGB, b: RGB): number {
 const accents = ["gold", "blue", "rose", "violet", "teal", "ember"];
 const accentText = (a: string) => (a === "gold" ? "gold-text" : a);
 
+// --t3 reaches only 3.83 / 4.08 on --surface3, so text there is --t1 or --t2.
 const pairs: [string, string][] = [
   ...["t1", "t2", "t3"].flatMap((t) => ["bg", "surface", "surface2"].map((s): [string, string] => [t, s])),
+  ...["t1", "t2"].map((t): [string, string] => [t, "surface3"]),
   ...accents.flatMap((a) => ["bg", "surface"].map((s): [string, string] => [accentText(a), s])),
   ...accents.map((a): [string, string] => [`${a}-on`, a]),
 ];

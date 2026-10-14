@@ -119,7 +119,8 @@ export default function SearchToolbar({
               position: "absolute",
               right: 10,
               top: "50%",
-              transform: "translateY(-50%)",
+              // translate, not transform: spin's transform would replace it.
+              translate: "0 -50%",
               width: 12,
               height: 12,
               borderRadius: "50%",

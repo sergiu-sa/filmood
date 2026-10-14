@@ -52,7 +52,7 @@ export default function GuestBanner() {
         <button
           onClick={() => setDismissed(true)}
           className="cursor-pointer border-none bg-transparent text-sm leading-none transition-colors hover:text-(--t1)"
-          style={{ color: "var(--t3)" }}
+          style={{ color: "var(--t2)" }}
           aria-label="Dismiss"
         >
           ✕
